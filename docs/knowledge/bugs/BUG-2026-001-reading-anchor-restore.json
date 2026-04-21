@@ -1,0 +1,24 @@
+{
+  "id": "BUG-2026-001",
+  "title": "Reader restart restores the chapter but loses the exact intra-chapter position",
+  "symptom": "After reopening the app, the reader often returned to the correct chapter but drifted back toward the top instead of the exact saved reading position.",
+  "root_cause": "Progress bootstrap and UI restore were racing. A default or early anchor could be written back before the chapter content and scroll state had fully restored, which let a zero or near-zero position overwrite a previously saved non-zero anchor.",
+  "fix": [
+    "Deferred position restore until the target chapter content had finished loading.",
+    "Blocked initial progress bootstrap when a valid non-zero saved anchor already existed.",
+    "Added regression coverage for long-chapter restore so restart recovery is verified automatically."
+  ],
+  "failed_attempts": [],
+  "impact": "Resume-reading continuity broke on long books. Users could reopen the same chapter but still lose the exact place they stopped at, which is a high-friction failure for a reading app.",
+  "tags": [
+    "android",
+    "compose",
+    "reader",
+    "reading-progress",
+    "anchor-restore",
+    "resolved"
+  ],
+  "confidence": 0.94,
+  "created_at": "2026-04-16",
+  "updated_at": "2026-04-20"
+}

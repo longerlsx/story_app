@@ -1,0 +1,24 @@
+{
+  "id": "BUG-2026-007",
+  "title": "Cross-chapter paging feels like a hard cut instead of a continuous page turn",
+  "symptom": "Page turns inside a chapter felt smooth, but crossing from one chapter to the next or previous chapter produced a visibly different hard switch.",
+  "root_cause": "Intra-chapter turns used the pager's normal horizontal animation, while cross-chapter turns rebuilt chapter content and pager state without any boundary transition layer.",
+  "fix": [
+    "Added boundary transition layers that move in the same horizontal direction as normal page turns.",
+    "Applied the same page padding model to boundary layers so chapter-edge turns keep the same page silhouette as normal turns."
+  ],
+  "failed_attempts": [],
+  "impact": "Readers could feel the implementation seam exactly at chapter boundaries, which weakens page-mode immersion.",
+  "tags": [
+    "android",
+    "compose",
+    "reader",
+    "page-mode",
+    "animation",
+    "chapter-boundary",
+    "resolved"
+  ],
+  "confidence": 0.9,
+  "created_at": "2026-04-20",
+  "updated_at": "2026-04-20"
+}

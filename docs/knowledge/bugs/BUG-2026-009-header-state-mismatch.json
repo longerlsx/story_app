@@ -1,0 +1,25 @@
+{
+  "id": "BUG-2026-009",
+  "title": "Immersive header and chrome-visible top bar used the wrong visual treatment",
+  "symptom": "The reading-only header appeared as a floating pill and did not match the intended lightweight style, while the chrome-visible state lacked a clean full-width top bar with back and overflow affordances.",
+  "root_cause": "The reader reused one header treatment across two different interaction states instead of modeling a lightweight immersive header and a separate full chrome top bar as distinct states.",
+  "fix": [
+    "Split the reader into two explicit top-bar states: a lightweight immersive header and a full-width chrome-visible top bar.",
+    "Made the two states mutually exclusive so the immersive header disappears when the full chrome is revealed.",
+    "Reserved the right side of the full top bar for an explicit `...` placeholder."
+  ],
+  "failed_attempts": [],
+  "impact": "The UI looked visually inconsistent and did not match the interaction model users expect from a reading app.",
+  "tags": [
+    "android",
+    "compose",
+    "reader",
+    "top-bar",
+    "immersive-mode",
+    "ux",
+    "resolved"
+  ],
+  "confidence": 0.89,
+  "created_at": "2026-04-20",
+  "updated_at": "2026-04-20"
+}

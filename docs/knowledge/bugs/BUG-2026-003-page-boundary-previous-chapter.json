@@ -1,0 +1,24 @@
+{
+  "id": "BUG-2026-003",
+  "title": "Paging backward across a chapter boundary opens the previous chapter at the start instead of the end",
+  "symptom": "In page mode, tapping backward from the first page of a chapter jumped to the previous chapter's first page, which violated normal page-turn expectations.",
+  "root_cause": "Cross-chapter backward navigation reused the default chapter-open path, and that path restores to chapter start unless an explicit restore-to-last-page intent is provided.",
+  "fix": [
+    "Introduced boundary-aware chapter opening for page mode.",
+    "Mapped backward boundary turns to `restoreToLastPage` so the previous chapter opens near its last page instead of its start.",
+    "Added an instrumentation test for backward paging across chapter boundaries."
+  ],
+  "failed_attempts": [],
+  "impact": "The page-mode mental model broke at chapter edges, making paging feel inconsistent and unlike a real page-turn reader.",
+  "tags": [
+    "android",
+    "compose",
+    "reader",
+    "page-mode",
+    "chapter-boundary",
+    "resolved"
+  ],
+  "confidence": 0.95,
+  "created_at": "2026-04-17",
+  "updated_at": "2026-04-20"
+}

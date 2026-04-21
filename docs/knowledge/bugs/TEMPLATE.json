@@ -1,0 +1,22 @@
+{
+  "id": "BUG-YYYY-NNN",
+  "title": "",
+  "symptom": "",
+  "root_cause": "",
+  "fix": [
+    ""
+  ],
+  "failed_attempts": [
+    ""
+  ],
+  "impact": "",
+  "tags": [
+    "android",
+    "compose",
+    "reader",
+    "investigating"
+  ],
+  "confidence": 0.8,
+  "created_at": "YYYY-MM-DD",
+  "updated_at": "YYYY-MM-DD"
+}

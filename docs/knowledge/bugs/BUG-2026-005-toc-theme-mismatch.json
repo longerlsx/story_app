@@ -1,0 +1,24 @@
+{
+  "id": "BUG-2026-005",
+  "title": "Night-mode TOC styling does not follow the active reader theme",
+  "symptom": "The chapter directory in night mode displayed light/default list surfaces and looked detached from the current reading theme.",
+  "root_cause": "The TOC sheet used generic surface/list defaults instead of deriving colors from the active reader theme palette.",
+  "fix": [
+    "Made TOC sheet colors and row styling theme-aware.",
+    "Aligned night-mode TOC visuals with the active reader palette rather than generic Material defaults."
+  ],
+  "failed_attempts": [],
+  "impact": "Theme consistency broke exactly when users switched modes to read comfortably, making the UI feel unfinished.",
+  "tags": [
+    "android",
+    "compose",
+    "reader",
+    "toc",
+    "night-mode",
+    "theme",
+    "resolved"
+  ],
+  "confidence": 0.91,
+  "created_at": "2026-04-16",
+  "updated_at": "2026-04-20"
+}

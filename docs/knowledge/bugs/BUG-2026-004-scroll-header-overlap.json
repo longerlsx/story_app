@@ -1,0 +1,23 @@
+{
+  "id": "BUG-2026-004",
+  "title": "Scroll-mode immersive header overlaps the first visible lines of text",
+  "symptom": "In scroll mode, the persistent back arrow and chapter label visually collided with the top lines of正文.",
+  "root_cause": "Scroll-mode content started at the very top of the viewport while the immersive header occupied the same visual band. Unlike page mode, scroll mode had no reserved top viewport inset.",
+  "fix": [
+    "Added a dedicated top viewport inset for scroll mode.",
+    "Kept the immersive header lightweight while ensuring正文 never enters the header band."
+  ],
+  "failed_attempts": [],
+  "impact": "The first screen of text became harder to read and made the persistent header look visually broken.",
+  "tags": [
+    "android",
+    "compose",
+    "reader",
+    "scroll-mode",
+    "immersive-header",
+    "resolved"
+  ],
+  "confidence": 0.93,
+  "created_at": "2026-04-17",
+  "updated_at": "2026-04-20"
+}

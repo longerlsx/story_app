@@ -1,0 +1,23 @@
+{
+  "id": "BUG-2026-002",
+  "title": "TXT chapter parser over-matches body text that looks like a chapter title",
+  "symptom": "Sentences such as `第一章正文。` were interpreted as chapter headings, which produced incorrect TOC boundaries and could leave later chapter bodies empty or shifted.",
+  "root_cause": "The chapter-heading regex was too permissive. It matched body sentences that started with chapter-like numerals even when they were not standalone headings.",
+  "fix": [
+    "Tightened chapter-title patterns so only realistic heading shapes are treated as chapter starts.",
+    "Added parser and import regression tests that cover正文首句-like cases and normal `第X章` headings."
+  ],
+  "failed_attempts": [],
+  "impact": "Incorrect chapter boundaries break both TOC navigation and any later reading-position logic that depends on chapter offsets.",
+  "tags": [
+    "android",
+    "txt",
+    "chapter-parser",
+    "toc",
+    "regex",
+    "resolved"
+  ],
+  "confidence": 0.97,
+  "created_at": "2026-04-16",
+  "updated_at": "2026-04-20"
+}

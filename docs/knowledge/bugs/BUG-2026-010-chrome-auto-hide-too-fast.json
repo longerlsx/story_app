@@ -1,0 +1,24 @@
+{
+  "id": "BUG-2026-010",
+  "title": "Reader chrome auto-hides too quickly for real settings interaction",
+  "symptom": "The reader controls disappeared before users could comfortably inspect settings, TOC, or chapter actions.",
+  "root_cause": "The auto-hide timing was tuned for minimum chrome exposure instead of the slower rhythm of actual reading adjustments.",
+  "fix": [
+    "Extended the auto-hide timeout to around 3 seconds.",
+    "Kept interaction-heavy states such as settings expansion from collapsing immediately."
+  ],
+  "failed_attempts": [],
+  "impact": "Users had to re-open controls repeatedly, which made the reader feel twitchy and harder to operate.",
+  "tags": [
+    "android",
+    "compose",
+    "reader",
+    "chrome",
+    "timeout",
+    "ux",
+    "resolved"
+  ],
+  "confidence": 0.87,
+  "created_at": "2026-04-20",
+  "updated_at": "2026-04-20"
+}

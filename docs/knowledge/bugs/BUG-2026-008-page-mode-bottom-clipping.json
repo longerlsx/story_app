@@ -1,0 +1,34 @@
+{
+  "id": "BUG-2026-008",
+  "title": "Page mode clips the last visible line near the bottom edge while scroll mode remains correct",
+  "symptom": "In page mode, the last line near the bottom edge appears partially cut, as if an invisible horizontal strip sits in front of the text. The same chapter in scroll mode does not show the problem.",
+  "root_cause": "The defect came from a mismatch between page measurement and page rendering in a fixed-height viewport. Page mode first sliced text using one viewport/safe-area interpretation and then rendered each page with a slightly different bottom-safe-area and text-layout model. Two details mattered: page mode had been reading bottom insets through a fragile one-shot path, and the runtime `Text` did not fully mirror the measurement style. Scroll mode did not reproduce the bug because it uses a `LazyColumn` that can continue flowing past the bottom edge instead of forcing text into one fixed page-height box.",
+  "fix": [
+    "Switched page-mode safe-area handling to Compose-managed `WindowInsets.safeDrawing`, so the effective bottom viewport matches the real drawable area instead of relying on a one-shot root inset snapshot.",
+    "Unified page measurement and page rendering around the same page `TextStyle`, including `PlatformTextStyle(includeFontPadding = false)`, so the page splitter and the actual on-screen `Text` use the same layout assumptions.",
+    "Applied the same page padding and text-style model to cross-chapter boundary transition layers so the normal page surface and boundary animation surface no longer diverge.",
+    "Kept the earlier failed approaches in `failed_attempts` so future debugging does not regress into bar-color tuning or forced line-freezing."
+  ],
+  "failed_attempts": [
+    "Adjusted page viewport using `systemBars`-based bottom inset, but the clipping still reproduced.",
+    "Added top inset into page metrics, which introduced excess top whitespace without eliminating bottom clipping.",
+    "Forced page slices to preserve measured line breaks, which reduced reflow drift but produced visibly unnatural broken wrapping.",
+    "Changed system bar colors and navigation-bar contrast settings, which improved bar appearance but did not address the actual clipping behavior."
+  ],
+  "impact": "This is a release-blocking issue for page mode because it makes the reading surface look physically obstructed and damages trust in the pagination engine.",
+  "tags": [
+    "android",
+    "compose",
+    "reader",
+    "page-mode",
+    "window-insets",
+    "text-layout",
+    "rendering",
+    "safe-drawing",
+    "resolved",
+    "failed-attempts"
+  ],
+  "confidence": 0.93,
+  "created_at": "2026-04-20",
+  "updated_at": "2026-04-20"
+}

@@ -1,0 +1,25 @@
+{
+  "id": "BUG-2026-006",
+  "title": "Day mode and night mode incorrectly share one brightness value",
+  "symptom": "A comfortable daytime brightness made night mode too bright, and a comfortable night brightness made daytime reading too dim.",
+  "root_cause": "Reader settings stored brightness as a single global scalar instead of maintaining per-appearance-mode state.",
+  "fix": [
+    "Split brightness into independent day-mode and night-mode values.",
+    "Set more sensible defaults around 80% for day and 30% for night.",
+    "Migrated legacy single-brightness settings forward so existing users do not lose their preference."
+  ],
+  "failed_attempts": [],
+  "impact": "Brightness adjustments became frustrating because switching appearance mode undid the user's comfort tuning.",
+  "tags": [
+    "android",
+    "compose",
+    "reader",
+    "brightness",
+    "settings",
+    "day-night",
+    "resolved"
+  ],
+  "confidence": 0.96,
+  "created_at": "2026-04-16",
+  "updated_at": "2026-04-20"
+}
