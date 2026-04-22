@@ -12,4 +12,5 @@ data class ReaderSettings(
     val nightBrightness: Float = 0.3f,
     val dayThemePreset: ReaderThemePreset = ReaderThemePreset.PAPER,
     val nightThemePreset: ReaderThemePreset = ReaderThemePreset.AMOLED,
+    val ttsSettings: ReaderTtsSettings = ReaderTtsSettings(),
 )

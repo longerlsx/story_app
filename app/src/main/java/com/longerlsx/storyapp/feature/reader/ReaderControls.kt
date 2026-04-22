@@ -2,12 +2,15 @@ package com.longerlsx.storyapp.feature.reader
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,12 +21,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.longerlsx.storyapp.core.model.ReaderAppearanceMode
+
+data class ReaderTtsToggleUiState(
+    val actionLabel: String = "朗读",
+    val showImmersiveAction: Boolean = false,
+    val immersiveActionLabel: String = actionLabel,
+)
 
 @Composable
 fun ReaderControls(
@@ -34,11 +44,14 @@ fun ReaderControls(
     canOpenPreviousChapter: Boolean,
     canOpenNextChapter: Boolean,
     themePalette: ReaderThemePalette,
+    ttsToggleState: ReaderTtsToggleUiState? = null,
     onOpenPreviousChapter: () -> Unit,
     onOpenNextChapter: () -> Unit,
     onOpenToc: () -> Unit,
     onToggleAppearanceMode: () -> Unit,
     onOpenSettings: () -> Unit,
+    onToggleTts: () -> Unit = {},
+    onImmersiveTtsAction: () -> Unit = {},
     expandedContent: (@Composable () -> Unit)? = null,
 ) {
     Surface(
@@ -89,16 +102,33 @@ fun ReaderControls(
                     }
                 }
 
-                ReaderChromeMode.READING_ONLY -> Unit
+                ReaderChromeMode.READING_ONLY -> {
+                    if (ttsToggleState?.showImmersiveAction == true) {
+                        ReaderImmersiveTtsStopRow(
+                            themePalette = themePalette,
+                            label = ttsToggleState.immersiveActionLabel,
+                            onActionClick = onImmersiveTtsAction,
+                        )
+                    }
+                }
             }
 
-            ReaderPrimaryActionBar(
-                appearanceMode = appearanceMode,
-                themePalette = themePalette,
-                onOpenToc = onOpenToc,
-                onToggleAppearanceMode = onToggleAppearanceMode,
-                onOpenSettings = onOpenSettings,
-            )
+            when (chromeMode) {
+                ReaderChromeMode.CHROME_VISIBLE,
+                ReaderChromeMode.SETTINGS_EXPANDED,
+                ReaderChromeMode.DIRECTORY_OPEN,
+                -> ReaderPrimaryActionBar(
+                    appearanceMode = appearanceMode,
+                    themePalette = themePalette,
+                    ttsToggleState = ttsToggleState,
+                    onOpenToc = onOpenToc,
+                    onToggleAppearanceMode = onToggleAppearanceMode,
+                    onOpenSettings = onOpenSettings,
+                    onToggleTts = onToggleTts,
+                )
+
+                ReaderChromeMode.READING_ONLY -> Unit
+            }
         }
     }
 }
@@ -259,9 +289,11 @@ private fun ReaderChapterNavigationRow(
 private fun ReaderPrimaryActionBar(
     appearanceMode: ReaderAppearanceMode,
     themePalette: ReaderThemePalette,
+    ttsToggleState: ReaderTtsToggleUiState?,
     onOpenToc: () -> Unit,
     onToggleAppearanceMode: () -> Unit,
     onOpenSettings: () -> Unit,
+    onToggleTts: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -285,6 +317,14 @@ private fun ReaderPrimaryActionBar(
             onClick = onOpenSettings,
             modifier = Modifier.weight(1f),
         )
+        if (ttsToggleState != null) {
+            ReaderTtsToggleAction(
+                state = ttsToggleState,
+                themePalette = themePalette,
+                onClick = onToggleTts,
+                modifier = Modifier.weight(1f),
+            )
+        }
     }
 }
 
@@ -307,7 +347,12 @@ private fun ReaderBarAction(
                     themePalette.background.copy(alpha = 0.45f)
                 },
             )
-            .clickable(enabled = enabled, onClick = onClick)
+            .combinedClickable(
+                enabled = enabled,
+                role = Role.Button,
+                onClick = onClick,
+                onLongClick = null,
+            )
             .semantics { contentDescription = label },
     ) {
         Text(
@@ -322,6 +367,59 @@ private fun ReaderBarAction(
             } else {
                 themePalette.content.copy(alpha = 0.35f)
             },
+        )
+    }
+}
+
+@Composable
+private fun ReaderTtsToggleAction(
+    state: ReaderTtsToggleUiState,
+    themePalette: ReaderThemePalette,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = modifier
+            .padding(horizontal = 4.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(themePalette.background.copy(alpha = 0.9f))
+            .combinedClickable(
+                role = Role.Button,
+                onClick = onClick,
+                onLongClick = null,
+            )
+            .semantics { contentDescription = state.actionLabel },
+    ) {
+        Text(
+            text = state.actionLabel,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
+            color = themePalette.content,
+        )
+    }
+}
+
+@Composable
+private fun ReaderImmersiveTtsStopRow(
+    themePalette: ReaderThemePalette,
+    label: String,
+    onActionClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp)
+            .height(40.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ReaderBarAction(
+            label = label,
+            themePalette = themePalette,
+            onClick = onActionClick,
+            modifier = Modifier.weight(1f),
         )
     }
 }

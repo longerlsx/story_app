@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Story App</string>
+    <string name="reader_tts_notification_channel_name">后台朗读</string>
+    <string name="reader_tts_notification_title_fallback">朗读中</string>
+    <string name="reader_tts_pause">暂停</string>
+    <string name="reader_tts_resume">继续</string>
+    <string name="reader_tts_stop">停止</string>
 </resources>

@@ -27,113 +27,187 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.longerlsx.storyapp.core.model.ReaderAppearanceMode
 import com.longerlsx.storyapp.core.model.ReaderSettings
+import com.longerlsx.storyapp.core.model.ReaderTtsSettings
 import com.longerlsx.storyapp.core.model.ReadingMode
+import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsVoiceOption
 import kotlin.math.roundToInt
 
 @Composable
 fun ReaderSettingsSheet(
     settings: ReaderSettings,
     themePalette: ReaderThemePalette,
+    activeTab: ReaderSettingsTab,
+    availableVoices: List<ReaderTtsVoiceOption>,
+    selectedVoiceName: String?,
+    ttsStatusText: String,
+    ttsRemainingTimeLabel: String? = null,
+    ttsSystemDefaultVoiceStatus: String? = null,
+    onSelectTab: (ReaderSettingsTab) -> Unit,
     onUpdateSettings: (ReaderSettings) -> Unit,
+    onUpdateTtsSettings: (ReaderTtsSettings) -> Unit,
 ) {
-    val activeBrightness = ReaderBrightnessResolver.resolveActiveBrightness(settings)
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        ReaderSliderRow(
-            title = "亮度",
-            valueText = "${(activeBrightness * 100).roundToInt()}%",
-            value = activeBrightness,
-            valueRange = 0.1f..1f,
+        ReaderSettingsTabRow(
+            activeTab = activeTab,
             themePalette = themePalette,
-            onValueChange = {
-                onUpdateSettings(
-                    ReaderBrightnessResolver.withActiveBrightness(settings, it),
-                )
-            },
-            trailingText = "护眼模式",
+            onSelectTab = onSelectTab,
         )
+        when (activeTab) {
+            ReaderSettingsTab.READING -> ReaderReadingSettingsBody(
+                settings = settings,
+                themePalette = themePalette,
+                onUpdateSettings = onUpdateSettings,
+            )
 
-        ReaderStepperRow(
-            title = "字号",
-            valueText = settings.fontSizeSp.toString(),
-            themePalette = themePalette,
-            onDecrease = {
-                onUpdateSettings(
-                    settings.copy(fontSizeSp = (settings.fontSizeSp - 2).coerceAtLeast(14)),
-                )
-            },
-            onIncrease = {
-                onUpdateSettings(
-                    settings.copy(fontSizeSp = (settings.fontSizeSp + 2).coerceAtMost(32)),
-                )
-            },
-        )
-
-        ReaderStepperRow(
-            title = "行距",
-            valueText = settings.lineHeightMultiplier.formatOneDecimal(),
-            themePalette = themePalette,
-            onDecrease = {
-                onUpdateSettings(
-                    settings.copy(
-                        lineHeightMultiplier = (settings.lineHeightMultiplier - 0.1f).coerceAtLeast(1.2f),
-                    ),
-                )
-            },
-            onIncrease = {
-                onUpdateSettings(
-                    settings.copy(
-                        lineHeightMultiplier = (settings.lineHeightMultiplier + 0.1f).coerceAtMost(2.2f),
-                    ),
-                )
-            },
-        )
-
-        ReaderStepperRow(
-            title = "段落距",
-            valueText = settings.paragraphSpacingEm.formatOneDecimal(),
-            themePalette = themePalette,
-            onDecrease = {
-                onUpdateSettings(
-                    settings.copy(
-                        paragraphSpacingEm = (settings.paragraphSpacingEm - 0.1f).coerceAtLeast(0.4f),
-                    ),
-                )
-            },
-            onIncrease = {
-                onUpdateSettings(
-                    settings.copy(
-                        paragraphSpacingEm = (settings.paragraphSpacingEm + 0.1f).coerceAtMost(1.8f),
-                    ),
-                )
-            },
-        )
-
-        ReaderModeRow(
-            readingMode = settings.readingMode,
-            settings = settings,
-            themePalette = themePalette,
-            onUpdateSettings = onUpdateSettings,
-        )
-
-        ReaderThemeRow(
-            appearanceMode = settings.appearanceMode,
-            selectedPreset = ReaderThemeResolver.resolveActivePreset(settings),
-            themePalette = themePalette,
-            onSelectPreset = { preset ->
-                onUpdateSettings(
-                    when (settings.appearanceMode) {
-                        ReaderAppearanceMode.DAY -> settings.copy(dayThemePreset = preset)
-                        ReaderAppearanceMode.NIGHT -> settings.copy(nightThemePreset = preset)
-                    },
-                )
-            },
-        )
+            ReaderSettingsTab.TTS -> ReaderTtsSettingsSheet(
+                statusText = ttsStatusText,
+                settings = settings.ttsSettings,
+                availableVoices = availableVoices,
+                selectedVoiceName = selectedVoiceName,
+                remainingTimeLabel = ttsRemainingTimeLabel,
+                systemDefaultVoiceStatus = ttsSystemDefaultVoiceStatus,
+                onSelectVoice = { voiceName ->
+                    onUpdateTtsSettings(settings.ttsSettings.copy(voiceName = voiceName))
+                },
+                onUpdateSpeechRate = { speechRate ->
+                    onUpdateTtsSettings(settings.ttsSettings.copy(speechRate = speechRate))
+                },
+                onUpdatePitch = { pitch ->
+                    onUpdateTtsSettings(settings.ttsSettings.copy(pitch = pitch))
+                },
+                onUpdateTimerPreset = { timerPreset ->
+                    onUpdateTtsSettings(settings.ttsSettings.copy(timerPreset = timerPreset))
+                },
+            )
+        }
     }
+}
+
+@Composable
+private fun ReaderSettingsTabRow(
+    activeTab: ReaderSettingsTab,
+    themePalette: ReaderThemePalette,
+    onSelectTab: (ReaderSettingsTab) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        ReaderSettingsTab.entries.forEach { tab ->
+            ReaderInlinePill(
+                label = tab.label,
+                themePalette = themePalette,
+                modifier = Modifier.weight(1f),
+                selected = tab == activeTab,
+                contentDescription = "设置分页：${tab.label}，${if (tab == activeTab) "已选中" else "未选中"}",
+                onClick = { onSelectTab(tab) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReaderReadingSettingsBody(
+    settings: ReaderSettings,
+    themePalette: ReaderThemePalette,
+    onUpdateSettings: (ReaderSettings) -> Unit,
+) {
+    val activeBrightness = ReaderBrightnessResolver.resolveActiveBrightness(settings)
+    ReaderSliderRow(
+        title = "亮度",
+        valueText = "${(activeBrightness * 100).roundToInt()}%",
+        value = activeBrightness,
+        valueRange = 0.1f..1f,
+        themePalette = themePalette,
+        onValueChange = {
+            onUpdateSettings(
+                ReaderBrightnessResolver.withActiveBrightness(settings, it),
+            )
+        },
+        trailingText = "护眼模式",
+    )
+
+    ReaderStepperRow(
+        title = "字号",
+        valueText = settings.fontSizeSp.toString(),
+        themePalette = themePalette,
+        onDecrease = {
+            onUpdateSettings(
+                settings.copy(fontSizeSp = (settings.fontSizeSp - 2).coerceAtLeast(14)),
+            )
+        },
+        onIncrease = {
+            onUpdateSettings(
+                settings.copy(fontSizeSp = (settings.fontSizeSp + 2).coerceAtMost(32)),
+            )
+        },
+    )
+
+    ReaderStepperRow(
+        title = "行距",
+        valueText = settings.lineHeightMultiplier.formatOneDecimal(),
+        themePalette = themePalette,
+        onDecrease = {
+            onUpdateSettings(
+                settings.copy(
+                    lineHeightMultiplier = (settings.lineHeightMultiplier - 0.1f).coerceAtLeast(1.2f),
+                ),
+            )
+        },
+        onIncrease = {
+            onUpdateSettings(
+                settings.copy(
+                    lineHeightMultiplier = (settings.lineHeightMultiplier + 0.1f).coerceAtMost(2.2f),
+                ),
+            )
+        },
+    )
+
+    ReaderStepperRow(
+        title = "段落距",
+        valueText = settings.paragraphSpacingEm.formatOneDecimal(),
+        themePalette = themePalette,
+        onDecrease = {
+            onUpdateSettings(
+                settings.copy(
+                    paragraphSpacingEm = (settings.paragraphSpacingEm - 0.1f).coerceAtLeast(0.4f),
+                ),
+            )
+        },
+        onIncrease = {
+            onUpdateSettings(
+                settings.copy(
+                    paragraphSpacingEm = (settings.paragraphSpacingEm + 0.1f).coerceAtMost(1.8f),
+                ),
+            )
+        },
+    )
+
+    ReaderModeRow(
+        readingMode = settings.readingMode,
+        settings = settings,
+        themePalette = themePalette,
+        onUpdateSettings = onUpdateSettings,
+    )
+
+    ReaderThemeRow(
+        appearanceMode = settings.appearanceMode,
+        selectedPreset = ReaderThemeResolver.resolveActivePreset(settings),
+        themePalette = themePalette,
+        onSelectPreset = { preset ->
+            onUpdateSettings(
+                when (settings.appearanceMode) {
+                    ReaderAppearanceMode.DAY -> settings.copy(dayThemePreset = preset)
+                    ReaderAppearanceMode.NIGHT -> settings.copy(nightThemePreset = preset)
+                },
+            )
+        },
+    )
 }
 
 @Composable

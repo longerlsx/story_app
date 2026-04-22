@@ -17,6 +17,8 @@ import com.longerlsx.storyapp.core.model.ImportSourceType
 import com.longerlsx.storyapp.feature.bookshelf.BookshelfScreen
 import com.longerlsx.storyapp.feature.importer.ExternalImportHandler
 import com.longerlsx.storyapp.feature.reader.ReaderScreen
+import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsIntentFactory
+import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsNavigationPolicy
 import com.longerlsx.storyapp.feature.source.SourceEntryScreen
 import kotlinx.coroutines.launch
 
@@ -27,11 +29,25 @@ fun StoryApp(
 ) {
     val context = LocalContext.current
     val application = context.applicationContext as StoryApplication
+    val ttsController = application.readerTtsController
     val appState = rememberStoryAppState(
         initialBookId = application.anchorStore.getLastOpenedBookId(),
     )
     val books by application.bookRepository.observeBookshelf().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
+    fun openReaderWithTtsGuard(bookId: String) {
+        if (
+            ReaderTtsNavigationPolicy.shouldStopForOpenReader(
+                playbackState = ttsController.playbackState,
+                activeBookId = ttsController.currentBookId,
+                nextBookId = bookId,
+            )
+        ) {
+            ttsController.stopByNavigation()
+        }
+        appState.openReader(bookId)
+    }
+
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri ->
@@ -46,10 +62,17 @@ fun StoryApp(
                 bytes = bytes,
                 sourceType = ImportSourceType.LOCAL_FILE,
             )
-            appState.openReader(result.book.id)
+            openReaderWithTtsGuard(result.book.id)
         }
     }
     LaunchedEffect(externalIntent) {
+        val notificationBookId = ReaderTtsIntentFactory.extractOpenReaderBookId(externalIntent)
+        if (notificationBookId != null) {
+            openReaderWithTtsGuard(notificationBookId)
+            onExternalIntentConsumed()
+            return@LaunchedEffect
+        }
+
         val payload = ExternalImportHandler.extractPayload(
             context = context,
             intent = externalIntent,
@@ -65,7 +88,7 @@ fun StoryApp(
             bytes = payload.bytes,
             sourceType = ImportSourceType.EXTERNAL_INTENT,
         )
-        appState.openReader(result.book.id)
+        openReaderWithTtsGuard(result.book.id)
         onExternalIntentConsumed()
     }
 
@@ -76,13 +99,14 @@ fun StoryApp(
                 importLauncher.launch(arrayOf("text/plain", "text/*", "*/*"))
             },
             onOpenSourceEntry = appState::openSourceEntry,
-            onOpenBook = appState::openReader,
+            onOpenBook = ::openReaderWithTtsGuard,
         )
 
         AppScreen.READER -> ReaderScreen(
             bookId = requireNotNull(appState.selectedBookId),
             repository = application.bookRepository,
             settingsStore = application.readerSettingsStore,
+            ttsController = ttsController,
             onBack = appState::openBookshelf,
         )
 

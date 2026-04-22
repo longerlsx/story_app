@@ -2,6 +2,8 @@ package com.longerlsx.storyapp.data.reader
 
 import com.longerlsx.storyapp.core.model.ReaderAppearanceMode
 import com.longerlsx.storyapp.core.model.ReaderSettings
+import com.longerlsx.storyapp.core.model.ReaderTtsSettings
+import com.longerlsx.storyapp.core.model.ReaderTtsTimerPreset
 import com.longerlsx.storyapp.core.model.ReadingMode
 import com.longerlsx.storyapp.feature.reader.ReaderThemePreset
 import java.io.File
@@ -47,6 +49,16 @@ class ReaderSettingsStore(
                 ?.let(ReaderThemePreset::fromStoredValue)
                 ?: legacyThemePreset?.takeIf { it.appearanceMode == ReaderAppearanceMode.NIGHT }
                 ?: defaults.nightThemePreset,
+            ttsSettings = ReaderTtsSettings(
+                voiceName = properties.getProperty(KEY_TTS_VOICE_NAME),
+                speechRate = properties.getProperty(KEY_TTS_SPEECH_RATE)?.toFloatOrNull()
+                    ?: defaults.ttsSettings.speechRate,
+                pitch = properties.getProperty(KEY_TTS_PITCH)?.toFloatOrNull()
+                    ?: defaults.ttsSettings.pitch,
+                timerPreset = ReaderTtsTimerPreset.fromStoredValue(
+                    properties.getProperty(KEY_TTS_TIMER_PRESET),
+                ) ?: defaults.ttsSettings.timerPreset,
+            ),
         )
     }
 
@@ -61,6 +73,10 @@ class ReaderSettingsStore(
             setProperty(KEY_NIGHT_BRIGHTNESS, settings.nightBrightness.toString())
             setProperty(KEY_DAY_THEME_PRESET, settings.dayThemePreset.name)
             setProperty(KEY_NIGHT_THEME_PRESET, settings.nightThemePreset.name)
+            settings.ttsSettings.voiceName?.let { setProperty(KEY_TTS_VOICE_NAME, it) }
+            setProperty(KEY_TTS_SPEECH_RATE, settings.ttsSettings.speechRate.toString())
+            setProperty(KEY_TTS_PITCH, settings.ttsSettings.pitch.toString())
+            setProperty(KEY_TTS_TIMER_PRESET, settings.ttsSettings.timerPreset.storedValue)
         }
 
         if (!rootDir.exists()) {
@@ -92,5 +108,9 @@ class ReaderSettingsStore(
         const val KEY_DAY_THEME_PRESET = "dayThemePreset"
         const val KEY_NIGHT_THEME_PRESET = "nightThemePreset"
         const val KEY_THEME_PRESET_LEGACY = "themePreset"
+        const val KEY_TTS_VOICE_NAME = "ttsVoiceName"
+        const val KEY_TTS_SPEECH_RATE = "ttsSpeechRate"
+        const val KEY_TTS_PITCH = "ttsPitch"
+        const val KEY_TTS_TIMER_PRESET = "ttsTimerPreset"
     }
 }

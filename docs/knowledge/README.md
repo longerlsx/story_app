@@ -5,6 +5,7 @@ This directory stores reusable project knowledge that should survive beyond a si
 Current entries:
 
 - [2026-04-android-reader-development-cycle.md](/Users/longshengxi/proj/story_app/docs/knowledge/2026-04-android-reader-development-cycle.md): high-level implementation and debugging summary for the current Android reader build-out.
+- [gradle-android-environment-troubleshooting.md](/Users/longshengxi/proj/story_app/docs/knowledge/gradle-android-environment-troubleshooting.md): Gradle, Android SDK, proxy, and repository-resolution lessons from project bootstrap.
 - [bugs/INDEX.md](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/INDEX.md): structured bug index with links to per-bug JSON records.
 - [bugs/TEMPLATE.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/TEMPLATE.json): canonical bug-record template for new entries.
 

@@ -5,8 +5,8 @@ object ReaderChromeStateReducer {
         return when (current) {
             ReaderChromeMode.READING_ONLY -> ReaderChromeMode.CHROME_VISIBLE
             ReaderChromeMode.CHROME_VISIBLE,
-            ReaderChromeMode.SETTINGS_EXPANDED,
             ReaderChromeMode.DIRECTORY_OPEN,
+            ReaderChromeMode.SETTINGS_EXPANDED,
             -> ReaderChromeMode.READING_ONLY
         }
     }

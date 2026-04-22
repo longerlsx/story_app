@@ -90,7 +90,7 @@ class ReaderChromeTest {
             assertTrue(device.ensureScrollMode())
             assertTrue(device.revealReaderChrome("设置"))
 
-            assertTrue(device.waitForReaderTopBar("阅读器交互测试"))
+            assertTrue(device.waitForReaderTopBar("阅读器交互测试", timeoutMs = 4_000))
             assertTrue(device.hasObject(By.descContains("阅读器交互测试")))
             assertTrue(device.hasObject(By.descContains("第1章 开始")))
             assertTrue(device.hasObject(By.desc("更多")))
@@ -105,8 +105,99 @@ class ReaderChromeTest {
                     device.wait(Until.hasObject(By.desc("夜间")), 2_000) ||
                     device.wait(Until.hasObject(By.desc("日间")), 2_000),
             )
+            assertTrue(
+                device.wait(Until.hasObject(By.text("朗读")), 2_000) ||
+                    device.wait(Until.hasObject(By.desc("朗读")), 2_000),
+            )
             assertFalse(device.hasObject(By.text("上一章")))
             assertFalse(device.hasObject(By.text("下一章")))
+        }
+    }
+
+    @Test
+    fun appearanceToggleResetsChromeAutoHideFromLastInteraction() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val importFile = File(context.cacheDir, "reader-chrome-autohide-reset.txt").apply {
+            writeText(
+                """
+                《操作层自动收起测试》
+                作者：测试作者
+
+                第1章 开始
+                第一章正文。
+                """.trimIndent(),
+            )
+        }
+        val uri = FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            importFile,
+        )
+        val externalIntent = Intent(Intent.ACTION_VIEW).apply {
+            setClass(context, MainActivity::class.java)
+            setDataAndType(uri, "text/plain")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+
+        ActivityScenario.launch<MainActivity>(externalIntent).use {
+            assertTrue(device.wait(Until.hasObject(By.textContains("第一章正文")), 8_000))
+            assertTrue(device.revealReaderChrome("设置"))
+            assertTrue(device.tapPrimaryAction(ReaderPrimaryActionSlot.APPEARANCE))
+            assertTrue(
+                device.wait(Until.hasObject(By.text("设置")), 2_500) ||
+                    device.wait(Until.hasObject(By.desc("设置")), 2_500),
+            )
+            assertTrue(
+                device.wait(Until.gone(By.text("设置")), 2_000) ||
+                    device.wait(Until.gone(By.desc("设置")), 2_000),
+            )
+        }
+    }
+
+    @Test
+    fun closingSettingsRearmsChromeAutoHideCountdown() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val importFile = File(context.cacheDir, "reader-chrome-settings-close-autohide.txt").apply {
+            writeText(
+                """
+                《设置关闭后自动收起测试》
+                作者：测试作者
+
+                第1章 开始
+                第一章正文。
+                """.trimIndent(),
+            )
+        }
+        val uri = FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            importFile,
+        )
+        val externalIntent = Intent(Intent.ACTION_VIEW).apply {
+            setClass(context, MainActivity::class.java)
+            setDataAndType(uri, "text/plain")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+
+        ActivityScenario.launch<MainActivity>(externalIntent).use {
+            assertTrue(device.wait(Until.hasObject(By.textContains("第一章正文")), 8_000))
+            assertTrue(device.revealReaderChrome("设置"))
+            assertTrue(device.tapPrimaryAction(ReaderPrimaryActionSlot.SETTINGS))
+            assertTrue(device.wait(Until.hasObject(By.text("亮度")), 3_000))
+
+            assertTrue(device.tapPrimaryAction(ReaderPrimaryActionSlot.SETTINGS))
+            assertTrue(
+                device.wait(Until.hasObject(By.text("目录")), 1_500) ||
+                    device.wait(Until.hasObject(By.desc("目录")), 1_500),
+            )
+            assertTrue(
+                device.wait(Until.gone(By.text("目录")), 4_000) ||
+                    device.wait(Until.gone(By.desc("目录")), 4_000),
+            )
         }
     }
 

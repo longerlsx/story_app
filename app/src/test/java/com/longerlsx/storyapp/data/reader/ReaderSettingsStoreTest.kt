@@ -2,6 +2,8 @@ package com.longerlsx.storyapp.data.reader
 
 import com.longerlsx.storyapp.core.model.ReaderSettings
 import com.longerlsx.storyapp.core.model.ReaderAppearanceMode
+import com.longerlsx.storyapp.core.model.ReaderTtsSettings
+import com.longerlsx.storyapp.core.model.ReaderTtsTimerPreset
 import com.longerlsx.storyapp.core.model.ReadingMode
 import com.longerlsx.storyapp.feature.reader.ReaderThemePreset
 import java.nio.file.Files
@@ -29,6 +31,12 @@ class ReaderSettingsStoreTest {
                 nightBrightness = 0.28f,
                 dayThemePreset = ReaderThemePreset.PAPER,
                 nightThemePreset = ReaderThemePreset.AMOLED,
+                ttsSettings = ReaderTtsSettings(
+                    voiceName = "zh-CN-XiaoxiaoNeural",
+                    speechRate = 1.15f,
+                    pitch = 0.95f,
+                    timerPreset = ReaderTtsTimerPreset.Countdown(15),
+                ),
             )
 
             ReaderSettingsStore(tempDir).save(settings)
@@ -44,6 +52,7 @@ class ReaderSettingsStoreTest {
         val tempDir = Files.createTempDirectory("story-app-reader-settings-default-test").toFile()
         try {
             assertEquals(ReaderSettings(), ReaderSettingsStore(tempDir).load())
+            assertEquals(ReaderTtsTimerPreset.NoTimer, ReaderSettings().ttsSettings.timerPreset)
         } finally {
             tempDir.deleteRecursively()
         }
@@ -63,6 +72,42 @@ class ReaderSettingsStoreTest {
 
             assertEquals(0.66f, settings.dayBrightness)
             assertEquals(0.66f, settings.nightBrightness)
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun loadsExplicitNoTimerPresetFromStoredSettings() {
+        val tempDir = Files.createTempDirectory("story-app-reader-settings-explicit-no-timer-test").toFile()
+        try {
+            tempDir.resolve("reader-settings.properties").writeText(
+                """
+                ttsTimerPreset=NO_TIMER
+                """.trimIndent(),
+            )
+
+            val settings = ReaderSettingsStore(tempDir).load()
+
+            assertEquals(ReaderTtsTimerPreset.NoTimer, settings.ttsSettings.timerPreset)
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun fallsBackToNoTimerForUnsupportedCountdownPreset() {
+        val tempDir = Files.createTempDirectory("story-app-reader-settings-invalid-timer-test").toFile()
+        try {
+            tempDir.resolve("reader-settings.properties").writeText(
+                """
+                ttsTimerPreset=COUNTDOWN_7
+                """.trimIndent(),
+            )
+
+            val settings = ReaderSettingsStore(tempDir).load()
+
+            assertEquals(ReaderTtsTimerPreset.NoTimer, settings.ttsSettings.timerPreset)
         } finally {
             tempDir.deleteRecursively()
         }
