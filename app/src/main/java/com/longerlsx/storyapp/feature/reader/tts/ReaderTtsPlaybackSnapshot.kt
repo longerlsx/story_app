@@ -37,3 +37,13 @@ fun ReaderTtsPlaybackSnapshot.activeVisualRangeOrNull(): ReaderTtsActiveVisualRa
         endCharOffset = clampedEnd,
     )
 }
+
+fun ReaderTtsPlaybackSnapshot.activeFollowCharOffsetOrNull(): Int? {
+    val segment = currentSegment ?: return null
+    return nextRecoverableCharOffset
+        ?.coerceIn(segment.startCharOffset, segment.endCharOffset)
+        ?: lastConfirmedSpokenRange
+            ?.startCharOffset
+            ?.coerceIn(segment.startCharOffset, segment.endCharOffset)
+        ?: segment.startCharOffset
+}

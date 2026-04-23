@@ -21,6 +21,7 @@ import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsController
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsPlaybackSnapshot
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsSegment
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsStartRequest
+import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsCharacterRange
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -425,6 +426,101 @@ class ReaderTtsFollowTest {
         composeRule.waitForIdle()
 
         composeRule.onNodeWithText("第二页标记。", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun pageModeDoesNotJumpBackWhenCurrentSegmentCompletesAfterCrossPageFollow() {
+        val bookId = "book-page-follow-completion"
+        val marker = "第二页标记。"
+        val content = buildString {
+            append("第一页起点。\n")
+            repeat(10) { index ->
+                append("用于制造多页效果的铺垫正文第${index}行，这是一段足够长的测试文本。\n")
+            }
+            append(marker)
+            append('\n')
+            repeat(8) { index ->
+                append("第二页之后的延展正文第${index}行，这是一段足够长的测试文本。\n")
+            }
+        }
+        val markerStart = content.indexOf(marker)
+        val markerEnd = markerStart + marker.length
+        val repository = createRepository(
+            bookId = bookId,
+            chapterTexts = mapOf(0 to content),
+        )
+        val settingsStore = createSettingsStore(
+            name = "reader-tts-follow-page-completion",
+            initial = ReaderSettings(
+                readingMode = ReadingMode.PAGE,
+                paragraphSpacingEm = 0.4f,
+            ),
+        )
+        val controller = ReaderTtsController(
+            launchForegroundService = { true },
+            sendStopCommand = {},
+        )
+        controller.start(
+            request = ReaderTtsStartRequest(
+                bookId = bookId,
+                bookTitle = "分页跟随完成态测试",
+                chapterIndex = 0,
+                charOffset = 0,
+                chapterTitleOrSummary = "第一章",
+                activeStateLabel = "朗读中",
+            ),
+            settings = settingsStore.load().ttsSettings,
+        )
+        controller.onPlaybackStarted()
+
+        composeRule.setContent {
+            ReaderScreen(
+                bookId = bookId,
+                repository = repository,
+                settingsStore = settingsStore,
+                ttsController = controller,
+                onBack = {},
+            )
+        }
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithText("第一页起点。", substring = true).fetchSemanticsNodes().isNotEmpty()
+        }
+
+        controller.updatePlaybackSnapshot(
+            ReaderTtsPlaybackSnapshot(
+                currentSegment = ReaderTtsSegment(
+                    chapterIndex = 0,
+                    startCharOffset = 0,
+                    endCharOffset = markerEnd,
+                    spokenText = content.substring(0, markerEnd),
+                ),
+                lastConfirmedSpokenRange = ReaderTtsCharacterRange(markerStart, markerEnd),
+                nextRecoverableCharOffset = markerEnd,
+                nextRecoverableRange = ReaderTtsCharacterRange(markerEnd, markerEnd),
+            ),
+        )
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithText(marker, substring = true).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText(marker, substring = true).assertIsDisplayed()
+
+        controller.updatePlaybackSnapshot(
+            ReaderTtsPlaybackSnapshot(
+                currentSegment = ReaderTtsSegment(
+                    chapterIndex = 0,
+                    startCharOffset = 0,
+                    endCharOffset = markerEnd,
+                    spokenText = content.substring(0, markerEnd),
+                ),
+                lastConfirmedSpokenRange = ReaderTtsCharacterRange(markerEnd, markerEnd),
+                nextRecoverableCharOffset = markerEnd,
+                nextRecoverableRange = ReaderTtsCharacterRange(markerEnd, markerEnd),
+            ),
+        )
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText(marker, substring = true).assertIsDisplayed()
     }
 
     @Test

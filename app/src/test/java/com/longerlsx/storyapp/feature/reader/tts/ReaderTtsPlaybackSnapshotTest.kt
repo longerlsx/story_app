@@ -104,4 +104,35 @@ class ReaderTtsPlaybackSnapshotTest {
             snapshot.activeVisualRangeOrNull(),
         )
     }
+
+    @Test
+    fun prefersRecoverableOffsetForActiveFollowPositionWhenTimingRangeIsCollapsed() {
+        val snapshot = ReaderTtsPlaybackSnapshot(
+            currentSegment = ReaderTtsSegment(
+                chapterIndex = 8,
+                startCharOffset = 100,
+                endCharOffset = 124,
+                spokenText = "朗读已经走到这句结尾。",
+            ),
+            lastConfirmedSpokenRange = ReaderTtsCharacterRange(124, 124),
+            nextRecoverableCharOffset = 124,
+            nextRecoverableRange = ReaderTtsCharacterRange(124, 124),
+        )
+
+        assertEquals(124, snapshot.activeFollowCharOffsetOrNull())
+    }
+
+    @Test
+    fun fallsBackToCurrentSegmentStartForActiveFollowPositionWhenNoProgressExists() {
+        val snapshot = ReaderTtsPlaybackSnapshot(
+            currentSegment = ReaderTtsSegment(
+                chapterIndex = 6,
+                startCharOffset = 40,
+                endCharOffset = 58,
+                spokenText = "系统还没给 timing。",
+            ),
+        )
+
+        assertEquals(40, snapshot.activeFollowCharOffsetOrNull())
+    }
 }

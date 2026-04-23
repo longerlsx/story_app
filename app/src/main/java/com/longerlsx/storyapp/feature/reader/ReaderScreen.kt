@@ -1154,9 +1154,11 @@ private fun ReaderReadyContent(
                             endCharOffset = it.endCharOffset,
                         )
                     },
-                followTargetCharOffset = activePlaybackVisualRange
-                    ?.takeIf { it.chapterIndex == selectedChapterIndex && !isFollowSuppressed }
-                    ?.startCharOffset,
+                followTargetCharOffset = resolvePageFollowTargetCharOffset(
+                    playbackSnapshot = ttsRuntime.playbackSnapshot,
+                    selectedChapterIndex = selectedChapterIndex,
+                    isFollowSuppressed = isFollowSuppressed,
+                ),
                 enableTtsRestartGesture = isCurrentBookTtsOngoing,
                 enableTapToDismissExpandedChrome = chromeMode == ReaderChromeMode.SETTINGS_EXPANDED,
                 onRestartFromCharOffset = { charOffset ->
