@@ -1114,7 +1114,10 @@ private fun ReaderReadyContent(
                         pressedCharOffset = charOffset,
                     )
                 },
-                onTapBodyText = if (chromeMode == ReaderChromeMode.SETTINGS_EXPANDED) {
+                onTapBodyText = if (
+                    isCurrentBookTtsOngoing ||
+                    chromeMode == ReaderChromeMode.SETTINGS_EXPANDED
+                ) {
                     { setChromeMode(ReaderChromeStateReducer.onCenterTap(chromeMode)) }
                 } else {
                     null
@@ -1160,7 +1163,10 @@ private fun ReaderReadyContent(
                     isFollowSuppressed = isFollowSuppressed,
                 ),
                 enableTtsRestartGesture = isCurrentBookTtsOngoing,
-                enableTapToDismissExpandedChrome = chromeMode == ReaderChromeMode.SETTINGS_EXPANDED,
+                enableTapToDismissExpandedChrome = (
+                    chromeMode == ReaderChromeMode.SETTINGS_EXPANDED ||
+                        isCurrentBookTtsOngoing
+                    ),
                 onRestartFromCharOffset = { charOffset ->
                     restartTtsFromPressedOffset(
                         chapterIndex = selectedChapterIndex,

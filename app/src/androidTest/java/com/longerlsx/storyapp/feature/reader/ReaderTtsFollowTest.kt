@@ -279,6 +279,55 @@ class ReaderTtsFollowTest {
     }
 
     @Test
+    fun tappingBodyWhileTtsIsActiveAndReadingOnlyRevealsChrome() {
+        val bookId = "book-tts-reading-only-body-tap"
+        val repository = createRepository(
+            bookId = bookId,
+            chapterTexts = mapOf(
+                0 to """
+                    第一段正文。
+                    第二段正文。
+                    第三段正文。
+                """.trimIndent(),
+            ),
+        )
+        val settingsStore = createSettingsStore(
+            name = "reader-tts-reading-only-body-tap",
+            initial = ReaderSettings(readingMode = ReadingMode.SCROLL),
+        )
+        val controller = ReaderTtsController(
+            launchForegroundService = { true },
+            sendStopCommand = {},
+        )
+        controller.start(
+            request = ReaderTtsStartRequest(
+                bookId = bookId,
+                bookTitle = "正文点击唤出操作层测试",
+                chapterIndex = 0,
+                charOffset = 0,
+                chapterTitleOrSummary = "第一章",
+                activeStateLabel = "朗读中",
+            ),
+            settings = settingsStore.load().ttsSettings,
+        )
+        controller.onPlaybackStarted()
+
+        composeRule.setContent {
+            ReaderScreen(
+                bookId = bookId,
+                repository = repository,
+                settingsStore = settingsStore,
+                ttsController = controller,
+                onBack = {},
+            )
+        }
+
+        composeRule.onNodeWithContentDescription("沉浸式阅读头部").assertIsDisplayed()
+        composeRule.onNodeWithText("第二段正文。").assertIsDisplayed().performClick()
+        composeRule.onNodeWithContentDescription("设置").assertIsDisplayed()
+    }
+
+    @Test
     fun pageModeFollowsPlaybackIntoSpokenChapter() {
         val bookId = "book-page-follow"
         val repository = createRepository(
