@@ -12,28 +12,42 @@ object ReaderPageTextLayout {
         availableWidthPx: Int,
         textMeasurer: TextMeasurer,
         textStyle: TextStyle,
+        paragraphSpacingPx: Float,
     ): List<ReaderPageLine> {
         if (content.isBlank() || availableWidthPx <= 0) {
             return emptyList()
         }
 
-        val layoutResult = textMeasurer.measure(
-            text = AnnotatedString(content),
-            style = textStyle,
-            overflow = TextOverflow.Clip,
-            softWrap = true,
-            constraints = Constraints(
-                maxWidth = availableWidthPx.coerceAtLeast(1),
-            ),
-        )
-
-        return List(layoutResult.lineCount) { lineIndex ->
-            ReaderPageLine(
-                startCharOffset = layoutResult.getLineStart(lineIndex),
-                endCharOffset = layoutResult.getLineEnd(lineIndex, visibleEnd = true),
-                topPx = layoutResult.getLineTop(lineIndex),
-                bottomPx = layoutResult.getLineBottom(lineIndex),
-            )
+        val paragraphs = content.toDisplayParagraphs()
+        if (paragraphs.isEmpty()) {
+            return emptyList()
         }
+
+        val lines = mutableListOf<ReaderPageLine>()
+        var paragraphTopPx = 0f
+        paragraphs.forEachIndexed { paragraphIndex, paragraph ->
+            val layoutResult = textMeasurer.measure(
+                text = AnnotatedString(paragraph.text),
+                style = textStyle,
+                overflow = TextOverflow.Clip,
+                softWrap = true,
+                constraints = Constraints(
+                    maxWidth = availableWidthPx.coerceAtLeast(1),
+                ),
+            )
+            repeat(layoutResult.lineCount) { lineIndex ->
+                lines += ReaderPageLine(
+                    startCharOffset = paragraph.startCharOffset + layoutResult.getLineStart(lineIndex),
+                    endCharOffset = paragraph.startCharOffset + layoutResult.getLineEnd(lineIndex, visibleEnd = true),
+                    topPx = paragraphTopPx + layoutResult.getLineTop(lineIndex),
+                    bottomPx = paragraphTopPx + layoutResult.getLineBottom(lineIndex),
+                )
+            }
+            paragraphTopPx += layoutResult.size.height.toFloat()
+            if (paragraphIndex < paragraphs.lastIndex) {
+                paragraphTopPx += paragraphSpacingPx
+            }
+        }
+        return lines
     }
 }

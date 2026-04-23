@@ -27,4 +27,19 @@ class ReaderPageAnchorMapperTest {
 
         assertEquals(100, ReaderPageAnchorMapper.anchorForPageIndex(pages, 1))
     }
+
+    @Test
+    fun mapsVisiblePageTextOffsetsBackToRawChapterOffsets() {
+        val page = ReaderPageSlice(
+            startCharOffset = 40,
+            endCharOffset = 72,
+            text = "正文段落",
+            visibleStartCharOffset = 43,
+            visibleEndCharOffset = 47,
+        )
+
+        assertEquals(43, page.rawCharOffsetForVisibleTextOffset(0))
+        assertEquals(45, page.rawCharOffsetForVisibleTextOffset(2))
+        assertEquals(46, page.rawCharOffsetForVisibleTextOffset(99))
+    }
 }

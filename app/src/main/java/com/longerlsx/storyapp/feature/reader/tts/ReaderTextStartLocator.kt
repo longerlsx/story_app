@@ -17,9 +17,9 @@ object ReaderTextStartLocator {
         viewportTopPx: Int = 0,
     ): ReaderTextStartLocation? {
         val activeItem = visibleItems
-            .sortedBy { it.offsetPx }
+            .sortedBy { it.bodyOffsetPx }
             .firstOrNull { item ->
-                item.offsetPx + item.sizePx > viewportTopPx
+                item.bodyOffsetPx + item.bodyHeightPx > viewportTopPx
             }
             ?: return null
 
@@ -28,8 +28,8 @@ object ReaderTextStartLocator {
             chapterIndex = activeItem.chapterIndex,
             charOffset = ReaderScrollFeedAnchorMapper.toCharOffset(
                 contentLength = contentLength,
-                itemOffsetPx = activeItem.offsetPx - viewportTopPx,
-                itemHeightPx = activeItem.sizePx,
+                bodyOffsetPx = activeItem.bodyOffsetPx - viewportTopPx,
+                bodyHeightPx = activeItem.bodyHeightPx,
             ),
         )
     }
@@ -39,12 +39,14 @@ object ReaderTextStartLocator {
         pages: List<ReaderPageSlice>,
         currentPageIndex: Int,
     ): ReaderTextStartLocation {
+        val page = pages.getOrNull(currentPageIndex.coerceIn(0, pages.lastIndex))
         return ReaderTextStartLocation(
             chapterIndex = chapterIndex,
-            charOffset = ReaderPageAnchorMapper.anchorForPageIndex(
-                pages = pages,
-                pageIndex = currentPageIndex,
-            ),
+            charOffset = page?.visibleStartCharOffset
+                ?: ReaderPageAnchorMapper.anchorForPageIndex(
+                    pages = pages,
+                    pageIndex = currentPageIndex,
+                ),
         )
     }
 
@@ -59,7 +61,35 @@ object ReaderTextStartLocator {
         }
 
         val startOffset = pressedCharOffset.coerceIn(0, text.lastIndex)
-        for (index in startOffset..text.lastIndex) {
+        val paragraphStart = text.lastIndexOf('\n', startOffset)
+            .let { if (it < 0) 0 else it + 1 }
+        val paragraphEndExclusive = text.indexOf('\n', startOffset)
+            .let { if (it < 0) text.length else it }
+
+        for (index in startOffset.coerceAtMost(paragraphEndExclusive - 1) downTo paragraphStart) {
+            if (nonBodyRanges.any { index in it }) {
+                continue
+            }
+            if (text[index].isReadableBodyCharacter()) {
+                return ReaderTextStartLocation(
+                    chapterIndex = chapterIndex,
+                    charOffset = index,
+                )
+            }
+        }
+
+        for (index in startOffset until paragraphEndExclusive) {
+            if (nonBodyRanges.any { index in it }) {
+                continue
+            }
+            if (text[index].isReadableBodyCharacter()) {
+                return ReaderTextStartLocation(
+                    chapterIndex = chapterIndex,
+                    charOffset = index,
+                )
+            }
+        }
+        for (index in paragraphEndExclusive..text.lastIndex) {
             if (nonBodyRanges.any { index in it }) {
                 continue
             }

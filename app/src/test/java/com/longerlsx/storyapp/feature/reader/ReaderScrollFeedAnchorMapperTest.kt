@@ -6,24 +6,53 @@ import org.junit.Test
 class ReaderScrollFeedAnchorMapperTest {
 
     @Test
-    fun mapsVisibleItemOffsetToChapterLocalCharOffset() {
-        val charOffset = ReaderScrollFeedAnchorMapper.toCharOffset(
-            contentLength = 1000,
-            itemOffsetPx = -120,
-            itemHeightPx = 400,
+    fun toCharOffset_usesBodyGeometryOnly() {
+        assertEquals(
+            0,
+            ReaderScrollFeedAnchorMapper.toCharOffset(
+                contentLength = 400,
+                bodyOffsetPx = 24,
+                bodyHeightPx = 160,
+            ),
         )
-
-        assertEquals(300, charOffset)
     }
 
     @Test
-    fun restoresApproximateItemOffsetFromSavedCharOffset() {
-        val itemOffset = ReaderScrollFeedAnchorMapper.toScrollOffsetPx(
-            contentLength = 1000,
-            charOffset = 250,
-            itemHeightPx = 400,
+    fun toScrollOffsetPx_mapsWithinBodyGeometryOnly() {
+        assertEquals(
+            80,
+            ReaderScrollFeedAnchorMapper.toScrollOffsetPx(
+                contentLength = 400,
+                charOffset = 200,
+                bodyHeightPx = 160,
+            ),
         )
+    }
 
-        assertEquals(100, itemOffset)
+    @Test
+    fun toCharOffset_respectsReadableViewportTopInset() {
+        assertEquals(
+            53,
+            ReaderScrollFeedAnchorMapper.toCharOffset(
+                contentLength = 400,
+                bodyOffsetPx = 28,
+                bodyHeightPx = 180,
+                viewportTopPx = 52,
+            ),
+        )
+    }
+
+    @Test
+    fun toItemScrollOffsetPx_alignsTargetToReadableViewportTop() {
+        assertEquals(
+            124,
+            ReaderScrollFeedAnchorMapper.toItemScrollOffsetPx(
+                contentLength = 400,
+                charOffset = 200,
+                bodyOffsetWithinItemPx = 96,
+                bodyHeightPx = 160,
+                viewportTopPx = 52,
+            ),
+        )
     }
 }

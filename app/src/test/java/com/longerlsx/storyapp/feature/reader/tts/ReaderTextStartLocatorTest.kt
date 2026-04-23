@@ -26,6 +26,59 @@ class ReaderTextStartLocatorTest {
     }
 
     @Test
+    fun resolvesScrollTopLocationFromVisibleBodyInsteadOfWholeItemGeometry() {
+        val location = ReaderTextStartLocator.resolveScrollTopLocation(
+            visibleItems = listOf(
+                ReaderVisibleChapterItem(
+                    itemIndex = 0,
+                    chapterIndex = 1,
+                    offsetPx = -120,
+                    sizePx = 560,
+                    bodyOffsetPx = 28,
+                    bodyHeightPx = 180,
+                ),
+                ReaderVisibleChapterItem(
+                    itemIndex = 1,
+                    chapterIndex = 2,
+                    offsetPx = 320,
+                    sizePx = 300,
+                    bodyOffsetPx = 360,
+                    bodyHeightPx = 220,
+                ),
+            ),
+            chapterTextByIndex = mapOf(
+                1 to "a".repeat(400),
+                2 to "b".repeat(320),
+            ),
+            viewportTopPx = 0,
+        )
+
+        assertEquals(ReaderTextStartLocation(chapterIndex = 1, charOffset = 0), location)
+    }
+
+    @Test
+    fun resolvesScrollTopLocationFromReadableViewportTopInset() {
+        val location = ReaderTextStartLocator.resolveScrollTopLocation(
+            visibleItems = listOf(
+                ReaderVisibleChapterItem(
+                    itemIndex = 0,
+                    chapterIndex = 1,
+                    offsetPx = -120,
+                    sizePx = 560,
+                    bodyOffsetPx = 28,
+                    bodyHeightPx = 180,
+                ),
+            ),
+            chapterTextByIndex = mapOf(
+                1 to "a".repeat(400),
+            ),
+            viewportTopPx = 52,
+        )
+
+        assertEquals(ReaderTextStartLocation(chapterIndex = 1, charOffset = 53), location)
+    }
+
+    @Test
     fun resolvesPageTopLocationFromCurrentPageStartOffset() {
         val location = ReaderTextStartLocator.resolvePageTopLocation(
             chapterIndex = 7,
@@ -38,6 +91,32 @@ class ReaderTextStartLocatorTest {
         )
 
         assertEquals(ReaderTextStartLocation(chapterIndex = 7, charOffset = 120), location)
+    }
+
+    @Test
+    fun resolvesPageTopLocationFromVisiblePageStartOffset() {
+        val location = ReaderTextStartLocator.resolvePageTopLocation(
+            chapterIndex = 4,
+            pages = listOf(
+                ReaderPageSlice(
+                    startCharOffset = 0,
+                    endCharOffset = 120,
+                    text = "正文",
+                    visibleStartCharOffset = 6,
+                    visibleEndCharOffset = 8,
+                ),
+                ReaderPageSlice(
+                    startCharOffset = 120,
+                    endCharOffset = 260,
+                    text = "下一页正文",
+                    visibleStartCharOffset = 123,
+                    visibleEndCharOffset = 128,
+                ),
+            ),
+            currentPageIndex = 0,
+        )
+
+        assertEquals(ReaderTextStartLocation(chapterIndex = 4, charOffset = 6), location)
     }
 
     @Test

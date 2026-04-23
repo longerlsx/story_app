@@ -85,6 +85,25 @@ class ReaderTtsSettingsExpansionTest {
         }
     }
 
+    @Test
+    fun longTtsSettingsStillKeepsPrimaryActionBarUsable() {
+        ActivityScenario.launch<MainActivity>(buildImportIntent("reader-tts-settings-bottom-bar")).use {
+            assertTrue(device.wait(Until.hasObject(By.textContains("第一章正文")), 8_000))
+            assertTrue(device.revealReaderChrome("设置"))
+            assertTrue(device.tapPrimaryAction(ReaderPrimaryActionSlot.SETTINGS))
+            assertTrue(device.wait(Until.hasObject(By.text("阅读")), 3_000))
+
+            val ttsTab = device.wait(Until.findObject(By.text("朗读")), 3_000)
+            assertTrue(ttsTab != null)
+            ttsTab!!.click()
+
+            assertTrue(device.wait(Until.hasObject(By.text("测试语音")), 3_000))
+            assertTrue(device.tapPrimaryAction(ReaderPrimaryActionSlot.DIRECTORY))
+            assertTrue(device.wait(Until.hasObject(By.text("第1章 开始")), 3_000))
+            assertFalse(device.hasObject(By.text("测试语音")))
+        }
+    }
+
     private fun buildImportIntent(fileName: String): Intent {
         val importFile = File(context.cacheDir, "$fileName.txt").apply {
             writeText(
@@ -129,6 +148,34 @@ private class VoiceListOnlyReaderTtsEngine(
                 ReaderTtsVoiceOption(
                     name = "cmn-cn-x-test-local",
                     displayName = "测试语音",
+                ),
+                ReaderTtsVoiceOption(
+                    name = "cmn-cn-x-voice-b-local",
+                    displayName = "测试语音 B",
+                ),
+                ReaderTtsVoiceOption(
+                    name = "cmn-cn-x-voice-c-local",
+                    displayName = "测试语音 C",
+                ),
+                ReaderTtsVoiceOption(
+                    name = "cmn-cn-x-voice-d-local",
+                    displayName = "测试语音 D",
+                ),
+                ReaderTtsVoiceOption(
+                    name = "cmn-cn-x-voice-e-local",
+                    displayName = "测试语音 E",
+                ),
+                ReaderTtsVoiceOption(
+                    name = "cmn-cn-x-voice-f-local",
+                    displayName = "测试语音 F",
+                ),
+                ReaderTtsVoiceOption(
+                    name = "cmn-cn-x-voice-g-local",
+                    displayName = "测试语音 G",
+                ),
+                ReaderTtsVoiceOption(
+                    name = "cmn-cn-x-voice-h-local",
+                    displayName = "测试语音 H",
                 ),
             ),
         )

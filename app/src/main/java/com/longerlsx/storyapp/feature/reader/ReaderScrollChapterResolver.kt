@@ -5,6 +5,8 @@ data class ReaderVisibleChapterItem(
     val chapterIndex: Int,
     val offsetPx: Int,
     val sizePx: Int,
+    val bodyOffsetPx: Int = offsetPx,
+    val bodyHeightPx: Int = sizePx,
 )
 
 object ReaderScrollChapterResolver {
@@ -13,9 +15,9 @@ object ReaderScrollChapterResolver {
         viewportTopPx: Int,
     ): Int? {
         val activeItem = visibleItems
-            .sortedBy { it.offsetPx }
+            .sortedBy { it.bodyOffsetPx }
             .firstOrNull { item ->
-                item.offsetPx + item.sizePx > viewportTopPx
+                item.bodyOffsetPx + item.bodyHeightPx > viewportTopPx
             }
         return activeItem?.chapterIndex
     }

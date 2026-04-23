@@ -1,5 +1,4 @@
 package com.longerlsx.storyapp.feature.reader
-
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -98,6 +97,187 @@ class ReaderTtsFollowTest {
     }
 
     @Test
+    fun pageModeLongPressRestartMapsVisibleTextBackToRawChapterOffset() {
+        val bookId = "book-page-long-press"
+        val text = "\n\n第二段命中正文。第三句。"
+        val restartRequests = mutableListOf<ReaderTtsStartRequest>()
+        val repository = createRepository(
+            bookId = bookId,
+            chapterTexts = mapOf(0 to text),
+        )
+        val settingsStore = createSettingsStore(
+            name = "reader-tts-follow-page-long-press",
+            initial = ReaderSettings(readingMode = ReadingMode.PAGE),
+        )
+        val controller = ReaderTtsController(
+            launchForegroundService = { true },
+            sendStopCommand = {},
+            sendRestartCommand = { restartRequests += it },
+        )
+        controller.start(
+            request = ReaderTtsStartRequest(
+                bookId = bookId,
+                bookTitle = "分页长按重启测试",
+                chapterIndex = 0,
+                charOffset = 0,
+                chapterTitleOrSummary = "第一章",
+                activeStateLabel = "朗读中",
+            ),
+            settings = settingsStore.load().ttsSettings,
+        )
+        controller.onPlaybackStarted()
+
+        composeRule.setContent {
+            ReaderScreen(
+                bookId = bookId,
+                repository = repository,
+                settingsStore = settingsStore,
+                ttsController = controller,
+                onBack = {},
+            )
+        }
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithText("第二段命中正文。第三句。").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText("第二段命中正文。第三句。")
+            .assertIsDisplayed()
+            .performTouchInput { longClick() }
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            restartRequests.size == 1
+        }
+
+        composeRule.runOnIdle {
+            assertEquals(1, restartRequests.size)
+            val request = restartRequests.single()
+            assertEquals(0, request.chapterIndex)
+            assertTrue(request.charOffset >= text.indexOf("第二段命中正文"))
+            assertTrue(request.charOffset < text.indexOf("第二段命中正文") + "第二段命中正文".length)
+        }
+    }
+
+    @Test
+    fun pageModeLongPressOnLaterParagraphDispatchesRestartNearPressedParagraph() {
+        val bookId = "book-page-long-press-later-paragraph"
+        val firstParagraph = "第一页第一段正文，用于占住当前朗读位置。"
+        val secondParagraph = "第一页第二段正文，长按这里应该切到这一段。"
+        val thirdParagraph = "第一页第三段正文，用于保证同页多段命中。"
+        val text = listOf(firstParagraph, secondParagraph, thirdParagraph).joinToString("\n")
+        val restartRequests = mutableListOf<ReaderTtsStartRequest>()
+        val repository = createRepository(
+            bookId = bookId,
+            chapterTexts = mapOf(0 to text),
+        )
+        val settingsStore = createSettingsStore(
+            name = "reader-tts-follow-page-long-press-later-paragraph",
+            initial = ReaderSettings(readingMode = ReadingMode.PAGE),
+        )
+        val controller = ReaderTtsController(
+            launchForegroundService = { true },
+            sendStopCommand = {},
+            sendRestartCommand = { restartRequests += it },
+        )
+        controller.start(
+            request = ReaderTtsStartRequest(
+                bookId = bookId,
+                bookTitle = "分页长按后段测试",
+                chapterIndex = 0,
+                charOffset = 0,
+                chapterTitleOrSummary = "第一章",
+                activeStateLabel = "朗读中",
+            ),
+            settings = settingsStore.load().ttsSettings,
+        )
+        controller.onPlaybackStarted()
+
+        composeRule.setContent {
+            ReaderScreen(
+                bookId = bookId,
+                repository = repository,
+                settingsStore = settingsStore,
+                ttsController = controller,
+                onBack = {},
+            )
+        }
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithText(secondParagraph).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText(secondParagraph)
+            .assertIsDisplayed()
+            .performTouchInput { longClick() }
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            restartRequests.size == 1
+        }
+
+        composeRule.runOnIdle {
+            val request = restartRequests.single()
+            assertEquals(0, request.chapterIndex)
+            assertTrue(
+                "Expected restart charOffset to land in second paragraph, but was ${request.charOffset}",
+                request.charOffset >= text.indexOf(secondParagraph),
+            )
+            assertTrue(
+                "Expected restart charOffset to stay within second paragraph, but was ${request.charOffset}",
+                request.charOffset < text.indexOf(secondParagraph) + secondParagraph.length,
+            )
+        }
+    }
+
+    @Test
+    fun tappingBodyWhileTtsIsActiveAndSettingsExpandedReturnsToReadingOnly() {
+        val bookId = "book-tts-settings-body-tap"
+        val repository = createRepository(
+            bookId = bookId,
+            chapterTexts = mapOf(
+                0 to """
+                    第一段正文。
+                    第二段正文。
+                    第三段正文。
+                """.trimIndent(),
+            ),
+        )
+        val settingsStore = createSettingsStore(
+            name = "reader-tts-settings-body-tap",
+            initial = ReaderSettings(readingMode = ReadingMode.SCROLL),
+        )
+        val controller = ReaderTtsController(
+            launchForegroundService = { true },
+            sendStopCommand = {},
+        )
+        controller.start(
+            request = ReaderTtsStartRequest(
+                bookId = bookId,
+                bookTitle = "正文点击返回沉浸态测试",
+                chapterIndex = 0,
+                charOffset = 0,
+                chapterTitleOrSummary = "第一章",
+                activeStateLabel = "朗读中",
+            ),
+            settings = settingsStore.load().ttsSettings,
+        )
+        controller.onPlaybackStarted()
+
+        composeRule.setContent {
+            ReaderScreen(
+                bookId = bookId,
+                repository = repository,
+                settingsStore = settingsStore,
+                ttsController = controller,
+                onBack = {},
+            )
+        }
+
+        composeRule.onRoot().performTouchInput { click(center) }
+        composeRule.onNodeWithContentDescription("设置").performClick()
+        composeRule.onNodeWithText("当前状态：朗读中").assertIsDisplayed()
+
+        composeRule.onNodeWithText("第二段正文。").assertIsDisplayed().performClick()
+
+        composeRule.onNodeWithContentDescription("沉浸式阅读头部").assertIsDisplayed()
+    }
+
+    @Test
     fun pageModeFollowsPlaybackIntoSpokenChapter() {
         val bookId = "book-page-follow"
         val repository = createRepository(
@@ -159,11 +339,11 @@ class ReaderTtsFollowTest {
         val bookId = "book-page-swipe-suppression"
         val content = buildString {
             append("第一页起点。\n")
-            repeat(24) { index ->
+            repeat(10) { index ->
                 append("用于制造多页效果的铺垫正文第${index}行，这是一段足够长的测试文本。\n")
             }
             append("第二页标记。\n")
-            repeat(16) { index ->
+            repeat(8) { index ->
                 append("第二页之后的延展正文第${index}行，这是一段足够长的测试文本。\n")
             }
         }
@@ -173,7 +353,10 @@ class ReaderTtsFollowTest {
         )
         val settingsStore = createSettingsStore(
             name = "reader-tts-follow-page-swipe",
-            initial = ReaderSettings(readingMode = ReadingMode.PAGE),
+            initial = ReaderSettings(
+                readingMode = ReadingMode.PAGE,
+                paragraphSpacingEm = 0.4f,
+            ),
         )
         val controller = ReaderTtsController(
             launchForegroundService = { true },
@@ -219,7 +402,7 @@ class ReaderTtsFollowTest {
                     substring = true,
                 ).fetchSemanticsNodes().isNotEmpty()
         }
-        repeat(8) {
+        repeat(20) {
             if (composeRule.onAllNodesWithText("第二页标记。", substring = true).fetchSemanticsNodes().isNotEmpty()) {
                 return@repeat
             }

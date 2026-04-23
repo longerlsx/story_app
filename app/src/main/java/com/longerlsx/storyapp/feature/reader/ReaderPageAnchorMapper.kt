@@ -4,7 +4,18 @@ data class ReaderPageSlice(
     val startCharOffset: Int,
     val endCharOffset: Int,
     val text: String = "",
+    val rawText: String = text,
+    val visibleStartCharOffset: Int = startCharOffset,
+    val visibleEndCharOffset: Int = endCharOffset,
 )
+
+fun ReaderPageSlice.rawCharOffsetForVisibleTextOffset(
+    visibleTextOffset: Int,
+): Int {
+    val lastVisibleCharOffset = (visibleEndCharOffset - 1).coerceAtLeast(visibleStartCharOffset)
+    return (visibleStartCharOffset + visibleTextOffset)
+        .coerceIn(visibleStartCharOffset, lastVisibleCharOffset)
+}
 
 object ReaderPageAnchorMapper {
     fun pageIndexForCharOffset(

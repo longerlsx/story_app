@@ -7,10 +7,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -21,6 +23,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -28,6 +32,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.longerlsx.storyapp.core.model.ReaderAppearanceMode
+import kotlin.math.roundToInt
 
 data class ReaderTtsToggleUiState(
     val actionLabel: String = "朗读",
@@ -61,73 +66,82 @@ fun ReaderControls(
         tonalElevation = 10.dp,
         shadowElevation = 10.dp,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            when (chromeMode) {
-                ReaderChromeMode.CHROME_VISIBLE -> {
-                    if (showChapterNavigationRow) {
-                        ReaderChapterNavigationRow(
-                            progressSummary = progressSummary,
-                            themePalette = themePalette,
-                            canOpenPreviousChapter = canOpenPreviousChapter,
-                            canOpenNextChapter = canOpenNextChapter,
-                            onOpenPreviousChapter = onOpenPreviousChapter,
-                            onOpenNextChapter = onOpenNextChapter,
-                        )
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            // Keep the bottom action bar visible even when settings/directory content grows tall.
+            val expandedPanelMaxHeight = maxOf(
+                220.dp,
+                minOf(maxHeight * 0.68f, maxHeight - 92.dp),
+            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 18.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                when (chromeMode) {
+                    ReaderChromeMode.CHROME_VISIBLE -> {
+                        if (showChapterNavigationRow) {
+                            ReaderChapterNavigationRow(
+                                progressSummary = progressSummary,
+                                themePalette = themePalette,
+                                canOpenPreviousChapter = canOpenPreviousChapter,
+                                canOpenNextChapter = canOpenNextChapter,
+                                onOpenPreviousChapter = onOpenPreviousChapter,
+                                onOpenNextChapter = onOpenNextChapter,
+                            )
+                        }
                     }
-                }
 
-                ReaderChromeMode.SETTINGS_EXPANDED,
-                ReaderChromeMode.DIRECTORY_OPEN,
-                -> {
-                    if (expandedContent != null) {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            color = themePalette.surface.copy(alpha = 0.98f),
-                            shape = RoundedCornerShape(24.dp),
-                            tonalElevation = 2.dp,
-                        ) {
-                            Box(
+                    ReaderChromeMode.SETTINGS_EXPANDED,
+                    ReaderChromeMode.DIRECTORY_OPEN,
+                    -> {
+                        if (expandedContent != null) {
+                            Surface(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 14.dp, vertical = 14.dp),
+                                    .heightIn(max = expandedPanelMaxHeight),
+                                color = themePalette.surface.copy(alpha = 0.98f),
+                                shape = RoundedCornerShape(24.dp),
+                                tonalElevation = 2.dp,
                             ) {
-                                expandedContent()
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = 14.dp),
+                                ) {
+                                    expandedContent()
+                                }
                             }
+                        }
+                    }
+
+                    ReaderChromeMode.READING_ONLY -> {
+                        if (ttsToggleState?.showImmersiveAction == true) {
+                            ReaderImmersiveTtsStopRow(
+                                themePalette = themePalette,
+                                label = ttsToggleState.immersiveActionLabel,
+                                onActionClick = onImmersiveTtsAction,
+                            )
                         }
                     }
                 }
 
-                ReaderChromeMode.READING_ONLY -> {
-                    if (ttsToggleState?.showImmersiveAction == true) {
-                        ReaderImmersiveTtsStopRow(
-                            themePalette = themePalette,
-                            label = ttsToggleState.immersiveActionLabel,
-                            onActionClick = onImmersiveTtsAction,
-                        )
-                    }
+                when (chromeMode) {
+                    ReaderChromeMode.CHROME_VISIBLE,
+                    ReaderChromeMode.SETTINGS_EXPANDED,
+                    ReaderChromeMode.DIRECTORY_OPEN,
+                    -> ReaderPrimaryActionBar(
+                        appearanceMode = appearanceMode,
+                        themePalette = themePalette,
+                        ttsToggleState = ttsToggleState,
+                        onOpenToc = onOpenToc,
+                        onToggleAppearanceMode = onToggleAppearanceMode,
+                        onOpenSettings = onOpenSettings,
+                        onToggleTts = onToggleTts,
+                    )
+
+                    ReaderChromeMode.READING_ONLY -> Unit
                 }
-            }
-
-            when (chromeMode) {
-                ReaderChromeMode.CHROME_VISIBLE,
-                ReaderChromeMode.SETTINGS_EXPANDED,
-                ReaderChromeMode.DIRECTORY_OPEN,
-                -> ReaderPrimaryActionBar(
-                    appearanceMode = appearanceMode,
-                    themePalette = themePalette,
-                    ttsToggleState = ttsToggleState,
-                    onOpenToc = onOpenToc,
-                    onToggleAppearanceMode = onToggleAppearanceMode,
-                    onOpenSettings = onOpenSettings,
-                    onToggleTts = onToggleTts,
-                )
-
-                ReaderChromeMode.READING_ONLY -> Unit
             }
         }
     }
@@ -138,11 +152,15 @@ fun BoxScope.ReaderImmersiveHeader(
     chapterTitle: String,
     themePalette: ReaderThemePalette,
     onBack: () -> Unit,
+    onBottomMeasured: (Int) -> Unit = {},
 ) {
     Row(
         modifier = Modifier
             .align(Alignment.TopStart)
             .padding(start = 14.dp, top = 14.dp, end = 18.dp)
+            .onGloballyPositioned { coordinates ->
+                onBottomMeasured(coordinates.positionInParent().y.plus(coordinates.size.height).roundToInt())
+            }
             .semantics { contentDescription = "沉浸式阅读头部" },
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -171,12 +189,16 @@ fun BoxScope.ReaderTopBar(
     chapterTitle: String,
     themePalette: ReaderThemePalette,
     onBack: () -> Unit,
+    onBottomMeasured: (Int) -> Unit = {},
 ) {
     Box(
         modifier = Modifier
             .align(Alignment.TopCenter)
             .fillMaxWidth()
             .padding(horizontal = 14.dp, vertical = 12.dp)
+            .onGloballyPositioned { coordinates ->
+                onBottomMeasured(coordinates.positionInParent().y.plus(coordinates.size.height).roundToInt())
+            }
             .semantics { contentDescription = "阅读器顶部栏" },
     ) {
         Row(
