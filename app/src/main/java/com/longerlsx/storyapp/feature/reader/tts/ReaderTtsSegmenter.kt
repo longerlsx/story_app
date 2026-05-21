@@ -77,7 +77,7 @@ object ReaderTtsSegmenter {
                 chapterIndex = chapterIndex,
                 startCharOffset = buffer.first().start,
                 endCharOffset = buffer.last().end,
-                spokenText = buffer.joinToString(" ") { it.text },
+                spokenText = sanitizeForSpeech(buffer.joinToString(" ") { it.text }),
             )
             buffer = mutableListOf()
             bufferLength = 0
@@ -104,6 +104,27 @@ object ReaderTtsSegmenter {
 
     private fun isSentenceTerminator(ch: Char): Boolean {
         return ch == '.' || ch == '!' || ch == '?' || ch == '。' || ch == '！' || ch == '？'
+    }
+
+    fun sanitizeForSpeech(text: String): String {
+        return text
+            .map { ch -> if (isNoisySymbol(ch)) ' ' else ch }
+            .joinToString(separator = "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+    }
+
+    private fun isNoisySymbol(ch: Char): Boolean {
+        return ch == '-' ||
+            ch == '－' ||
+            ch == '—' ||
+            ch == '–' ||
+            ch == '*' ||
+            ch == '＊' ||
+            ch == '【' ||
+            ch == '】' ||
+            ch == '[' ||
+            ch == ']'
     }
 
     private data class TextSpan(

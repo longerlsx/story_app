@@ -565,7 +565,7 @@ class ReaderTtsService : Service(), ReaderTtsEngine.Callback {
                                     startIndex = startLocation.charOffset.coerceAtMost(chapterText.length),
                                     endIndex = segment.endCharOffset.coerceAtMost(chapterText.length),
                                 )
-                                .trim()
+                                .let(ReaderTtsSegmenter::sanitizeForSpeech)
                             if (clippedText.isBlank()) {
                                 null
                             } else {

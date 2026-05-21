@@ -56,4 +56,19 @@ class ReaderTtsSegmenterTest {
         assertEquals(1, segments.size)
         assertEquals("A very long sentence that should stay intact.", segments[0].spokenText)
     }
+
+    @Test
+    fun removesNoisySymbolsFromSpokenTextWithoutChangingOffsets() {
+        val text = "【标题】 - 第一段*内容。"
+        val segments = ReaderTtsSegmenter.segment(
+            chapterIndex = 3,
+            text = text,
+            maxChunkChars = 80,
+        )
+
+        assertEquals(1, segments.size)
+        assertEquals("标题 第一段 内容。", segments.single().spokenText)
+        assertEquals(0, segments.single().startCharOffset)
+        assertEquals(text.length, segments.single().endCharOffset)
+    }
 }

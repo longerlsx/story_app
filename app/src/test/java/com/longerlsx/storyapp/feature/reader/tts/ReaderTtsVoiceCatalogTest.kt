@@ -89,4 +89,37 @@ class ReaderTtsVoiceCatalogTest {
         assertEquals(null, resolution.resolvedVoiceName)
         assertTrue(resolution.usingSystemDefaultFallback)
     }
+
+    @Test
+    fun keepsXiaomiSimplifiedChineseVoicesWithoutRegionCode() {
+        val resolution = ReaderTtsVoiceCatalog.resolve(
+            availableVoices = listOf(
+                ReaderTtsRawVoice(
+                    name = "en",
+                    languageTag = "en",
+                    displayName = "英语",
+                ),
+                ReaderTtsRawVoice(
+                    name = "zh",
+                    languageTag = "zh",
+                    displayName = "中文",
+                ),
+                ReaderTtsRawVoice(
+                    name = "zh",
+                    languageTag = "zh-Hans",
+                    displayName = "中文 (简体中文)",
+                ),
+                ReaderTtsRawVoice(
+                    name = "zh",
+                    languageTag = "zh-Hant",
+                    displayName = "中文 (繁体中文)",
+                ),
+            ),
+            persistedVoiceName = null,
+        )
+
+        assertEquals(listOf("zh"), resolution.visibleOptions.map { it.name })
+        assertTrue(resolution.visibleOptions.single().displayName.contains("简体中文"))
+        assertFalse(resolution.visibleOptions.single().displayName.contains("繁体中文"))
+    }
 }

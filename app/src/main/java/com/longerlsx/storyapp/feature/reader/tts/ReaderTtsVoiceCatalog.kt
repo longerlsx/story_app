@@ -41,9 +41,22 @@ object ReaderTtsVoiceCatalog {
             compareBy<ReaderTtsRawVoice>(
                 { if (it.name.endsWith("-local", ignoreCase = true)) 0 else 1 },
                 { if (it.name.endsWith("-network", ignoreCase = true)) 1 else 0 },
+                { simplifiedScriptRank(it.languageTag) },
                 { it.name },
             ),
         )
+    }
+
+    private fun simplifiedScriptRank(languageTag: String?): Int {
+        val locale = languageTag
+            ?.takeIf(String::isNotBlank)
+            ?.let(Locale::forLanguageTag)
+        return when (locale?.script?.uppercase(Locale.ROOT)) {
+            "HANS" -> 0
+            "" -> 1
+            null -> 1
+            else -> 2
+        }
     }
 
     private fun toVoiceOption(voice: ReaderTtsRawVoice): ReaderTtsVoiceOption {
@@ -63,7 +76,11 @@ object ReaderTtsVoiceCatalog {
             ?.let(Locale::forLanguageTag)
         val language = locale?.language?.lowercase(Locale.ROOT)
         val region = locale?.country?.uppercase(Locale.ROOT)
+        val script = locale?.script?.uppercase(Locale.ROOT)
         if (region == "CN" && (language == "zh" || language == "cmn")) {
+            return true
+        }
+        if (region.isNullOrBlank() && language == "zh" && script != "HANT") {
             return true
         }
 
