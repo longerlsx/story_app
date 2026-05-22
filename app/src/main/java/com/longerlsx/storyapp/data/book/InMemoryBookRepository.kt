@@ -91,7 +91,6 @@ class InMemoryBookRepository(
             val contents = snapshot.chapters.associate { chapter ->
                 chapter.chapterIndex to loadedText.normalizedText
                     .substring(chapter.startOffset.coerceAtLeast(0), chapter.endOffset.coerceAtMost(loadedText.normalizedText.length))
-                    .trim()
             }
             saveImportedBook(
                 book = snapshot.book,

@@ -1,0 +1,28 @@
+{
+  "id": "BUG-2026-013",
+  "title": "TXT chapter parser misses spaced numeric headings and leaks double-title lines into chapter bodies",
+  "symptom": "TXT novels whose chapter heading is split across two adjacent lines, such as `第 1 章` followed by `第一章`, are parsed at the second line only. The first heading line is kept in the previous body or preface, and restored chapter text can regain heading lines after catalog hydration.",
+  "root_cause": "The original parser used one narrow line regex and dropped only the first matched heading line from each section. It did not run a rule-selection pass, did not scan with compatible title forms for double headings, did not filter front table-of-contents duplicates, and persisted offsets at heading boundaries instead of body boundaries.",
+  "fix": [
+    "Replaced the single-regex splitter with a clean-room, Legado-inspired pipeline: line indexing, built-in rule trial, primary/auxiliary rule selection, full-text candidate scan, TOC filtering, double-title merging, and chapter assembly.",
+    "Added support for compact and spaced Chinese numbered headings, common chapter suffixes, special markers, numeric titles, and volume markers without copying Legado GPL source or rule data.",
+    "Changed parsed and persisted chapter offsets to body ranges so `normalized.substring(startOffset, endOffset)` exactly matches `ParsedChapter.content` and hydration restores the same text.",
+    "Added no-title long-text fallback splitting on paragraph boundaries."
+  ],
+  "failed_attempts": [
+    "Do not fix this by only widening the old regex; broad regexes over-match body lines and do not solve double-title or TOC duplication.",
+    "Do not copy Legado `txtTocRule.json` or source code directly; keep this implementation clean-room because Legado is GPL-3.0."
+  ],
+  "impact": "New imports of common Chinese TXT novels get more stable chapter boundaries, fewer skipped or leaked title lines, safer front-TOC handling, and consistent restored chapter body text.",
+  "tags": [
+    "android",
+    "reader",
+    "txt",
+    "toc",
+    "chapter-parser",
+    "resolved"
+  ],
+  "confidence": 0.86,
+  "created_at": "2026-05-22",
+  "updated_at": "2026-05-22"
+}

@@ -126,4 +126,41 @@ class ImportCoordinatorTest {
             tempDir.toFile().deleteRecursively()
         }
     }
+
+    @Test
+    fun importTxtStoresBodyOffsetsForDoubleTitleChapters() = runTest {
+        val tempDir = Files.createTempDirectory("story-app-import-double-title-test")
+        try {
+            val repository = InMemoryBookRepository()
+            val coordinator = ImportCoordinator(
+                repository = repository,
+                storage = ImportedBookStorage(tempDir.toFile()),
+                textContentLoader = TextContentLoader(),
+            )
+            val bytes = """
+                《双标题测试》
+                作者：测试作者
+
+                第 1 章
+                第一章
+                正文第一段。
+            """.trimIndent().encodeToByteArray()
+
+            val result = coordinator.importTxt(
+                fileName = "双标题测试.txt",
+                bytes = bytes,
+                sourceType = ImportSourceType.LOCAL_FILE,
+                importedAt = 100L,
+            )
+
+            val chapter = result.chapters.first { it.title == "第 1 章" }
+            val normalized = TxtNormalizer.normalize(bytes.decodeToString())
+
+            assertEquals("正文第一段。", repository.getChapterText(result.book.id, chapter.chapterIndex))
+            assertEquals("正文第一段。".length, chapter.wordCount)
+            assertEquals("正文第一段。", normalized.substring(chapter.startOffset, chapter.endOffset))
+        } finally {
+            tempDir.toFile().deleteRecursively()
+        }
+    }
 }

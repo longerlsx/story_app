@@ -9,79 +9,46 @@ data class ParsedChapter(
 
 object ChapterParser {
     fun parse(content: String): List<ParsedChapter> {
+        return parseDetailed(content).chapters
+    }
+
+    fun parseDetailed(content: String): ChapterParseResult {
         val normalized = TxtNormalizer.normalize(content)
         if (normalized.isBlank()) {
-            return emptyList()
-        }
-
-        val markers = findChapterMarkers(normalized)
-        if (markers.isEmpty()) {
-            return listOf(
-                ParsedChapter(
-                    title = "正文",
-                    content = normalized.trim(),
-                    startOffset = 0,
-                    endOffset = normalized.length,
+            return ChapterParseResult(
+                chapters = emptyList(),
+                diagnostics = ChapterParseDiagnostics(
+                    selectedPrimaryRuleId = null,
+                    auxiliaryRuleIds = emptyList(),
+                    scannedCandidateCount = 0,
+                    filteredCandidateCount = 0,
+                    mergedCandidateCount = 0,
+                    tocCandidatesDropped = 0,
+                    doubleTitlesMerged = 0,
+                    fallbackMode = "empty",
                 ),
             )
         }
 
-        val chapters = mutableListOf<ParsedChapter>()
-        val firstMarker = markers.first()
-        val preface = normalized.substring(0, firstMarker.offset).trim()
-        if (preface.isNotBlank()) {
-            chapters += ParsedChapter(
-                title = "前言",
-                content = preface,
-                startOffset = 0,
-                endOffset = firstMarker.offset,
-            )
-        }
+        val lines = ChapterLine.fromContent(normalized)
+        val selection = ChapterRuleSelector.select(lines)
+        val scanned = ChapterCandidateScanner.scan(lines, selection)
+        val filterResult = ChapterCandidateFilter.filterDetailed(normalized, scanned)
+        val mergeResult = ChapterCandidateMerger.mergeDetailed(normalized, filterResult.candidates)
+        val assemblyResult = ChapterAssembler.assemble(normalized, mergeResult.candidates)
 
-        markers.forEachIndexed { index, marker ->
-            val sectionEnd = markers.getOrNull(index + 1)?.offset ?: normalized.length
-            val section = normalized.substring(marker.offset, sectionEnd).trim('\n')
-            val body = section.lineSequence()
-                .drop(1)
-                .joinToString("\n")
-                .trim()
-
-            chapters += ParsedChapter(
-                title = marker.title,
-                content = body,
-                startOffset = marker.offset,
-                endOffset = sectionEnd,
-            )
-        }
-
-        return chapters
+        return ChapterParseResult(
+            chapters = assemblyResult.chapters,
+            diagnostics = ChapterParseDiagnostics(
+                selectedPrimaryRuleId = selection.primaryRuleId,
+                auxiliaryRuleIds = selection.auxiliaryRules.map { it.id },
+                scannedCandidateCount = scanned.size,
+                filteredCandidateCount = filterResult.candidates.size,
+                mergedCandidateCount = mergeResult.candidates.size,
+                tocCandidatesDropped = filterResult.tocCandidatesDropped,
+                doubleTitlesMerged = mergeResult.doubleTitlesMerged,
+                fallbackMode = assemblyResult.fallbackMode,
+            ),
+        )
     }
-
-    private fun findChapterMarkers(content: String): List<ChapterMarker> {
-        val markers = mutableListOf<ChapterMarker>()
-        val lines = content.split('\n')
-        var offset = 0
-
-        for (line in lines) {
-            val trimmed = line.trim()
-            if (ChapterPatterns.isChapterTitle(trimmed)) {
-                markers += ChapterMarker(
-                    title = trimmed,
-                    offset = offset,
-                )
-            }
-
-            offset += line.length
-            if (offset < content.length && content[offset] == '\n') {
-                offset += 1
-            }
-        }
-
-        return markers
-    }
-
-    private data class ChapterMarker(
-        val title: String,
-        val offset: Int,
-    )
 }

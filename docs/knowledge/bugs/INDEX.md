@@ -67,11 +67,13 @@ This is mandatory for both:
 | BUG-2026-008 | Page mode clips the last visible line near the bottom edge while scroll mode remains correct | resolved | `page-mode`, `window-insets`, `text-layout` | [BUG-2026-008-page-mode-bottom-clipping.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-008-page-mode-bottom-clipping.json) |
 | BUG-2026-009 | Immersive header and chrome-visible top bar used the wrong visual treatment | resolved | `top-bar`, `immersive-mode`, `ux` | [BUG-2026-009-header-state-mismatch.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-009-header-state-mismatch.json) |
 | BUG-2026-010 | Reader chrome auto-hides too quickly for real settings interaction | resolved | `chrome`, `timeout`, `ux` | [BUG-2026-010-chrome-auto-hide-too-fast.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-010-chrome-auto-hide-too-fast.json) |
+| BUG-2026-013 | TXT chapter parser misses spaced numeric headings and leaks double-title lines into chapter bodies | resolved | `txt`, `toc`, `chapter-parser` | [BUG-2026-013-txt-chapter-parser-legado-inspired.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-013-txt-chapter-parser-legado-inspired.json) |
 
 ## Retrieval Hints For Future Threads
 
 - If a new issue mentions “same chapter but wrong place”, start with `BUG-2026-001`.
 - If page turns feel wrong only at chapter edges, compare `BUG-2026-003` and `BUG-2026-007`.
+- If TXT import misses `第 1 章` or leaks adjacent duplicate title lines like `第一章` into body text, start with `BUG-2026-013`; the confirmed fix is the clean-room rule-selection parser and body-offset persistence.
 - If the last line of page mode looks visually obstructed, start with `BUG-2026-008`; the confirmed fix was to align safe drawing insets and page `TextStyle` between measurement and rendering, and not to repeat its failed attempts first.
 - If a styling complaint only affects night mode overlays or sheets, compare `BUG-2026-005`.
 
