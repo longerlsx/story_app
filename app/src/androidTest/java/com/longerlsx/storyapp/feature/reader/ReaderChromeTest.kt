@@ -198,6 +198,89 @@ class ReaderChromeTest {
     }
 
     @Test
+    fun pageModeCenterTapOnLaterPageBodyTextRevealsReaderChrome() {
+        val application = ApplicationProvider.getApplicationContext<StoryApplication>()
+        application.readerSettingsStore.save(ReaderSettings(readingMode = ReadingMode.PAGE))
+        val importFile = File(application.cacheDir, "reader-page-later-body-center-tap.txt").apply {
+            writeText(
+                buildString {
+                    appendLine("《翻页后续页正文点击测试》")
+                    appendLine("作者：测试作者")
+                    appendLine()
+                    appendLine("第1章 开始")
+                    repeat(18) { index ->
+                        appendLine("第一页铺垫正文${index + 1}，用于把目标段落推到后续页面，避免只验证首屏空白区域点击。")
+                    }
+                    appendLine(
+                        "后续页中心命中正文标记，这一段需要足够长，让 TextView 的可见边界横跨屏幕中心；点击屏幕中心时应打开阅读器顶部栏和底部操作栏，而不是只停留在沉浸式阅读头部。继续补充真实小说式长句，确保中间区域是正文文本本身，不是段落间空白。",
+                    )
+                    appendLine("后续页尾部正文，保持页面有正常阅读密度。")
+                },
+            )
+        }
+        val uri = FileProvider.getUriForFile(
+            application,
+            "${application.packageName}.fileprovider",
+            importFile,
+        )
+        val externalIntent = Intent(Intent.ACTION_VIEW).apply {
+            setClass(application, MainActivity::class.java)
+            setDataAndType(uri, "text/plain")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+
+        ActivityScenario.launch<MainActivity>(externalIntent).use {
+            assertTrue(device.wait(Until.hasObject(By.textContains("第一页铺垫正文1")), 8_000))
+            assertTrue(device.wait(Until.hasObject(By.desc("沉浸式阅读头部")), 3_000))
+
+            val rightX = (device.displayWidth * 0.88f).toInt()
+            val centerY = device.displayHeight / 2
+            var targetText = device.wait(Until.findObject(By.textContains("后续页中心命中正文标记")), 500)
+            repeat(10) {
+                if (targetText == null) {
+                    device.click(rightX, centerY)
+                    device.waitForIdle()
+                    targetText = device.wait(Until.findObject(By.textContains("后续页中心命中正文标记")), 500)
+                }
+            }
+            assertNotNull(targetText)
+            assertFalse(device.hasObject(By.desc("阅读器顶部栏")))
+
+            val targetBounds = targetText!!.visibleBounds
+            val centerX = device.displayWidth / 2
+            assertTrue(targetBounds.left < centerX)
+            assertTrue(targetBounds.right > centerX)
+
+            device.shellTap(centerX, targetBounds.centerY())
+
+            assertTrue(
+                "后续页正文中心点击后应显示阅读器顶部栏",
+                device.wait(Until.hasObject(By.desc("阅读器顶部栏")), 2_000),
+            )
+            assertTrue(
+                "后续页正文中心点击后应显示底部操作栏",
+                device.wait(Until.hasObject(By.text("设置")), 1_000) ||
+                    device.wait(Until.hasObject(By.desc("设置")), 1_000) ||
+                    device.wait(Until.hasObject(By.text("朗读")), 1_000) ||
+                    device.wait(Until.hasObject(By.desc("朗读")), 1_000),
+            )
+        }
+    }
+
+    private fun UiDevice.shellTap(
+        x: Int,
+        y: Int,
+    ) {
+        InstrumentationRegistry.getInstrumentation()
+            .uiAutomation
+            .executeShellCommand("input tap $x $y")
+            .close()
+        waitForIdle()
+    }
+
+    @Test
     fun pageModeProgressExcludesSyntheticPrefaceFromChapterCount() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val importFile = File(context.cacheDir, "reader-chrome-preface-progress.txt").apply {

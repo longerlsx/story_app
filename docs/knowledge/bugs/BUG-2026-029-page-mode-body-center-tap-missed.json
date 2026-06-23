@@ -1,0 +1,29 @@
+{
+  "id": "BUG-2026-029",
+  "title": "Page-mode body text center taps can miss reader chrome toggle",
+  "symptom": "In page mode, tapping the center of real body text on a later page can leave the reader in immersive mode with only the compact header visible, while right-edge taps still turn pages. The issue was reproduced with a real imported TXT sample and with an instrumentation regression that executes shell-level `input tap` on body text.",
+  "root_cause": "The page tap-zone handler lived outside the HorizontalPager/page gesture path, so taps landing on body Text content were not reliably observed after the pager consumed pointer events. UiDevice clicks could pass while lower-level shell taps still missed, hiding the real interaction gap.",
+  "fix": [
+    "Move page tap-zone observation onto the HorizontalPager modifier so it participates in the pager gesture path.",
+    "Observe pointer events with `awaitFirstDown(requireUnconsumed = false)` and read the final up event after parent consumption, while ignoring movements beyond touch slop so swipes are not treated as taps.",
+    "Add a later-page body-text regression that executes shell-level `input tap` and asserts the reader top bar and bottom controls appear."
+  ],
+  "failed_attempts": [
+    "Do not rely only on UiDevice.click regressions; they can pass while shell-level or real lower-level taps still miss the chrome toggle.",
+    "Do not attach a normal `detectTapGestures` handler inside the page surface; it can still lose events to the pager's scrollable gesture handling.",
+    "Do not treat static screenshots alone as proof for this bug; the failure depends on a specific tap delivery path after page navigation."
+  ],
+  "impact": "Users could be trapped in immersive reading on dense real TXT pages unless they found a blank area or used another gesture, making settings, TOC, and TTS controls feel intermittently unavailable.",
+  "tags": [
+    "android",
+    "compose",
+    "reader",
+    "page-mode",
+    "chrome",
+    "interaction",
+    "resolved"
+  ],
+  "confidence": 0.87,
+  "created_at": "2026-06-23",
+  "updated_at": "2026-06-23"
+}

@@ -85,6 +85,7 @@ This is mandatory for both:
 | BUG-2026-026 | TXT parser treats in-body round attempt lines ending with ellipsis as chapters | resolved | `txt`, `toc`, `chapter-parser`, `chapter-boundary` | [BUG-2026-026-txt-parser-round-punctuation-body-line.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-026-txt-parser-round-punctuation-body-line.json) |
 | BUG-2026-027 | External TXT import crashes when a file URI cannot be opened | resolved | `txt`, `external-intent`, `crash` | [BUG-2026-027-external-import-unreadable-file-uri-crash.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-027-external-import-unreadable-file-uri-crash.json) |
 | BUG-2026-028 | TXT parser treats chapter-like dialogue lines as real chapter headings | resolved | `txt`, `chapter-parser`, `offset` | [BUG-2026-028-txt-parser-chapter-like-dialogue-false-positive.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-028-txt-parser-chapter-like-dialogue-false-positive.json) |
+| BUG-2026-029 | Page-mode body text center taps can miss reader chrome toggle | resolved | `reader`, `page-mode`, `chrome`, `interaction` | [BUG-2026-029-page-mode-body-center-tap-missed.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-029-page-mode-body-center-tap-missed.json) |
 
 ## Retrieval Hints For Future Threads
 
@@ -110,6 +111,7 @@ This is mandatory for both:
 - If a real TXT opens at `第1章` but the bottom chapter progress shows `2/N章`, start with `BUG-2026-023`; the confirmed fix is to format reader progress through a display helper that excludes a leading synthetic `前言` from numbered chapter counts without changing parser offsets or navigation.
 - If an external TXT open/share intent returns to the launcher or force-closes the app, start with `BUG-2026-027`; the confirmed fix is to treat URI query/open failures as a non-importable payload instead of letting `ContentResolver.openInputStream` exceptions escape.
 - If a body line that starts like a chapter heading, such as `第1章 她想：开始了吗？` or `第十三回合：还要继续吗？`, appears as a TOC entry, start with `BUG-2026-028`; the confirmed fix is to keep colon-subtitle punctuation support narrow and reject dialogue-like tails.
+- If page mode turns pages from right-edge taps but center taps on dense body text do not reveal the reader chrome, start with `BUG-2026-029`; the confirmed fix is to observe tap zones on the `HorizontalPager` gesture path and cover shell-level `input tap`, not only `UiDevice.click`.
 
 ## Authoring Rules
 

@@ -10,6 +10,8 @@ import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -61,6 +63,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
@@ -1688,125 +1691,149 @@ private fun PageReaderContent(
             }
         }
 
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(
-                    bookId,
-                    chapterIndex,
-                    contentLoaded,
-                    restoredPosition,
-                    safePages.size,
-                    pagerState.settledPage,
-                    pagerState.isScrollInProgress,
-                    previousChapterIndex,
-                    nextChapterIndex,
-                    boundaryTransition,
-                ) {
-                    detectTapGestures(
-                    ) { offset ->
-                        if (boundaryTransition != null) {
-                            return@detectTapGestures
-                        }
-                        when (ReaderTapZone.resolve(offset.x, size.width.toFloat())) {
-                            ReaderTapZone.PREVIOUS -> {
-                                scope.launch {
-                                    when (
-                                        val action = ReaderPageBoundaryResolver.resolvePageTurn(
-                                            direction = ReaderPageTurnDirection.PREVIOUS,
-                                            settledPage = pagerState.settledPage,
-                                            pageCount = safePages.size,
-                                            contentLoaded = contentLoaded,
-                                            restoredPosition = restoredPosition,
-                                            isScrollInProgress = pagerState.isScrollInProgress,
-                                            hasActiveBoundaryTransition = boundaryTransition != null,
-                                            previousChapterIndex = previousChapterIndex,
-                                            nextChapterIndex = nextChapterIndex,
-                                        )
-                                    ) {
-                                        ReaderPageTurnAction.Ignore -> Unit
-                                        is ReaderPageTurnAction.Page -> {
-                                            onManualFollowInterruption()
-                                            pagerState.animateScrollToPage(action.pageIndex)
-                                        }
-
-                                        is ReaderPageTurnAction.Chapter -> {
-                                            onManualFollowInterruption()
-                                            val activePage = pagerState.settledPage.coerceIn(0, safePages.lastIndex)
-                                            val sourcePage = safePages.getOrNull(activePage)
-                                            val previewPage = previousPages.lastOrNull()
-                                            if (sourcePage != null && previewPage != null) {
-                                                boundaryTransition = ReaderBoundaryPageTransition(
-                                                    direction = ReaderPageBoundaryDirection.PREVIOUS,
-                                                    sourcePage = sourcePage,
-                                                    previewPage = previewPage,
-                                                    targetChapterIndex = action.chapterIndex,
-                                                )
-                                                boundaryTransitionProgress.snapTo(0f)
-                                                boundaryTransitionProgress.animateTo(
-                                                    targetValue = 1f,
-                                                    animationSpec = tween(durationMillis = 180),
-                                                )
-                                            }
-                                            onOpenPreviousBoundary(action.chapterIndex)
-                                        }
-                                    }
-                                }
+        fun handlePageTap(tapZone: ReaderTapZone) {
+            if (boundaryTransition != null) {
+                return
+            }
+            when (tapZone) {
+                ReaderTapZone.PREVIOUS -> {
+                    scope.launch {
+                        when (
+                            val action = ReaderPageBoundaryResolver.resolvePageTurn(
+                                direction = ReaderPageTurnDirection.PREVIOUS,
+                                settledPage = pagerState.settledPage,
+                                pageCount = safePages.size,
+                                contentLoaded = contentLoaded,
+                                restoredPosition = restoredPosition,
+                                isScrollInProgress = pagerState.isScrollInProgress,
+                                hasActiveBoundaryTransition = boundaryTransition != null,
+                                previousChapterIndex = previousChapterIndex,
+                                nextChapterIndex = nextChapterIndex,
+                            )
+                        ) {
+                            ReaderPageTurnAction.Ignore -> Unit
+                            is ReaderPageTurnAction.Page -> {
+                                onManualFollowInterruption()
+                                pagerState.animateScrollToPage(action.pageIndex)
                             }
 
-                            ReaderTapZone.NEXT -> {
-                                scope.launch {
-                                    when (
-                                        val action = ReaderPageBoundaryResolver.resolvePageTurn(
-                                            direction = ReaderPageTurnDirection.NEXT,
-                                            settledPage = pagerState.settledPage,
-                                            pageCount = safePages.size,
-                                            contentLoaded = contentLoaded,
-                                            restoredPosition = restoredPosition,
-                                            isScrollInProgress = pagerState.isScrollInProgress,
-                                            hasActiveBoundaryTransition = boundaryTransition != null,
-                                            previousChapterIndex = previousChapterIndex,
-                                            nextChapterIndex = nextChapterIndex,
-                                        )
-                                    ) {
-                                        ReaderPageTurnAction.Ignore -> Unit
-                                        is ReaderPageTurnAction.Page -> {
-                                            onManualFollowInterruption()
-                                            pagerState.animateScrollToPage(action.pageIndex)
-                                        }
-
-                                        is ReaderPageTurnAction.Chapter -> {
-                                            onManualFollowInterruption()
-                                            val activePage = pagerState.settledPage.coerceIn(0, safePages.lastIndex)
-                                            val sourcePage = safePages.getOrNull(activePage)
-                                            val previewPage = nextPages.firstOrNull()
-                                            if (sourcePage != null && previewPage != null) {
-                                                boundaryTransition = ReaderBoundaryPageTransition(
-                                                    direction = ReaderPageBoundaryDirection.NEXT,
-                                                    sourcePage = sourcePage,
-                                                    previewPage = previewPage,
-                                                    targetChapterIndex = action.chapterIndex,
-                                                )
-                                                boundaryTransitionProgress.snapTo(0f)
-                                                boundaryTransitionProgress.animateTo(
-                                                    targetValue = 1f,
-                                                    animationSpec = tween(durationMillis = 180),
-                                                )
-                                            }
-                                            onOpenNextBoundary(action.chapterIndex)
-                                        }
-                                    }
+                            is ReaderPageTurnAction.Chapter -> {
+                                onManualFollowInterruption()
+                                val activePage = pagerState.settledPage.coerceIn(0, safePages.lastIndex)
+                                val sourcePage = safePages.getOrNull(activePage)
+                                val previewPage = previousPages.lastOrNull()
+                                if (sourcePage != null && previewPage != null) {
+                                    boundaryTransition = ReaderBoundaryPageTransition(
+                                        direction = ReaderPageBoundaryDirection.PREVIOUS,
+                                        sourcePage = sourcePage,
+                                        previewPage = previewPage,
+                                        targetChapterIndex = action.chapterIndex,
+                                    )
+                                    boundaryTransitionProgress.snapTo(0f)
+                                    boundaryTransitionProgress.animateTo(
+                                        targetValue = 1f,
+                                        animationSpec = tween(durationMillis = 180),
+                                    )
                                 }
+                                onOpenPreviousBoundary(action.chapterIndex)
                             }
-
-                            ReaderTapZone.TOGGLE_CHROME -> onToggleChrome()
                         }
                     }
-                },
+                }
+
+                ReaderTapZone.NEXT -> {
+                    scope.launch {
+                        when (
+                            val action = ReaderPageBoundaryResolver.resolvePageTurn(
+                                direction = ReaderPageTurnDirection.NEXT,
+                                settledPage = pagerState.settledPage,
+                                pageCount = safePages.size,
+                                contentLoaded = contentLoaded,
+                                restoredPosition = restoredPosition,
+                                isScrollInProgress = pagerState.isScrollInProgress,
+                                hasActiveBoundaryTransition = boundaryTransition != null,
+                                previousChapterIndex = previousChapterIndex,
+                                nextChapterIndex = nextChapterIndex,
+                            )
+                        ) {
+                            ReaderPageTurnAction.Ignore -> Unit
+                            is ReaderPageTurnAction.Page -> {
+                                onManualFollowInterruption()
+                                pagerState.animateScrollToPage(action.pageIndex)
+                            }
+
+                            is ReaderPageTurnAction.Chapter -> {
+                                onManualFollowInterruption()
+                                val activePage = pagerState.settledPage.coerceIn(0, safePages.lastIndex)
+                                val sourcePage = safePages.getOrNull(activePage)
+                                val previewPage = nextPages.firstOrNull()
+                                if (sourcePage != null && previewPage != null) {
+                                    boundaryTransition = ReaderBoundaryPageTransition(
+                                        direction = ReaderPageBoundaryDirection.NEXT,
+                                        sourcePage = sourcePage,
+                                        previewPage = previewPage,
+                                        targetChapterIndex = action.chapterIndex,
+                                    )
+                                    boundaryTransitionProgress.snapTo(0f)
+                                    boundaryTransitionProgress.animateTo(
+                                        targetValue = 1f,
+                                        animationSpec = tween(durationMillis = 180),
+                                    )
+                                }
+                                onOpenNextBoundary(action.chapterIndex)
+                            }
+                        }
+                    }
+                }
+
+                ReaderTapZone.TOGGLE_CHROME -> onToggleChrome()
+            }
+        }
+
+        Box(
+            modifier = Modifier.fillMaxSize(),
         ) {
             HorizontalPager(
                 state = pagerState,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .pointerInput(
+                        bookId,
+                        chapterIndex,
+                        contentLoaded,
+                        restoredPosition,
+                        safePages.size,
+                        pagerState.settledPage,
+                        pagerState.isScrollInProgress,
+                        previousChapterIndex,
+                        nextChapterIndex,
+                        boundaryTransition,
+                    ) {
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            var movedBeyondTapSlop = false
+                            while (true) {
+                                val event = awaitPointerEvent(PointerEventPass.Final)
+                                val change = event.changes.firstOrNull { it.id == down.id }
+                                    ?: return@awaitEachGesture
+                                val distance = (change.position - down.position).getDistance()
+                                if (distance > viewConfiguration.touchSlop) {
+                                    movedBeyondTapSlop = true
+                                }
+                                if (!change.pressed) {
+                                    if (!movedBeyondTapSlop) {
+                                        handlePageTap(
+                                            ReaderTapZone.resolve(
+                                                change.position.x,
+                                                size.width.toFloat(),
+                                            ),
+                                        )
+                                    }
+                                    return@awaitEachGesture
+                                }
+                            }
+                        }
+                    },
             ) { pageIndex ->
                 ReaderPageSurface(
                     page = safePages[pageIndex],
