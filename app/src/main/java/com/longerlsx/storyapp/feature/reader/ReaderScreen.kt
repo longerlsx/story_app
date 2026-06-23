@@ -730,21 +730,11 @@ private fun ReaderReadyContent(
     val ttsToggleUiState = readerTtsUiState.toggleState
     val ttsStatusText = readerTtsUiState.statusText
     val remainingTimeLabel = readerTtsUiState.remainingTimeLabel
-    val transientTtsMessage = when {
-        ttsRuntime.currentBookId == state.book.id && !ttsRuntime.localErrorMessage.isNullOrBlank() -> {
-            ttsRuntime.localErrorMessage
-        }
-
-        !localRestartFeedbackMessage.isNullOrBlank() -> {
-            localRestartFeedbackMessage
-        }
-
-        ttsRuntime.currentBookId == state.book.id && !ttsRuntime.localStatusMessage.isNullOrBlank() -> {
-            ttsRuntime.localStatusMessage
-        }
-
-        else -> null
-    }
+    val transientTtsMessage = ReaderTtsTransientMessageResolver.resolve(
+        currentBookId = state.book.id,
+        runtimeState = ttsRuntime,
+        localRestartFeedbackMessage = localRestartFeedbackMessage,
+    )
 
     LaunchedEffect(chromeMode, lastChromeInteractionAtMs) {
         val interactionAt = lastChromeInteractionAtMs
