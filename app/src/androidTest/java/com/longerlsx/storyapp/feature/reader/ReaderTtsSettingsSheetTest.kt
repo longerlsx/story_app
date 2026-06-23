@@ -1,7 +1,10 @@
 package com.longerlsx.storyapp.feature.reader
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.captureToImage
@@ -12,6 +15,8 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.unit.dp
 import com.longerlsx.storyapp.core.model.ReaderSettings
 import com.longerlsx.storyapp.core.model.ReaderTtsSettings
 import com.longerlsx.storyapp.core.model.ReaderTtsTimerPreset
@@ -274,4 +279,47 @@ class ReaderTtsSettingsSheetTest {
         composeRule.onAllNodesWithText("护眼模式").assertCountEquals(0)
     }
 
+    @Test
+    fun settingsTabsStayVisibleWhenTtsSettingsBodyScrolls() {
+        composeRule.setContent {
+            MaterialTheme {
+                Box(modifier = Modifier.height(180.dp)) {
+                    ReaderSettingsSheet(
+                        settings = ReaderSettings(),
+                        themePalette = ReaderThemePalette(
+                            background = Color.White,
+                            surface = Color(0xFFF4F4F4),
+                            content = Color.Black,
+                        ),
+                        activeTab = ReaderSettingsTab.TTS,
+                        availableVoices = listOf(
+                            ReaderTtsVoiceOption(name = "voice-a", displayName = "系统女声"),
+                            ReaderTtsVoiceOption(name = "voice-b", displayName = "机械男声"),
+                        ),
+                        selectedVoiceName = "voice-a",
+                        ttsStatusText = "当前状态：未朗读",
+                        onSelectTab = {},
+                        onUpdateSettings = {},
+                        onUpdateTtsSettings = {},
+                    )
+                }
+            }
+        }
+
+        composeRule
+            .onNodeWithContentDescription("设置分页：阅读，未选中")
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithText("120 分钟")
+            .performScrollTo()
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithContentDescription("设置分页：阅读，未选中")
+            .assertIsDisplayed()
+        composeRule
+            .onNodeWithContentDescription("设置分页：朗读，已选中")
+            .assertIsDisplayed()
+    }
 }

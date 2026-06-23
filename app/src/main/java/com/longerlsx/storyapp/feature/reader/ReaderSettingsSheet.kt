@@ -50,9 +50,7 @@ fun ReaderSettingsSheet(
     onUpdateTtsSettings: (ReaderTtsSettings) -> Unit,
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState()),
+        modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         ReaderSettingsTabRow(
@@ -60,35 +58,42 @@ fun ReaderSettingsSheet(
             themePalette = themePalette,
             onSelectTab = onSelectTab,
         )
-        when (activeTab) {
-            ReaderSettingsTab.READING -> ReaderReadingSettingsBody(
-                settings = settings,
-                themePalette = themePalette,
-                onUpdateSettings = onUpdateSettings,
-            )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            when (activeTab) {
+                ReaderSettingsTab.READING -> ReaderReadingSettingsBody(
+                    settings = settings,
+                    themePalette = themePalette,
+                    onUpdateSettings = onUpdateSettings,
+                )
 
-            ReaderSettingsTab.TTS -> ReaderTtsSettingsSheet(
-                statusText = ttsStatusText,
-                settings = settings.ttsSettings,
-                themePalette = themePalette,
-                availableVoices = availableVoices,
-                availableVoicesLoaded = availableVoicesLoaded,
-                selectedVoiceName = selectedVoiceName,
-                remainingTimeLabel = ttsRemainingTimeLabel,
-                systemDefaultVoiceStatus = ttsSystemDefaultVoiceStatus,
-                onSelectVoice = { voiceName ->
-                    onUpdateTtsSettings(settings.ttsSettings.copy(voiceName = voiceName))
-                },
-                onUpdateSpeechRate = { speechRate ->
-                    onUpdateTtsSettings(settings.ttsSettings.copy(speechRate = speechRate))
-                },
-                onUpdatePitch = { pitch ->
-                    onUpdateTtsSettings(settings.ttsSettings.copy(pitch = pitch))
-                },
-                onUpdateTimerPreset = { timerPreset ->
-                    onUpdateTtsSettings(settings.ttsSettings.copy(timerPreset = timerPreset))
-                },
-            )
+                ReaderSettingsTab.TTS -> ReaderTtsSettingsSheet(
+                    statusText = ttsStatusText,
+                    settings = settings.ttsSettings,
+                    themePalette = themePalette,
+                    availableVoices = availableVoices,
+                    availableVoicesLoaded = availableVoicesLoaded,
+                    selectedVoiceName = selectedVoiceName,
+                    remainingTimeLabel = ttsRemainingTimeLabel,
+                    systemDefaultVoiceStatus = ttsSystemDefaultVoiceStatus,
+                    onSelectVoice = { voiceName ->
+                        onUpdateTtsSettings(settings.ttsSettings.copy(voiceName = voiceName))
+                    },
+                    onUpdateSpeechRate = { speechRate ->
+                        onUpdateTtsSettings(settings.ttsSettings.copy(speechRate = speechRate))
+                    },
+                    onUpdatePitch = { pitch ->
+                        onUpdateTtsSettings(settings.ttsSettings.copy(pitch = pitch))
+                    },
+                    onUpdateTimerPreset = { timerPreset ->
+                        onUpdateTtsSettings(settings.ttsSettings.copy(timerPreset = timerPreset))
+                    },
+                )
+            }
         }
     }
 }
