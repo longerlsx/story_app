@@ -41,10 +41,10 @@ object ReaderPageLinePaginator {
             val endCharOffset = lines[lastVisibleLineIndex].endCharOffset
                 .coerceAtLeast((startCharOffset + 1).coerceAtMost(content.length))
             val rawText = content.substring(startCharOffset, endCharOffset)
-            pages += ReaderPageSlice(
+            pages += readerPageSliceFromRawText(
                 startCharOffset = startCharOffset,
                 endCharOffset = endCharOffset,
-                text = rawText.trim('\n').ifBlank { rawText.ifBlank { "当前章节暂无正文。" } },
+                rawText = rawText,
             )
             lineIndex = lastVisibleLineIndex + 1
         }

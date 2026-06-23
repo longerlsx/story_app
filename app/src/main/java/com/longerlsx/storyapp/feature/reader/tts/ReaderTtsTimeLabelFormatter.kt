@@ -11,4 +11,10 @@ object ReaderTtsTimeLabelFormatter {
             else -> "${hours}h ${minutes}m"
         }
     }
+
+    fun formatPositiveRemainingMillisOrNull(remainingMillis: Long?): String? {
+        return remainingMillis
+            ?.takeIf { it > 0L }
+            ?.let(::formatRemainingMillis)
+    }
 }

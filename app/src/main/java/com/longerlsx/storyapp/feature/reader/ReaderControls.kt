@@ -3,7 +3,6 @@ package com.longerlsx.storyapp.feature.reader
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -377,13 +376,8 @@ private fun ReaderBarAction(
             )
             .semantics { contentDescription = label },
     ) {
-        Text(
-            text = label,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 10.dp),
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
+        ReaderActionLabelText(
+            label = label,
             color = if (enabled) {
                 themePalette.content
             } else {
@@ -412,16 +406,34 @@ private fun ReaderTtsToggleAction(
             )
             .semantics { contentDescription = state.actionLabel },
     ) {
-        Text(
-            text = state.actionLabel,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 10.dp),
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
+        ReaderActionLabelText(
+            label = state.actionLabel,
             color = themePalette.content,
         )
     }
+}
+
+@Composable
+private fun ReaderActionLabelText(
+    label: String,
+    color: androidx.compose.ui.graphics.Color,
+) {
+    Text(
+        text = label,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp),
+        style = if (label.length >= 7) {
+            MaterialTheme.typography.labelMedium
+        } else {
+            MaterialTheme.typography.bodyMedium
+        },
+        textAlign = TextAlign.Center,
+        color = color,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        softWrap = false,
+    )
 }
 
 @Composable

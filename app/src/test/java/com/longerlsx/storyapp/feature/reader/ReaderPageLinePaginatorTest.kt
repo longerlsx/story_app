@@ -73,6 +73,27 @@ class ReaderPageLinePaginatorTest {
     }
 
     @Test
+    fun recordsVisibleOffsetsWhenPageStartsWithLeadingNewlines() {
+        val content = "\n\n正文第一行\n正文第二行"
+        val lines = listOf(
+            ReaderPageLine(0, 1, topPx = 0f, bottomPx = 12f),
+            ReaderPageLine(1, 2, topPx = 12f, bottomPx = 24f),
+            ReaderPageLine(2, 7, topPx = 24f, bottomPx = 48f),
+            ReaderPageLine(8, content.length, topPx = 48f, bottomPx = 72f),
+        )
+
+        val pages = ReaderPageLinePaginator.paginate(
+            content = content,
+            lines = lines,
+            availableHeightPx = 48f,
+        )
+
+        assertEquals(2, pages.first().visibleStartCharOffset)
+        assertEquals(content.substring(0, 7), pages.first().rawText)
+        assertEquals("正文第一行", pages.first().text)
+    }
+
+    @Test
     fun returnsPlaceholderWhenContentIsBlank() {
         val pages = ReaderPageLinePaginator.paginate(
             content = "",

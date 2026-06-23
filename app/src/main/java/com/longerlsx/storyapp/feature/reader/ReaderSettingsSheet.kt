@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.longerlsx.storyapp.core.model.ReaderAppearanceMode
 import com.longerlsx.storyapp.core.model.ReaderSettings
@@ -38,6 +40,7 @@ fun ReaderSettingsSheet(
     themePalette: ReaderThemePalette,
     activeTab: ReaderSettingsTab,
     availableVoices: List<ReaderTtsVoiceOption>,
+    availableVoicesLoaded: Boolean = true,
     selectedVoiceName: String?,
     ttsStatusText: String,
     ttsRemainingTimeLabel: String? = null,
@@ -67,7 +70,9 @@ fun ReaderSettingsSheet(
             ReaderSettingsTab.TTS -> ReaderTtsSettingsSheet(
                 statusText = ttsStatusText,
                 settings = settings.ttsSettings,
+                themePalette = themePalette,
                 availableVoices = availableVoices,
+                availableVoicesLoaded = availableVoicesLoaded,
                 selectedVoiceName = selectedVoiceName,
                 remainingTimeLabel = ttsRemainingTimeLabel,
                 systemDefaultVoiceStatus = ttsSystemDefaultVoiceStatus,
@@ -129,7 +134,6 @@ private fun ReaderReadingSettingsBody(
                 ReaderBrightnessResolver.withActiveBrightness(settings, it),
             )
         },
-        trailingText = "护眼模式",
     )
 
     ReaderStepperRow(
@@ -218,7 +222,6 @@ private fun ReaderSliderRow(
     valueRange: ClosedFloatingPointRange<Float>,
     themePalette: ReaderThemePalette,
     onValueChange: (Float) -> Unit,
-    trailingText: String? = null,
 ) {
     Column(
         modifier = Modifier.semantics {
@@ -246,14 +249,12 @@ private fun ReaderSliderRow(
             value = value,
             onValueChange = onValueChange,
             valueRange = valueRange,
+            colors = SliderDefaults.colors(
+                thumbColor = themePalette.content.copy(alpha = 0.78f),
+                activeTrackColor = themePalette.content.copy(alpha = 0.52f),
+                inactiveTrackColor = themePalette.content.copy(alpha = 0.16f),
+            ),
         )
-        if (trailingText != null) {
-            Text(
-                text = trailingText,
-                style = MaterialTheme.typography.bodySmall,
-                color = themePalette.content.copy(alpha = 0.6f),
-            )
-        }
     }
 }
 
@@ -412,12 +413,13 @@ private fun ReaderThemeSwatch(
 }
 
 @Composable
-private fun ReaderInlinePill(
+internal fun ReaderInlinePill(
     label: String,
     themePalette: ReaderThemePalette,
     modifier: Modifier = Modifier,
     selected: Boolean = false,
     contentDescription: String? = null,
+    horizontalPadding: Dp = 0.dp,
     onClick: () -> Unit,
 ) {
     Surface(
@@ -438,7 +440,7 @@ private fun ReaderInlinePill(
     ) {
         Text(
             text = label,
-            modifier = Modifier.padding(vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = horizontalPadding, vertical = 10.dp),
             textAlign = TextAlign.Center,
             style = MaterialTheme.typography.bodyMedium,
             color = if (selected) themePalette.content else themePalette.content.copy(alpha = 0.85f),

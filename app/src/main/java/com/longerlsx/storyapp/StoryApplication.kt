@@ -109,7 +109,7 @@ class StoryApplication : Application() {
     }
 
     fun preloadReaderTtsVoices() {
-        if (readerTtsController.runtimeState.value.availableVoices.isNotEmpty()) {
+        if (readerTtsController.runtimeState.value.availableVoicesLoaded) {
             return
         }
         if (preloadVoicesJob?.isActive == true) {
@@ -117,10 +117,8 @@ class StoryApplication : Application() {
         }
         preloadVoicesJob = applicationScope.launch {
             val preloadEngine = createReaderTtsEngine(NoopReaderTtsCallback)
-            val voices = preloadEngine.initialize().getOrNull().orEmpty()
-            if (voices.isNotEmpty()) {
-                readerTtsController.updateAvailableVoices(voices)
-            }
+            val voices = preloadEngine.initialize()
+            readerTtsController.updateAvailableVoicesResult(voices)
             preloadEngine.shutdown()
         }
     }

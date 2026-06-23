@@ -195,10 +195,7 @@ class ReaderTtsService : Service(), ReaderTtsEngine.Callback {
             if (utteranceId != activeUtteranceId) {
                 return@launch
             }
-            if (
-                controller.playbackState != ReaderTtsSessionState.STARTING &&
-                controller.playbackState != ReaderTtsSessionState.PLAYING
-            ) {
+            if (!controller.playbackState.isSpeakingSession()) {
                 return@launch
             }
             val queuedSegment = activeQueue.getOrNull(activeQueueIndex)
@@ -237,10 +234,7 @@ class ReaderTtsService : Service(), ReaderTtsEngine.Callback {
             if (utteranceId != activeUtteranceId) {
                 return@launch
             }
-            if (
-                controller.playbackState != ReaderTtsSessionState.STARTING &&
-                controller.playbackState != ReaderTtsSessionState.PLAYING
-            ) {
+            if (!controller.playbackState.isSpeakingSession()) {
                 return@launch
             }
             controller.handleStartupFailure(message)
@@ -252,10 +246,7 @@ class ReaderTtsService : Service(), ReaderTtsEngine.Callback {
         request: ReaderTtsStartRequest,
         token: Long,
     ) {
-        if (
-            controller.playbackState != ReaderTtsSessionState.STARTING &&
-            controller.playbackState != ReaderTtsSessionState.PLAYING
-        ) {
+        if (!controller.playbackState.isSpeakingSession()) {
             return
         }
         if (!isPlaybackTokenCurrent(token)) {
@@ -429,7 +420,7 @@ class ReaderTtsService : Service(), ReaderTtsEngine.Callback {
     }
 
     private fun pauseByUserAction() {
-        if (!controller.playbackState.canPauseInPlace()) {
+        if (!controller.playbackState.isSpeakingSession()) {
             return
         }
         invalidatePlaybackToken()
@@ -444,7 +435,7 @@ class ReaderTtsService : Service(), ReaderTtsEngine.Callback {
     }
 
     private fun pauseForAudioFocusLoss() {
-        if (!controller.playbackState.canPauseInPlace()) {
+        if (!controller.playbackState.isSpeakingSession()) {
             return
         }
         invalidatePlaybackToken()
@@ -735,17 +726,6 @@ class ReaderTtsService : Service(), ReaderTtsEngine.Callback {
     }
 
     private fun isPlaybackTokenCurrent(token: Long): Boolean = playbackToken == token
-
-    private fun ReaderTtsTimerPreset.toInitialTimerMillis(): Long? {
-        return when (this) {
-            ReaderTtsTimerPreset.NoTimer -> null
-            is ReaderTtsTimerPreset.Countdown -> minutes * 60_000L
-        }
-    }
-
-    private fun ReaderTtsSessionState.canPauseInPlace(): Boolean {
-        return this == ReaderTtsSessionState.STARTING || this == ReaderTtsSessionState.PLAYING
-    }
 
     private data class QueuedSegment(
         val segment: ReaderTtsSegment,

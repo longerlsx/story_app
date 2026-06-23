@@ -21,8 +21,126 @@ import org.junit.runner.RunWith
 class ReaderPageModeTest {
 
     @Test
+    fun pagingForwardAcrossBoundaryByRightTapOpensNextChapter() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        resetStoryAppState(context)
+        val importFile = File(context.cacheDir, "reader-page-forward-boundary.txt").apply {
+            writeText(
+                buildString {
+                    appendLine("《翻页前进边界测试》")
+                    appendLine("第1章 开始")
+                    repeat(60) { index ->
+                        appendLine("第一章铺垫${index + 1}，这是一段明显偏长、用来撑开翻页内容的正文描述。")
+                    }
+                    appendLine("第一章结尾标记。")
+                    appendLine()
+                    appendLine("第2章 继续")
+                    appendLine("第二章边界开头标记。")
+                    appendLine("第二章第二段内容。")
+                },
+            )
+        }
+        val uri = FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            importFile,
+        )
+        val externalIntent = Intent(Intent.ACTION_VIEW).apply {
+            setClass(context, MainActivity::class.java)
+            setDataAndType(uri, "text/plain")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+
+        ActivityScenario.launch<MainActivity>(externalIntent).use {
+            assertTrue(device.wait(Until.hasObject(By.textContains("第一章铺垫1")), 8_000))
+            assertTrue(device.ensurePageMode())
+
+            val rightX = (device.displayWidth * 0.88f).toInt()
+            val centerY = device.displayHeight / 2
+            var reachedFirstChapterEnd = device.hasObject(By.textContains("第一章结尾标记"))
+            repeat(20) {
+                if (!reachedFirstChapterEnd) {
+                    device.click(rightX, centerY)
+                    device.waitForIdle()
+                    reachedFirstChapterEnd = device.wait(
+                        Until.hasObject(By.textContains("第一章结尾标记")),
+                        400,
+                    )
+                }
+            }
+            assertTrue(reachedFirstChapterEnd)
+
+            Thread.sleep(600)
+            device.click(rightX, centerY)
+            device.waitForIdle()
+
+            assertTrue(device.wait(Until.hasObject(By.textContains("第二章边界开头标记")), 8_000))
+        }
+    }
+
+    @Test
+    fun pagingForwardAfterChapterSwitchWithDifferentPageCountOpensNextChapter() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        resetStoryAppState(context)
+        val importFile = File(context.cacheDir, "reader-page-switch-forward-boundary.txt").apply {
+            writeText(
+                buildString {
+                    appendLine("《翻页切章边界测试》")
+                    appendLine("第1章 长章")
+                    repeat(80) { index ->
+                        appendLine("第一章长内容${index + 1}，用于让 pager 先停在非首页状态。")
+                    }
+                    appendLine()
+                    appendLine("第2章 短章")
+                    appendLine("第二章短章当前页标记。")
+                    appendLine()
+                    appendLine("第3章 目标")
+                    appendLine("第三章边界开头标记。")
+                },
+            )
+        }
+        val uri = FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            importFile,
+        )
+        val externalIntent = Intent(Intent.ACTION_VIEW).apply {
+            setClass(context, MainActivity::class.java)
+            setDataAndType(uri, "text/plain")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+
+        ActivityScenario.launch<MainActivity>(externalIntent).use {
+            assertTrue(device.wait(Until.hasObject(By.textContains("第一章长内容1")), 8_000))
+            assertTrue(device.ensurePageMode())
+
+            val rightX = (device.displayWidth * 0.88f).toInt()
+            val centerY = device.displayHeight / 2
+            repeat(3) {
+                device.click(rightX, centerY)
+                device.waitForIdle()
+            }
+
+            assertTrue(device.revealReaderChrome("下一章"))
+            assertTrue(device.tapChapterAction(previous = false))
+            assertTrue(device.wait(Until.hasObject(By.textContains("第二章短章当前页标记")), 8_000))
+            device.waitForIdle()
+
+            device.click(rightX, centerY)
+            device.waitForIdle()
+
+            assertTrue(device.wait(Until.hasObject(By.textContains("第三章边界开头标记")), 8_000))
+        }
+    }
+
+    @Test
     fun pagingBackwardAcrossBoundaryOpensPreviousChapterNearItsEnd() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        resetStoryAppState(context)
         val importFile = File(context.cacheDir, "reader-page-boundary.txt").apply {
             writeText(
                 """
@@ -101,7 +219,7 @@ class ReaderPageModeTest {
                 chapterTwo = device.wait(Until.findObject(By.text("第2章 继续")), 5_000)
             }
             assertNotNull(chapterTwo)
-            chapterTwo!!.click()
+            assertTrue(device.clickObjectCenter(chapterTwo!!))
 
             assertTrue(device.wait(Until.hasObject(By.textContains("第二章开头内容")), 8_000))
 
@@ -115,6 +233,7 @@ class ReaderPageModeTest {
     @Test
     fun pageModeKeepsImmersiveChromeAndRestoresLastChapter() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        resetStoryAppState(context)
         val importFile = File(context.cacheDir, "reader-page-mode.txt").apply {
             writeText(
                 """

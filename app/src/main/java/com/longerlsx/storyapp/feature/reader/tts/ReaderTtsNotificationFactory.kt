@@ -29,23 +29,10 @@ class ReaderTtsNotificationFactory(
     }
 
     fun build(runtimeState: ReaderTtsRuntimeState): Notification {
-        val summaryLine = runtimeState.currentPlaybackSummary.orEmpty()
-        val actionIsResume =
-            runtimeState.playbackState == ReaderTtsSessionState.PAUSED_BY_USER ||
-                runtimeState.playbackState == ReaderTtsSessionState.PAUSED_BY_AUDIO_FOCUS
-        val remainingTimeLabel = runtimeState.remainingTimerMillis
-            ?.let(ReaderTtsTimeLabelFormatter::formatRemainingMillis)
-        val stateLine = when {
-            actionIsResume && !remainingTimeLabel.isNullOrBlank() -> "已暂停 · $remainingTimeLabel"
-            actionIsResume -> "已暂停"
-            !remainingTimeLabel.isNullOrBlank() -> remainingTimeLabel
-            else -> runtimeState.activeStateLabel
-        }
-        val contentText = listOfNotNull(
-            summaryLine.takeIf(String::isNotBlank),
-            stateLine.takeIf(String::isNotBlank),
-        ).joinToString(" · ")
-            .ifBlank { runtimeState.activeStateLabel }
+        val primaryAction = ReaderTtsNotificationActionResolver.resolvePrimaryAction(
+            runtimeState.playbackState,
+        )
+        val contentText = ReaderTtsNotificationTextResolver.resolveContentText(runtimeState)
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_lock_silent_mode_off)
@@ -71,19 +58,19 @@ class ReaderTtsNotificationFactory(
 
         builder.addAction(
             NotificationCompat.Action(
-                if (actionIsResume) {
+                if (primaryAction == ReaderTtsNotificationPrimaryAction.RESUME) {
                     android.R.drawable.ic_media_play
                 } else {
                     android.R.drawable.ic_media_pause
                 },
                 context.getString(
-                    if (actionIsResume) {
+                    if (primaryAction == ReaderTtsNotificationPrimaryAction.RESUME) {
                         R.string.reader_tts_resume
                     } else {
                         R.string.reader_tts_pause
                     },
                 ),
-                if (actionIsResume) {
+                if (primaryAction == ReaderTtsNotificationPrimaryAction.RESUME) {
                     ReaderTtsIntentFactory.createResumeActionPendingIntent(context)
                 } else {
                     ReaderTtsIntentFactory.createPauseActionPendingIntent(context)

@@ -29,6 +29,22 @@ class ReaderPageAnchorMapperTest {
     }
 
     @Test
+    fun usesVisiblePageStartOffsetAsPersistedAnchorWhenPageTrimsLeadingNewlines() {
+        val pages = listOf(
+            ReaderPageSlice(
+                startCharOffset = 100,
+                endCharOffset = 140,
+                text = "正文",
+                rawText = "\n\n正文",
+                visibleStartCharOffset = 102,
+                visibleEndCharOffset = 104,
+            ),
+        )
+
+        assertEquals(102, ReaderPageAnchorMapper.anchorForPageIndex(pages, 0))
+    }
+
+    @Test
     fun mapsVisiblePageTextOffsetsBackToRawChapterOffsets() {
         val page = ReaderPageSlice(
             startCharOffset = 40,

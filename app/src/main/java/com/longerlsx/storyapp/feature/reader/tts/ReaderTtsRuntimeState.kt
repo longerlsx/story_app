@@ -17,6 +17,7 @@ data class ReaderTtsRuntimeState(
     val speechRate: Float = 1.0f,
     val pitch: Float = 1.0f,
     val availableVoices: List<ReaderTtsVoiceOption> = emptyList(),
+    val availableVoicesLoaded: Boolean = false,
     val notificationControlsAvailable: Boolean = true,
 ) {
     fun isOngoingSession(): Boolean {

@@ -300,6 +300,34 @@ class ReaderTtsControllerTest {
     }
 
     @Test
+    fun updateAvailableVoicesMarksCatalogLoadedEvenWhenNoVoicesRemain() {
+        val controller = ReaderTtsController(
+            launchForegroundService = { true },
+            sendStopCommand = {},
+        )
+
+        controller.updateAvailableVoices(emptyList())
+
+        assertTrue(controller.runtimeState.value.availableVoicesLoaded)
+        assertTrue(controller.runtimeState.value.availableVoices.isEmpty())
+    }
+
+    @Test
+    fun failedAvailableVoiceLoadDoesNotMarkCatalogLoaded() {
+        val controller = ReaderTtsController(
+            launchForegroundService = { true },
+            sendStopCommand = {},
+        )
+
+        controller.updateAvailableVoicesResult(
+            Result.failure(IllegalStateException("engine failed")),
+        )
+
+        assertFalse(controller.runtimeState.value.availableVoicesLoaded)
+        assertTrue(controller.runtimeState.value.availableVoices.isEmpty())
+    }
+
+    @Test
     fun restartFromLocationKeepsTimerBudgetAndDispatchesRestartCommand() {
         val restartRequests = mutableListOf<ReaderTtsStartRequest>()
         val controller = ReaderTtsController(

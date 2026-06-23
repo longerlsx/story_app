@@ -156,7 +156,7 @@ class ReaderTtsBackgroundPlaybackTest {
             assertTrue(device.tapPrimaryAction(ReaderPrimaryActionSlot.DIRECTORY))
             val chapterTwo = device.wait(Until.findObject(By.text("第2章 继续")), 5_000)
             assertNotNull(chapterTwo)
-            chapterTwo!!.click()
+            assertTrue(device.clickObjectCenter(chapterTwo!!))
 
             assertTrue(device.wait(Until.hasObject(By.textContains("第二章起始句")), 8_000))
             waitForPlaybackState(ReaderTtsSessionState.STOPPED_BY_NAVIGATION)
@@ -165,7 +165,7 @@ class ReaderTtsBackgroundPlaybackTest {
             val toggle = device.wait(Until.findObject(By.desc("朗读")), 3_000)
                 ?: device.wait(Until.findObject(By.text("朗读")), 3_000)
             assertNotNull(toggle)
-            toggle!!.click()
+            assertTrue(device.clickObjectCenter(toggle!!))
 
             waitForPlaybackState(ReaderTtsSessionState.PLAYING)
             val restartedEngine = engineHarness.awaitSpokenSegment(
@@ -211,7 +211,7 @@ class ReaderTtsBackgroundPlaybackTest {
             val toggle = device.wait(Until.findObject(By.desc("朗读")), 3_000)
                 ?: device.wait(Until.findObject(By.text("朗读")), 3_000)
             assertNotNull(toggle)
-            toggle!!.click()
+            assertTrue(device.clickObjectCenter(toggle!!))
 
             waitForPlaybackState(ReaderTtsSessionState.PLAYING)
             val restartedEngine = engineHarness.awaitSpokenSegment(
@@ -257,11 +257,11 @@ class ReaderTtsBackgroundPlaybackTest {
             val backButton = device.wait(Until.findObject(By.desc("返回")), 3_000)
                 ?: device.wait(Until.findObject(By.text("返回")), 3_000)
             assertNotNull(backButton)
-            backButton!!.click()
+            assertTrue(device.clickObjectCenter(backButton!!))
             assertTrue(device.wait(Until.hasObject(By.text("书架")), 8_000))
             val secondBookCard = device.wait(Until.findObject(By.text("第二本书")), 5_000)
             assertNotNull(secondBookCard)
-            secondBookCard!!.click()
+            assertTrue(device.clickObjectCenter(secondBookCard!!))
             assertTrue(device.wait(Until.hasObject(By.textContains("第二本书正文")), 8_000))
             waitForPlaybackState(ReaderTtsSessionState.STOPPED_BY_NAVIGATION)
         }

@@ -11,13 +11,25 @@ import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
 import com.longerlsx.storyapp.MainActivity
 import java.io.File
+import org.junit.After
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class ReaderAppearanceToggleTest {
+
+    @Before
+    fun setUp() {
+        resetStoryAppState(ApplicationProvider.getApplicationContext())
+    }
+
+    @After
+    fun tearDown() {
+        resetStoryAppState(ApplicationProvider.getApplicationContext())
+    }
 
     @Test
     fun directAppearanceToggleRemembersSeparateDayAndNightThemes() {
@@ -52,7 +64,7 @@ class ReaderAppearanceToggleTest {
 
             val dayTheme = device.wait(Until.findObject(By.desc("切换主题：暖黄")), 3_000)
             assertNotNull(dayTheme)
-            dayTheme!!.click()
+            assertTrue(device.clickObjectCenter(dayTheme!!))
             assertTrue(device.wait(Until.hasObject(By.desc("当前主题：暖黄")), 3_000))
 
             assertTrue(device.tapPrimaryAction(ReaderPrimaryActionSlot.APPEARANCE))
@@ -60,7 +72,7 @@ class ReaderAppearanceToggleTest {
             assertTrue(device.wait(Until.hasObject(By.text("日间")), 3_000))
             val nightTheme = device.wait(Until.findObject(By.desc("切换主题：深灰")), 3_000)
             assertNotNull(nightTheme)
-            nightTheme!!.click()
+            assertTrue(device.clickObjectCenter(nightTheme!!))
             assertTrue(device.wait(Until.hasObject(By.desc("当前主题：深灰")), 3_000))
 
             assertTrue(device.tapPrimaryAction(ReaderPrimaryActionSlot.APPEARANCE))

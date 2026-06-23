@@ -53,7 +53,7 @@ class ReaderSettingsExpansionTest {
 
             val settingsButton = device.wait(Until.findObject(By.text("设置")), 3_000)
             assertNotNull(settingsButton)
-            settingsButton!!.click()
+            assertTrue(device.clickObjectCenter(settingsButton!!))
 
             assertTrue(device.wait(Until.hasObject(By.text("亮度")), 3_000))
             assertTrue(device.hasObject(By.text("字号")))

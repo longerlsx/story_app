@@ -60,7 +60,7 @@ class ReaderTtsSettingsExpansionTest {
 
             val ttsTab = device.wait(Until.findObject(By.text("朗读")), 3_000)
             assertTrue(ttsTab != null)
-            ttsTab!!.click()
+            assertTrue(device.clickObjectCenter(ttsTab!!))
 
             assertTrue(device.wait(Until.hasObject(By.text("测试语音")), 3_000))
             assertTrue(device.tapPrimaryAction(ReaderPrimaryActionSlot.SETTINGS))
@@ -95,7 +95,7 @@ class ReaderTtsSettingsExpansionTest {
 
             val ttsTab = device.wait(Until.findObject(By.text("朗读")), 3_000)
             assertTrue(ttsTab != null)
-            ttsTab!!.click()
+            assertTrue(device.clickObjectCenter(ttsTab!!))
 
             assertTrue(device.wait(Until.hasObject(By.text("测试语音")), 3_000))
             assertTrue(device.tapPrimaryAction(ReaderPrimaryActionSlot.DIRECTORY))

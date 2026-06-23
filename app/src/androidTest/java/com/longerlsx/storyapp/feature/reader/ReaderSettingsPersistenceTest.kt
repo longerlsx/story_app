@@ -53,11 +53,11 @@ class ReaderSettingsPersistenceTest {
 
             val pageMode = device.wait(Until.findObject(By.text("翻页")), 3_000)
             assertNotNull(pageMode)
-            pageMode!!.click()
+            assertTrue(device.clickObjectCenter(pageMode!!))
 
             val fontUp = device.wait(Until.findObject(By.text("A+")), 3_000)
             assertNotNull(fontUp)
-            fontUp!!.click()
+            assertTrue(device.clickObjectCenter(fontUp!!))
         }
 
         ActivityScenario.launch<MainActivity>(

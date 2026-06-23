@@ -46,6 +46,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
@@ -74,7 +75,6 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
@@ -103,9 +103,10 @@ import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsCharacterRange
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsController
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsFollowSuppressionPolicy
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsStartRequest
-import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsTimeLabelFormatter
 import com.longerlsx.storyapp.feature.reader.tts.activeVisualRangeOrNull
 import com.longerlsx.storyapp.feature.reader.tts.isOngoingSession
+import com.longerlsx.storyapp.feature.reader.tts.isPausedSession
+import com.longerlsx.storyapp.feature.reader.tts.isSpeakingSession
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
@@ -365,11 +366,10 @@ private fun ReaderReadyContent(
         chromeBottomPx = scrollChromeBottomPx,
         extraSpacingPx = with(rootDensity) { ReaderScrollReadableTopSpacing.roundToPx() },
     )
-    val progressSummary = if (selectedChapterPosition >= 0) {
-        "${selectedChapterPosition + 1}/${state.chapters.size}章"
-    } else {
-        "--/--"
-    }
+    val progressSummary = ReaderChapterProgressFormatter.format(
+        chapters = state.chapters,
+        selectedChapterPosition = selectedChapterPosition,
+    )
     val activeBrightness = ReaderBrightnessResolver.resolveActiveBrightness(readerSettings)
     val brightnessOverlayAlpha = ((1f - activeBrightness).coerceIn(0f, 1f) * 0.42f)
 
@@ -695,23 +695,19 @@ private fun ReaderReadyContent(
 
     val isCurrentBookTtsPlaying =
         ttsRuntime.currentBookId == state.book.id &&
-            (
-                ttsRuntime.playbackState == com.longerlsx.storyapp.feature.reader.tts.ReaderTtsSessionState.STARTING ||
-                    ttsRuntime.playbackState == com.longerlsx.storyapp.feature.reader.tts.ReaderTtsSessionState.PLAYING
-                )
+            ttsRuntime.playbackState.isSpeakingSession()
     val isCurrentBookTtsPaused =
         ttsRuntime.currentBookId == state.book.id &&
-            (
-                ttsRuntime.playbackState == com.longerlsx.storyapp.feature.reader.tts.ReaderTtsSessionState.PAUSED_BY_USER ||
-                    ttsRuntime.playbackState == com.longerlsx.storyapp.feature.reader.tts.ReaderTtsSessionState.PAUSED_BY_AUDIO_FOCUS
-                )
+            ttsRuntime.playbackState.isPausedSession()
     val isCurrentBookTtsOngoing = isCurrentBookTtsPlaying || isCurrentBookTtsPaused
     val selectedVoiceName = readerSettings.ttsSettings.voiceName
         ?.takeIf { voiceName ->
             ttsRuntime.availableVoices.any { it.name == voiceName }
         }
     val ttsSystemDefaultVoiceStatus = if (
-        readerSettings.ttsSettings.voiceName != null && selectedVoiceName == null
+        ttsRuntime.availableVoicesLoaded &&
+        readerSettings.ttsSettings.voiceName != null &&
+        selectedVoiceName == null
     ) {
         "当前使用系统默认音色"
     } else {
@@ -727,24 +723,13 @@ private fun ReaderReadyContent(
         lastInterruptionAtMs = lastManualFollowInterruptionAtMs,
         nowMs = SystemClock.elapsedRealtime(),
     )
-    val remainingTimeLabel = ttsRuntime.remainingTimerMillis?.let(ReaderTtsTimeLabelFormatter::formatRemainingMillis)
-    val ttsToggleLabel = when {
-        isCurrentBookTtsPaused && !remainingTimeLabel.isNullOrBlank() -> "继续朗读 · $remainingTimeLabel"
-        isCurrentBookTtsPaused -> "继续朗读"
-        isCurrentBookTtsPlaying && !remainingTimeLabel.isNullOrBlank() -> "停止朗读 · $remainingTimeLabel"
-        isCurrentBookTtsPlaying -> "停止朗读"
-        else -> "朗读"
-    }
-    val ttsStatusText = when {
-        isCurrentBookTtsPaused -> "当前状态：已暂停"
-        isCurrentBookTtsPlaying -> "当前状态：朗读中"
-        else -> "当前状态：未朗读"
-    }
-    val ttsToggleUiState = ReaderTtsToggleUiState(
-        actionLabel = ttsToggleLabel,
-        showImmersiveAction = isCurrentBookTtsOngoing,
-        immersiveActionLabel = ttsToggleLabel,
+    val readerTtsUiState = ReaderTtsReaderUiStateResolver.resolve(
+        currentBookId = state.book.id,
+        runtimeState = ttsRuntime,
     )
+    val ttsToggleUiState = readerTtsUiState.toggleState
+    val ttsStatusText = readerTtsUiState.statusText
+    val remainingTimeLabel = readerTtsUiState.remainingTimeLabel
     val transientTtsMessage = when {
         ttsRuntime.currentBookId == state.book.id && !ttsRuntime.localErrorMessage.isNullOrBlank() -> {
             ttsRuntime.localErrorMessage
@@ -762,16 +747,22 @@ private fun ReaderReadyContent(
     }
 
     LaunchedEffect(chromeMode, lastChromeInteractionAtMs) {
-        val interactionAt = lastChromeInteractionAtMs ?: return@LaunchedEffect
-        if (chromeMode != ReaderChromeMode.CHROME_VISIBLE) {
-            return@LaunchedEffect
-        }
-        val remainingDelay = (3_000L - (SystemClock.elapsedRealtime() - interactionAt))
-            .coerceAtLeast(0L)
+        val interactionAt = lastChromeInteractionAtMs
+        val remainingDelay = ReaderChromeAutoHidePolicy.remainingDelayMillis(
+            chromeMode = chromeMode,
+            lastInteractionAtMs = interactionAt,
+            nowMs = SystemClock.elapsedRealtime(),
+        ) ?: return@LaunchedEffect
         if (remainingDelay > 0L) {
             delay(remainingDelay)
         }
-        if (chromeMode == ReaderChromeMode.CHROME_VISIBLE && lastChromeInteractionAtMs == interactionAt) {
+        if (
+            ReaderChromeAutoHidePolicy.shouldHideAfterDelay(
+                chromeMode = chromeMode,
+                scheduledInteractionAtMs = interactionAt ?: return@LaunchedEffect,
+                currentInteractionAtMs = lastChromeInteractionAtMs,
+            )
+        ) {
             setChromeMode(ReaderChromeMode.READING_ONLY, refreshAutoHide = false)
         }
     }
@@ -1192,20 +1183,22 @@ private fun ReaderReadyContent(
                         }
                     }
                 },
-                onOpenPreviousBoundary = {
+                onOpenPreviousBoundary = { targetChapterIndex ->
                     stopTtsForNavigation()
                     markManualFollowInterruption()
-                    val boundaryPreviousChapter = state.chapters.getOrNull(selectedChapterPosition - 1) ?: return@PageReaderContent
                     openChapter(
-                        chapterIndex = boundaryPreviousChapter.chapterIndex,
+                        chapterIndex = targetChapterIndex,
                         nextChromeMode = chromeMode,
                         restoreToLastPage = true,
                     )
                 },
-                onOpenNextBoundary = {
+                onOpenNextBoundary = { targetChapterIndex ->
                     stopTtsForNavigation()
                     markManualFollowInterruption()
-                    openAdjacentChapter(1, chromeMode)
+                    openChapter(
+                        chapterIndex = targetChapterIndex,
+                        nextChromeMode = chromeMode,
+                    )
                 },
                 onToggleChrome = {
                     setChromeMode(ReaderChromeStateReducer.onCenterTap(chromeMode))
@@ -1302,13 +1295,10 @@ private fun ReaderReadyContent(
                         toggleAppearanceMode()
                     },
                     onOpenSettings = {
-                        if (activeSettingsTab == null) {
-                            activeSettingsTab = if (isCurrentBookTtsOngoing) {
-                                ReaderSettingsTab.TTS
-                            } else {
-                                ReaderSettingsTab.READING
-                            }
-                        }
+                        activeSettingsTab = ReaderSettingsTabResolver.resolveOnOpen(
+                            currentTab = activeSettingsTab,
+                            isCurrentBookTtsOngoing = isCurrentBookTtsOngoing,
+                        )
                         val nextChromeMode = ReaderChromeStateReducer.onOpenSettings(chromeMode)
                         setChromeMode(
                             nextChromeMode,
@@ -1340,6 +1330,7 @@ private fun ReaderReadyContent(
                                     themePalette = themePalette,
                                     activeTab = activeSettingsTab ?: ReaderSettingsTab.READING,
                                     availableVoices = ttsRuntime.availableVoices,
+                                    availableVoicesLoaded = ttsRuntime.availableVoicesLoaded,
                                     selectedVoiceName = selectedVoiceName,
                                     ttsStatusText = ttsStatusText,
                                     ttsRemainingTimeLabel = remainingTimeLabel,
@@ -1520,8 +1511,8 @@ private fun PageReaderContent(
     onPagesChanged: (List<ReaderPageSlice>) -> Unit,
     onRestored: (Int) -> Unit,
     onPageSettled: (Int) -> Unit,
-    onOpenPreviousBoundary: () -> Unit,
-    onOpenNextBoundary: () -> Unit,
+    onOpenPreviousBoundary: (targetChapterIndex: Int) -> Unit,
+    onOpenNextBoundary: (targetChapterIndex: Int) -> Unit,
     onToggleChrome: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -1622,9 +1613,11 @@ private fun PageReaderContent(
                 textStyle = pageTextStyle,
             )
         }
-        val pagerState = rememberPagerState(
-            pageCount = { safePages.size },
-        )
+        val pagerState = key(bookId, chapterIndex) {
+            rememberPagerState(
+                pageCount = { safePages.size },
+            )
+        }
 
         LaunchedEffect(bookId, chapterIndex, safePages) {
             onPagesChanged(safePages)
@@ -1701,12 +1694,13 @@ private fun PageReaderContent(
                 .pointerInput(
                     bookId,
                     chapterIndex,
-                    content,
+                    contentLoaded,
+                    restoredPosition,
                     safePages.size,
+                    pagerState.settledPage,
+                    pagerState.isScrollInProgress,
                     previousChapterIndex,
-                    previousChapterContent,
                     nextChapterIndex,
-                    nextChapterContent,
                     boundaryTransition,
                 ) {
                     detectTapGestures(
@@ -1717,52 +1711,90 @@ private fun PageReaderContent(
                         when (ReaderTapZone.resolve(offset.x, size.width.toFloat())) {
                             ReaderTapZone.PREVIOUS -> {
                                 scope.launch {
-                                    onManualFollowInterruption()
-                                    if (pagerState.currentPage > 0) {
-                                        pagerState.animateScrollToPage(pagerState.currentPage - 1)
-                                    } else {
-                                        val previewText = previousPages.lastOrNull()?.text
-                                        val sourceText = safePages.getOrNull(pagerState.currentPage)?.text.orEmpty()
-                                        if (!previewText.isNullOrBlank() && previousChapterIndex != null) {
-                                            boundaryTransition = ReaderBoundaryPageTransition(
-                                                direction = ReaderPageBoundaryDirection.PREVIOUS,
-                                                sourceText = sourceText,
-                                                previewText = previewText,
-                                                targetChapterIndex = previousChapterIndex,
-                                            )
-                                            boundaryTransitionProgress.snapTo(0f)
-                                            boundaryTransitionProgress.animateTo(
-                                                targetValue = 1f,
-                                                animationSpec = tween(durationMillis = 180),
-                                            )
+                                    when (
+                                        val action = ReaderPageBoundaryResolver.resolvePageTurn(
+                                            direction = ReaderPageTurnDirection.PREVIOUS,
+                                            settledPage = pagerState.settledPage,
+                                            pageCount = safePages.size,
+                                            contentLoaded = contentLoaded,
+                                            restoredPosition = restoredPosition,
+                                            isScrollInProgress = pagerState.isScrollInProgress,
+                                            hasActiveBoundaryTransition = boundaryTransition != null,
+                                            previousChapterIndex = previousChapterIndex,
+                                            nextChapterIndex = nextChapterIndex,
+                                        )
+                                    ) {
+                                        ReaderPageTurnAction.Ignore -> Unit
+                                        is ReaderPageTurnAction.Page -> {
+                                            onManualFollowInterruption()
+                                            pagerState.animateScrollToPage(action.pageIndex)
                                         }
-                                        onOpenPreviousBoundary()
+
+                                        is ReaderPageTurnAction.Chapter -> {
+                                            onManualFollowInterruption()
+                                            val activePage = pagerState.settledPage.coerceIn(0, safePages.lastIndex)
+                                            val sourcePage = safePages.getOrNull(activePage)
+                                            val previewPage = previousPages.lastOrNull()
+                                            if (sourcePage != null && previewPage != null) {
+                                                boundaryTransition = ReaderBoundaryPageTransition(
+                                                    direction = ReaderPageBoundaryDirection.PREVIOUS,
+                                                    sourcePage = sourcePage,
+                                                    previewPage = previewPage,
+                                                    targetChapterIndex = action.chapterIndex,
+                                                )
+                                                boundaryTransitionProgress.snapTo(0f)
+                                                boundaryTransitionProgress.animateTo(
+                                                    targetValue = 1f,
+                                                    animationSpec = tween(durationMillis = 180),
+                                                )
+                                            }
+                                            onOpenPreviousBoundary(action.chapterIndex)
+                                        }
                                     }
                                 }
                             }
 
                             ReaderTapZone.NEXT -> {
                                 scope.launch {
-                                    onManualFollowInterruption()
-                                    if (pagerState.currentPage < safePages.lastIndex) {
-                                        pagerState.animateScrollToPage(pagerState.currentPage + 1)
-                                    } else {
-                                        val previewText = nextPages.firstOrNull()?.text
-                                        val sourceText = safePages.getOrNull(pagerState.currentPage)?.text.orEmpty()
-                                        if (!previewText.isNullOrBlank() && nextChapterIndex != null) {
-                                            boundaryTransition = ReaderBoundaryPageTransition(
-                                                direction = ReaderPageBoundaryDirection.NEXT,
-                                                sourceText = sourceText,
-                                                previewText = previewText,
-                                                targetChapterIndex = nextChapterIndex,
-                                            )
-                                            boundaryTransitionProgress.snapTo(0f)
-                                            boundaryTransitionProgress.animateTo(
-                                                targetValue = 1f,
-                                                animationSpec = tween(durationMillis = 180),
-                                            )
+                                    when (
+                                        val action = ReaderPageBoundaryResolver.resolvePageTurn(
+                                            direction = ReaderPageTurnDirection.NEXT,
+                                            settledPage = pagerState.settledPage,
+                                            pageCount = safePages.size,
+                                            contentLoaded = contentLoaded,
+                                            restoredPosition = restoredPosition,
+                                            isScrollInProgress = pagerState.isScrollInProgress,
+                                            hasActiveBoundaryTransition = boundaryTransition != null,
+                                            previousChapterIndex = previousChapterIndex,
+                                            nextChapterIndex = nextChapterIndex,
+                                        )
+                                    ) {
+                                        ReaderPageTurnAction.Ignore -> Unit
+                                        is ReaderPageTurnAction.Page -> {
+                                            onManualFollowInterruption()
+                                            pagerState.animateScrollToPage(action.pageIndex)
                                         }
-                                        onOpenNextBoundary()
+
+                                        is ReaderPageTurnAction.Chapter -> {
+                                            onManualFollowInterruption()
+                                            val activePage = pagerState.settledPage.coerceIn(0, safePages.lastIndex)
+                                            val sourcePage = safePages.getOrNull(activePage)
+                                            val previewPage = nextPages.firstOrNull()
+                                            if (sourcePage != null && previewPage != null) {
+                                                boundaryTransition = ReaderBoundaryPageTransition(
+                                                    direction = ReaderPageBoundaryDirection.NEXT,
+                                                    sourcePage = sourcePage,
+                                                    previewPage = previewPage,
+                                                    targetChapterIndex = action.chapterIndex,
+                                                )
+                                                boundaryTransitionProgress.snapTo(0f)
+                                                boundaryTransitionProgress.animateTo(
+                                                    targetValue = 1f,
+                                                    animationSpec = tween(durationMillis = 180),
+                                                )
+                                            }
+                                            onOpenNextBoundary(action.chapterIndex)
+                                        }
                                     }
                                 }
                             }
@@ -1776,35 +1808,28 @@ private fun PageReaderContent(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize(),
             ) { pageIndex ->
-                Box(
+                ReaderPageSurface(
+                    page = safePages[pageIndex],
+                    themePalette = themePalette,
+                    fontSize = fontSize,
+                    lineHeight = lineHeight,
+                    paragraphSpacing = paragraphSpacing,
+                    pageTopPadding = pageTopPadding,
+                    pageBottomPadding = pageBottomPadding,
+                    highlightRange = highlightRange,
+                    onTapText = if (enableTapToDismissExpandedChrome) {
+                        onToggleChrome
+                    } else {
+                        null
+                    },
+                    onLongPressCharOffset = if (pageIndex == pagerState.currentPage && enableTtsRestartGesture) {
+                        onRestartFromCharOffset
+                    } else {
+                        null
+                    },
                     modifier = Modifier
-                        .fillMaxSize()
-                        .padding(
-                            start = ReaderHorizontalPadding,
-                            end = ReaderHorizontalPadding,
-                            top = pageTopPadding,
-                            bottom = pageBottomPadding,
-                        ),
-                ) {
-                    ReaderPageParagraphContent(
-                        page = safePages[pageIndex],
-                        themePalette = themePalette,
-                        fontSize = fontSize,
-                        lineHeight = lineHeight,
-                        paragraphSpacing = paragraphSpacing,
-                        highlightRange = highlightRange,
-                        onTapText = if (enableTapToDismissExpandedChrome) {
-                            onToggleChrome
-                        } else {
-                            null
-                        },
-                        onLongPressCharOffset = if (pageIndex == pagerState.currentPage && enableTtsRestartGesture) {
-                            onRestartFromCharOffset
-                        } else {
-                            null
-                        },
-                    )
-                }
+                        .fillMaxSize(),
+                )
             }
 
             boundaryTransition?.let { transition ->
@@ -1818,19 +1843,23 @@ private fun PageReaderContent(
                     ReaderPageBoundaryDirection.PREVIOUS -> -containerWidthPx * (1f - boundaryTransitionProgress.value)
                 }
                 ReaderBoundaryPageLayer(
-                    text = transition.sourceText,
-                    backgroundColor = themePalette.background,
-                    textStyle = pageTextStyle,
-                    topPadding = pageTopPadding,
-                    bottomPadding = pageBottomPadding,
+                    page = transition.sourcePage,
+                    themePalette = themePalette,
+                    fontSize = fontSize,
+                    lineHeight = lineHeight,
+                    paragraphSpacing = paragraphSpacing,
+                    pageTopPadding = pageTopPadding,
+                    pageBottomPadding = pageBottomPadding,
                     offsetPx = currentOffsetPx.roundToInt(),
                 )
                 ReaderBoundaryPageLayer(
-                    text = transition.previewText,
-                    backgroundColor = themePalette.background,
-                    textStyle = pageTextStyle,
-                    topPadding = pageTopPadding,
-                    bottomPadding = pageBottomPadding,
+                    page = transition.previewPage,
+                    themePalette = themePalette,
+                    fontSize = fontSize,
+                    lineHeight = lineHeight,
+                    paragraphSpacing = paragraphSpacing,
+                    pageTopPadding = pageTopPadding,
+                    pageBottomPadding = pageBottomPadding,
                     offsetPx = previewOffsetPx.roundToInt(),
                 )
             }
@@ -1840,30 +1869,67 @@ private fun PageReaderContent(
 
 @Composable
 private fun BoxScope.ReaderBoundaryPageLayer(
-    text: String,
-    backgroundColor: Color,
-    textStyle: TextStyle,
-    topPadding: androidx.compose.ui.unit.Dp,
-    bottomPadding: androidx.compose.ui.unit.Dp,
+    page: ReaderPageSlice,
+    themePalette: ReaderThemePalette,
+    fontSize: TextUnit,
+    lineHeight: TextUnit,
+    paragraphSpacing: androidx.compose.ui.unit.Dp,
+    pageTopPadding: androidx.compose.ui.unit.Dp,
+    pageBottomPadding: androidx.compose.ui.unit.Dp,
     offsetPx: Int,
 ) {
     Box(
         modifier = Modifier
             .matchParentSize()
             .offset { IntOffset(x = offsetPx, y = 0) }
-            .background(backgroundColor)
+            .background(themePalette.background),
+    ) {
+        ReaderPageSurface(
+            page = page,
+            themePalette = themePalette,
+            fontSize = fontSize,
+            lineHeight = lineHeight,
+            paragraphSpacing = paragraphSpacing,
+            pageTopPadding = pageTopPadding,
+            pageBottomPadding = pageBottomPadding,
+            highlightRange = null,
+            modifier = Modifier.fillMaxSize(),
+        )
+    }
+}
+
+@Composable
+private fun ReaderPageSurface(
+    page: ReaderPageSlice,
+    themePalette: ReaderThemePalette,
+    fontSize: TextUnit,
+    lineHeight: TextUnit,
+    paragraphSpacing: androidx.compose.ui.unit.Dp,
+    pageTopPadding: androidx.compose.ui.unit.Dp,
+    pageBottomPadding: androidx.compose.ui.unit.Dp,
+    highlightRange: ReaderTtsCharacterRange?,
+    modifier: Modifier = Modifier,
+    onTapText: (() -> Unit)? = null,
+    onLongPressCharOffset: ((Int) -> Unit)? = null,
+) {
+    Box(
+        modifier = modifier
             .padding(
                 start = ReaderHorizontalPadding,
                 end = ReaderHorizontalPadding,
-                top = topPadding,
-                bottom = bottomPadding,
+                top = pageTopPadding,
+                bottom = pageBottomPadding,
             ),
     ) {
-        Text(
-            text = text,
-            style = textStyle,
-            softWrap = true,
-            overflow = TextOverflow.Clip,
+        ReaderPageParagraphContent(
+            page = page,
+            themePalette = themePalette,
+            fontSize = fontSize,
+            lineHeight = lineHeight,
+            paragraphSpacing = paragraphSpacing,
+            highlightRange = highlightRange,
+            onTapText = onTapText,
+            onLongPressCharOffset = onLongPressCharOffset,
         )
     }
 }
@@ -2108,8 +2174,8 @@ private data class ReaderLoadedChapterContent(
 
 private data class ReaderBoundaryPageTransition(
     val direction: ReaderPageBoundaryDirection,
-    val sourceText: String,
-    val previewText: String,
+    val sourcePage: ReaderPageSlice,
+    val previewPage: ReaderPageSlice,
     val targetChapterIndex: Int,
 )
 
@@ -2225,17 +2291,10 @@ private fun buildReaderPageSlice(
     val endCharOffset = lines[endLineIndex].endCharOffset
         .coerceAtLeast((startCharOffset + 1).coerceAtMost(content.length))
     val rawText = content.substring(startCharOffset, endCharOffset)
-    val trimmedPrefixLength = rawText.takeWhile { it == '\n' }.length
-    val trimmedSuffixLength = rawText.takeLastWhile { it == '\n' }.length
-    val visibleStartCharOffset = (startCharOffset + trimmedPrefixLength).coerceAtMost(endCharOffset)
-    val visibleEndCharOffset = (endCharOffset - trimmedSuffixLength).coerceAtLeast(visibleStartCharOffset)
-    return ReaderPageSlice(
+    return readerPageSliceFromRawText(
         startCharOffset = startCharOffset,
         endCharOffset = endCharOffset,
-        text = rawText.trim('\n').ifBlank { rawText.ifBlank { "当前章节暂无正文。" } },
         rawText = rawText,
-        visibleStartCharOffset = visibleStartCharOffset,
-        visibleEndCharOffset = visibleEndCharOffset,
     )
 }
 

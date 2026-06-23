@@ -6,6 +6,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.StaleObjectException
 import androidx.test.uiautomator.UiDevice
+import androidx.test.uiautomator.UiObject2
 import androidx.test.uiautomator.Until
 import java.io.File
 
@@ -45,6 +46,22 @@ internal fun UiDevice.revealReaderChrome(
     return hasObject(By.text(controlLabel)) || hasObject(By.desc(controlLabel))
 }
 
+internal fun UiDevice.clickObjectCenter(target: UiObject2): Boolean {
+    return try {
+        val bounds = target.visibleBounds
+        if (bounds.width() > 0 && bounds.height() > 0) {
+            click(bounds.centerX(), bounds.centerY())
+        } else {
+            target.click()
+        }
+        waitForIdle()
+        true
+    } catch (_: StaleObjectException) {
+        waitForIdle()
+        false
+    }
+}
+
 internal fun UiDevice.waitForReaderTopBar(
     titleHint: String,
     timeoutMs: Long = 2_000,
@@ -55,7 +72,7 @@ internal fun UiDevice.waitForReaderTopBar(
 }
 
 internal fun UiDevice.tapPrimaryAction(slot: ReaderPrimaryActionSlot): Boolean {
-    val label = when (slot) {
+    fun resolveLabel() = when (slot) {
         ReaderPrimaryActionSlot.DIRECTORY -> "目录"
         ReaderPrimaryActionSlot.APPEARANCE -> if (hasObject(By.text("夜间"))) "夜间" else "日间"
         ReaderPrimaryActionSlot.SETTINGS -> "设置"
@@ -65,7 +82,15 @@ internal fun UiDevice.tapPrimaryAction(slot: ReaderPrimaryActionSlot): Boolean {
             else -> "朗读"
         }
     }
-    return tapActionLabel(label) || click(
+    if (tapActionLabel(resolveLabel())) {
+        return true
+    }
+    click(displayWidth / 2, displayHeight / 2)
+    waitForIdle()
+    if (tapActionLabel(resolveLabel())) {
+        return true
+    }
+    val clicked = click(
         when (slot) {
             ReaderPrimaryActionSlot.DIRECTORY -> (displayWidth * 0.125f).toInt()
             ReaderPrimaryActionSlot.APPEARANCE -> (displayWidth * 0.375f).toInt()
@@ -74,11 +99,21 @@ internal fun UiDevice.tapPrimaryAction(slot: ReaderPrimaryActionSlot): Boolean {
         },
         (displayHeight * 0.92f).toInt(),
     )
+    waitForIdle()
+    return clicked
 }
 
 internal fun UiDevice.tapChapterAction(previous: Boolean): Boolean {
     val label = if (previous) "上一章" else "下一章"
-    return tapActionLabel(label) || click(
+    if (tapActionLabel(label)) {
+        return true
+    }
+    click(displayWidth / 2, displayHeight / 2)
+    waitForIdle()
+    if (tapActionLabel(label)) {
+        return true
+    }
+    val clicked = click(
         if (previous) {
             (displayWidth * 0.18f).toInt()
         } else {
@@ -86,6 +121,8 @@ internal fun UiDevice.tapChapterAction(previous: Boolean): Boolean {
         },
         (displayHeight * 0.845f).toInt(),
     )
+    waitForIdle()
+    return clicked
 }
 
 internal fun UiDevice.longPressActionLabel(label: String): Boolean {
@@ -123,20 +160,14 @@ internal fun UiDevice.ensureScrollMode(): Boolean {
         visibleText = "滚动",
     )
         ?: return false
-    scrollMode.click()
+    if (!clickObjectCenter(scrollMode)) {
+        return false
+    }
     val selectedInSheet = wait(Until.hasObject(By.desc("阅读模式：滚动，已选中")), 1_200)
     tapPrimaryAction(ReaderPrimaryActionSlot.SETTINGS)
     wait(Until.gone(By.text("亮度")), 2_000)
-    click(displayWidth / 2, displayHeight / 2)
-    waitForIdle()
-    if (!revealReaderChrome("设置")) {
-        return selectedInSheet
-    }
-    val hasPrev = hasObject(By.text("上一章"))
-    val hasNext = hasObject(By.text("下一章"))
-    click(displayWidth / 2, displayHeight / 2)
-    waitForIdle()
-    return selectedInSheet || (!hasPrev && !hasNext)
+    hideReaderChromeIfVisible()
+    return selectedInSheet
 }
 
 internal fun UiDevice.ensurePageMode(): Boolean {
@@ -148,20 +179,14 @@ internal fun UiDevice.ensurePageMode(): Boolean {
         visibleText = "翻页",
     )
         ?: return false
-    pageMode.click()
+    if (!clickObjectCenter(pageMode)) {
+        return false
+    }
     val selectedInSheet = wait(Until.hasObject(By.desc("阅读模式：翻页，已选中")), 1_200)
     tapPrimaryAction(ReaderPrimaryActionSlot.SETTINGS)
     wait(Until.gone(By.text("亮度")), 2_000)
-    click(displayWidth / 2, displayHeight / 2)
-    waitForIdle()
-    if (!revealReaderChrome("设置")) {
-        return selectedInSheet
-    }
-    val hasPrev = hasObject(By.text("上一章"))
-    val hasNext = hasObject(By.text("下一章"))
-    click(displayWidth / 2, displayHeight / 2)
-    waitForIdle()
-    return selectedInSheet || hasPrev || hasNext
+    hideReaderChromeIfVisible()
+    return selectedInSheet
 }
 
 internal fun UiDevice.scrollUntilTextVisible(
@@ -202,16 +227,29 @@ private fun UiDevice.tapActionLabel(label: String): Boolean {
         val target = wait(Until.findObject(By.desc(label)), 1_000)
             ?: wait(Until.findObject(By.text(label)), 1_000)
         if (target != null) {
-            try {
-                target.click()
-                waitForIdle()
+            if (clickObjectCenter(target)) {
                 return true
-            } catch (_: StaleObjectException) {
-                waitForIdle()
             }
         }
     }
     return false
+}
+
+private fun UiDevice.hideReaderChromeIfVisible() {
+    if (
+        hasObject(By.text("设置")) ||
+        hasObject(By.desc("设置")) ||
+        hasObject(By.text("目录")) ||
+        hasObject(By.desc("目录")) ||
+        hasObject(By.text("上一章")) ||
+        hasObject(By.desc("上一章")) ||
+        hasObject(By.text("下一章")) ||
+        hasObject(By.desc("下一章"))
+    ) {
+        click(displayWidth / 2, displayHeight / 2)
+        waitForIdle()
+        wait(Until.gone(By.text("设置")), 2_000)
+    }
 }
 
 private fun UiDevice.findSettingsOption(

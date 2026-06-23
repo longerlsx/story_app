@@ -5,9 +5,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -31,7 +29,9 @@ private val TimerPresetOptions = listOf(
 fun ReaderTtsSettingsSheet(
     statusText: String,
     settings: ReaderTtsSettings,
+    themePalette: ReaderThemePalette,
     availableVoices: List<ReaderTtsVoiceOption>,
+    availableVoicesLoaded: Boolean = true,
     selectedVoiceName: String?,
     remainingTimeLabel: String? = null,
     systemDefaultVoiceStatus: String? = null,
@@ -46,36 +46,45 @@ fun ReaderTtsSettingsSheet(
         Text(
             text = statusText,
             style = MaterialTheme.typography.bodyMedium,
+            color = themePalette.content,
         )
         if (!remainingTimeLabel.isNullOrBlank()) {
             Text(
                 text = "剩余时间：$remainingTimeLabel",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = themePalette.content.copy(alpha = 0.65f),
             )
         }
-        if (!systemDefaultVoiceStatus.isNullOrBlank()) {
+        if (availableVoicesLoaded && !systemDefaultVoiceStatus.isNullOrBlank()) {
             Text(
                 text = systemDefaultVoiceStatus,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = themePalette.content.copy(alpha = 0.65f),
             )
         }
-        if (availableVoices.isEmpty()) {
+        if (!availableVoicesLoaded) {
+            Text(
+                text = "正在加载系统音色...",
+                style = MaterialTheme.typography.bodySmall,
+                color = themePalette.content.copy(alpha = 0.65f),
+            )
+        } else if (availableVoices.isEmpty()) {
             Text(
                 text = "已筛除非大陆中文音色，当前将使用系统默认音色。",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = themePalette.content.copy(alpha = 0.65f),
             )
         } else {
             ReaderTtsChoiceSection(
                 title = "音色",
-                supportingText = "直接展示系统 TTS engine 当前可用的 voice。",
+                supportingText = "仅显示可用的大陆中文音色。",
+                themePalette = themePalette,
             ) {
                 availableVoices.forEach { option ->
                     ReaderTtsChoicePill(
                         label = option.displayName,
                         selected = selectedVoiceName == option.name,
+                        themePalette = themePalette,
                         onClick = { onSelectVoice(option.name) },
                     )
                 }
@@ -83,36 +92,42 @@ fun ReaderTtsSettingsSheet(
         }
         ReaderTtsChoiceSection(
             title = "语速",
-            supportingText = "修改后从下一个短句块开始生效。",
+            supportingText = "调整后会在后续朗读中生效。",
+            themePalette = themePalette,
         ) {
             SpeechRateOptions.forEach { option ->
                 ReaderTtsChoicePill(
                     label = "${option.formatOneDecimal()}x",
                     selected = settings.speechRate.nearlyEquals(option),
+                    themePalette = themePalette,
                     onClick = { onUpdateSpeechRate(option) },
                 )
             }
         }
         ReaderTtsChoiceSection(
             title = "音高",
-            supportingText = "机械感更强时，通常会偏低一点。",
+            supportingText = "调低会更沉稳，调高会更清亮。",
+            themePalette = themePalette,
         ) {
             PitchOptions.forEach { option ->
                 ReaderTtsChoicePill(
                     label = option.formatOneDecimal(),
                     selected = settings.pitch.nearlyEquals(option),
+                    themePalette = themePalette,
                     onClick = { onUpdatePitch(option) },
                 )
             }
         }
         ReaderTtsChoiceSection(
             title = "定时",
-            supportingText = "新会话会沿用上次选择的定时偏好。",
+            supportingText = "下次朗读会继续使用这个选择。",
+            themePalette = themePalette,
         ) {
             TimerPresetOptions.forEach { preset ->
                 ReaderTtsChoicePill(
                     label = preset.displayLabel(),
                     selected = settings.timerPreset == preset,
+                    themePalette = themePalette,
                     onClick = { onUpdateTimerPreset(preset) },
                 )
             }
@@ -124,6 +139,7 @@ fun ReaderTtsSettingsSheet(
 private fun ReaderTtsChoiceSection(
     title: String,
     supportingText: String? = null,
+    themePalette: ReaderThemePalette,
     content: @Composable () -> Unit,
 ) {
     Column(
@@ -132,12 +148,13 @@ private fun ReaderTtsChoiceSection(
         Text(
             text = title,
             style = MaterialTheme.typography.bodyMedium,
+            color = themePalette.content,
         )
         if (!supportingText.isNullOrBlank()) {
             Text(
                 text = supportingText,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = themePalette.content.copy(alpha = 0.65f),
             )
         }
         FlowRow(
@@ -154,28 +171,16 @@ private fun ReaderTtsChoiceSection(
 private fun ReaderTtsChoicePill(
     label: String,
     selected: Boolean,
+    themePalette: ReaderThemePalette,
     onClick: () -> Unit,
 ) {
-    Surface(
-        shape = RoundedCornerShape(18.dp),
-        color = if (selected) {
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
-        } else {
-            MaterialTheme.colorScheme.surfaceVariant
-        },
+    ReaderInlinePill(
+        label = label,
+        themePalette = themePalette,
+        selected = selected,
+        horizontalPadding = 14.dp,
         onClick = onClick,
-    ) {
-        Text(
-            text = label,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (selected) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
-        )
-    }
+    )
 }
 
 private fun ReaderTtsTimerPreset.displayLabel(): String {

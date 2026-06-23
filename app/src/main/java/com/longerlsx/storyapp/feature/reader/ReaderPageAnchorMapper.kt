@@ -9,6 +9,25 @@ data class ReaderPageSlice(
     val visibleEndCharOffset: Int = endCharOffset,
 )
 
+internal fun readerPageSliceFromRawText(
+    startCharOffset: Int,
+    endCharOffset: Int,
+    rawText: String,
+): ReaderPageSlice {
+    val trimmedPrefixLength = rawText.takeWhile { it == '\n' }.length
+    val trimmedSuffixLength = rawText.takeLastWhile { it == '\n' }.length
+    val visibleStartCharOffset = (startCharOffset + trimmedPrefixLength).coerceAtMost(endCharOffset)
+    val visibleEndCharOffset = (endCharOffset - trimmedSuffixLength).coerceAtLeast(visibleStartCharOffset)
+    return ReaderPageSlice(
+        startCharOffset = startCharOffset,
+        endCharOffset = endCharOffset,
+        text = rawText.trim('\n').ifBlank { rawText.ifBlank { "当前章节暂无正文。" } },
+        rawText = rawText,
+        visibleStartCharOffset = visibleStartCharOffset,
+        visibleEndCharOffset = visibleEndCharOffset,
+    )
+}
+
 fun ReaderPageSlice.rawCharOffsetForVisibleTextOffset(
     visibleTextOffset: Int,
 ): Int {
@@ -44,6 +63,6 @@ object ReaderPageAnchorMapper {
             return 0
         }
 
-        return pages[pageIndex.coerceIn(0, pages.lastIndex)].startCharOffset
+        return pages[pageIndex.coerceIn(0, pages.lastIndex)].visibleStartCharOffset
     }
 }

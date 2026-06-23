@@ -1,9 +1,13 @@
 package com.longerlsx.storyapp.feature.reader
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.junit4.ComposeContentTestRule
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.runtime.mutableStateOf
 import com.longerlsx.storyapp.core.model.Book
 import com.longerlsx.storyapp.core.model.Chapter
@@ -14,6 +18,8 @@ import com.longerlsx.storyapp.data.book.InMemoryBookRepository
 import com.longerlsx.storyapp.data.reader.ReaderSettingsStore
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsController
 import kotlinx.coroutines.runBlocking
+import kotlin.math.abs
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -103,6 +109,89 @@ class ReaderPageParagraphSpacingTest {
         assertFalse(highSpacingShowsSixteenthParagraph)
     }
 
+    @Test
+    fun pageBoundaryTurnWithHighParagraphSpacingOpensNextChapter() {
+        val bookId = "book-page-boundary-high-spacing"
+        val repository = createRepository(
+            bookId = bookId,
+            chapterTexts = mapOf(
+                0 to "第一章当前页结束标记。",
+                1 to """
+                    第二章边界开头标记。
+
+                    第二章第二段标记。
+
+                    第二章第三段标记。
+                """.trimIndent(),
+            ),
+        )
+        val controller = ReaderTtsController(
+            launchForegroundService = { true },
+            sendStopCommand = {},
+        )
+        val settingsStore = createSettingsStore(
+            name = "reader-page-boundary-high-spacing",
+            initial = ReaderSettings(
+                readingMode = ReadingMode.PAGE,
+                paragraphSpacingEm = 1.8f,
+            ),
+        )
+
+        composeRule.setContent {
+            ReaderScreen(
+                bookId = bookId,
+                repository = repository,
+                settingsStore = settingsStore,
+                ttsController = controller,
+                onBack = {},
+            )
+        }
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithText("第一章当前页结束标记。", substring = true)
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
+        composeRule.onNodeWithText("第一章当前页结束标记。").assertIsDisplayed()
+        composeRule.mainClock.autoAdvance = false
+        val rootBounds = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
+        composeRule.onRoot().performTouchInput {
+            click(
+                androidx.compose.ui.geometry.Offset(
+                    rootBounds.width * 0.92f,
+                    rootBounds.height * 0.5f,
+                ),
+            )
+        }
+        composeRule.mainClock.advanceTimeBy(90)
+
+        composeRule.waitUntil(timeoutMillis = 1_000) {
+            composeRule.hasTextNode("第二章边界开头标记。") &&
+                composeRule.hasTextNode("第二章第二段标记。")
+        }
+        val previewParagraphGap = composeRule.verticalGapBetweenText(
+            firstText = "第二章边界开头标记。",
+            secondText = "第二章第二段标记。",
+        )
+
+        composeRule.mainClock.advanceTimeBy(240)
+        composeRule.mainClock.autoAdvance = true
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithText("第二章边界开头标记。", substring = true)
+                .fetchSemanticsNodes()
+                .isNotEmpty()
+        }
+        composeRule.onNodeWithText("第二章边界开头标记。", substring = true).assertIsDisplayed()
+        val finalParagraphGap = composeRule.verticalGapBetweenText(
+            firstText = "第二章边界开头标记。",
+            secondText = "第二章第二段标记。",
+        )
+
+        assertTrue(previewParagraphGap > 1f)
+        assertEquals(finalParagraphGap, previewParagraphGap, 2f)
+    }
+
     private fun createRepository(
         bookId: String,
         chapterTexts: Map<Int, String>,
@@ -152,5 +241,26 @@ class ReaderPageParagraphSpacingTest {
             mkdirs()
         }
         return ReaderSettingsStore(root).also { it.save(initial) }
+    }
+
+    private fun ComposeContentTestRule.hasTextNode(text: String): Boolean {
+        return onAllNodesWithText(text, substring = true)
+            .fetchSemanticsNodes()
+            .isNotEmpty()
+    }
+
+    private fun ComposeContentTestRule.verticalGapBetweenText(
+        firstText: String,
+        secondText: String,
+    ): Float {
+        val first = onAllNodesWithText(firstText, substring = true)
+            .fetchSemanticsNodes()
+            .minBy { it.boundsInRoot.top }
+        val second = onAllNodesWithText(secondText, substring = true)
+            .fetchSemanticsNodes()
+            .minBy { node ->
+                abs(node.boundsInRoot.top - first.boundsInRoot.top)
+            }
+        return second.boundsInRoot.top - first.boundsInRoot.top
     }
 }

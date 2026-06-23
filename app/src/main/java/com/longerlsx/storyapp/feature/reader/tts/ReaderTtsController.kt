@@ -56,12 +56,7 @@ class ReaderTtsController(
         settings: ReaderTtsSettings,
         notificationControlsAvailable: Boolean = true,
     ): Boolean {
-        if (
-            playbackState == ReaderTtsSessionState.STARTING ||
-            playbackState == ReaderTtsSessionState.PLAYING ||
-            playbackState == ReaderTtsSessionState.PAUSED_BY_USER ||
-            playbackState == ReaderTtsSessionState.PAUSED_BY_AUDIO_FOCUS
-        ) {
+        if (playbackState.isOngoingSession()) {
             runtime.update {
                 it.copy(localErrorMessage = "朗读已在进行中")
             }
@@ -81,10 +76,7 @@ class ReaderTtsController(
             },
             playbackSnapshot = ReaderTtsPlaybackSnapshot(),
             timerPreset = settings.timerPreset,
-            remainingTimerMillis = when (val timerPreset = settings.timerPreset) {
-                ReaderTtsTimerPreset.NoTimer -> null
-                is ReaderTtsTimerPreset.Countdown -> timerPreset.minutes * 60_000L
-            },
+            remainingTimerMillis = settings.timerPreset.toInitialTimerMillis(),
             selectedVoiceName = settings.voiceName,
             speechRate = settings.speechRate,
             pitch = settings.pitch,
@@ -119,10 +111,7 @@ class ReaderTtsController(
     }
 
     fun pauseByUser() {
-        if (
-            playbackState != ReaderTtsSessionState.STARTING &&
-            playbackState != ReaderTtsSessionState.PLAYING
-        ) {
+        if (!playbackState.isSpeakingSession()) {
             return
         }
         runtime.update {
@@ -134,10 +123,7 @@ class ReaderTtsController(
     }
 
     fun pauseByAudioFocus() {
-        if (
-            playbackState != ReaderTtsSessionState.STARTING &&
-            playbackState != ReaderTtsSessionState.PLAYING
-        ) {
+        if (!playbackState.isSpeakingSession()) {
             return
         }
         runtime.update {
@@ -149,10 +135,7 @@ class ReaderTtsController(
     }
 
     fun resumeFromPause() {
-        if (
-            playbackState == ReaderTtsSessionState.PAUSED_BY_USER ||
-            playbackState == ReaderTtsSessionState.PAUSED_BY_AUDIO_FOCUS
-        ) {
+        if (playbackState.isPausedSession()) {
             runtime.update {
                 it.copy(
                     playbackState = ReaderTtsSessionState.PLAYING,
@@ -163,10 +146,7 @@ class ReaderTtsController(
     }
 
     fun requestResumePlayback() {
-        if (
-            playbackState != ReaderTtsSessionState.PAUSED_BY_USER &&
-            playbackState != ReaderTtsSessionState.PAUSED_BY_AUDIO_FOCUS
-        ) {
+        if (!playbackState.isPausedSession()) {
             return
         }
         sendResumeCommand()
@@ -274,8 +254,15 @@ class ReaderTtsController(
 
     fun updateAvailableVoices(voices: List<ReaderTtsVoiceOption>) {
         runtime.update {
-            it.copy(availableVoices = voices)
+            it.copy(
+                availableVoices = voices,
+                availableVoicesLoaded = true,
+            )
         }
+    }
+
+    fun updateAvailableVoicesResult(result: Result<List<ReaderTtsVoiceOption>>) {
+        result.getOrNull()?.let(::updateAvailableVoices)
     }
 
     fun applySettings(settings: ReaderTtsSettings) {
@@ -323,12 +310,5 @@ class ReaderTtsController(
     companion object {
         const val NOTIFICATION_PERMISSION_DEGRADED_MESSAGE =
             "通知权限未开启，后台仍可朗读，但通知栏控制可能不可用"
-    }
-}
-
-private fun ReaderTtsTimerPreset.toInitialTimerMillis(): Long? {
-    return when (this) {
-        ReaderTtsTimerPreset.NoTimer -> null
-        is ReaderTtsTimerPreset.Countdown -> minutes * 60_000L
     }
 }

@@ -14,8 +14,15 @@ enum class ReaderTtsSessionState {
 }
 
 fun ReaderTtsSessionState.isOngoingSession(): Boolean {
+    return isSpeakingSession() || isPausedSession()
+}
+
+fun ReaderTtsSessionState.isSpeakingSession(): Boolean {
     return this == ReaderTtsSessionState.STARTING ||
-        this == ReaderTtsSessionState.PLAYING ||
-        this == ReaderTtsSessionState.PAUSED_BY_USER ||
+        this == ReaderTtsSessionState.PLAYING
+}
+
+fun ReaderTtsSessionState.isPausedSession(): Boolean {
+    return this == ReaderTtsSessionState.PAUSED_BY_USER ||
         this == ReaderTtsSessionState.PAUSED_BY_AUDIO_FOCUS
 }
