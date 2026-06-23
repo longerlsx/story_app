@@ -1,0 +1,29 @@
+{
+  "id": "BUG-2026-037",
+  "title": "Reader settings tab body scroll state leaks between Reading and TTS tabs",
+  "symptom": "After scrolling the TTS settings body down to the timer presets and switching to the Reading tab, the Reading settings body could inherit the TTS scroll offset and open away from its top controls. A Pixel 8 / Android 14 Compose regression reproduced the issue by scrolling to `120 分钟`, tapping the `阅读` tab, and finding `亮度：80%` not displayed before the fix.",
+  "root_cause": "ReaderSettingsSheet used one shared rememberScrollState for whichever settings body was active. The scroll state survived activeTab changes, so the new tab reused the previous tab's vertical offset instead of starting from its own top position.",
+  "fix": [
+    "Created separate scroll states for the Reading and TTS settings bodies.",
+    "Bound the body verticalScroll to the scroll state for the currently active tab.",
+    "Added an instrumented Compose regression that scrolls the TTS body to the bottom, switches to Reading, and asserts the Brightness row is immediately visible."
+  ],
+  "failed_attempts": [
+    "Keeping the settings tabs fixed is not sufficient by itself; the active body scroll state must also be scoped per tab.",
+    "Testing only that tabs remain visible after scrolling misses the follow-up failure where switching tabs preserves the wrong body offset."
+  ],
+  "impact": "Keeps settings tab switches predictable and prevents users from landing mid-panel after moving between Reading and TTS settings in the compact reader overlay.",
+  "tags": [
+    "android",
+    "compose",
+    "reader",
+    "settings",
+    "tts",
+    "interaction",
+    "visual",
+    "resolved"
+  ],
+  "confidence": 0.9,
+  "created_at": "2026-06-23",
+  "updated_at": "2026-06-23"
+}

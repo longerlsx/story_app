@@ -4,6 +4,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
@@ -320,6 +324,48 @@ class ReaderTtsSettingsSheetTest {
             .assertIsDisplayed()
         composeRule
             .onNodeWithContentDescription("设置分页：朗读，已选中")
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun switchingSettingsTabsStartsTheNewBodyAtTopAfterScrolling() {
+        composeRule.setContent {
+            MaterialTheme {
+                var activeTab by remember { mutableStateOf(ReaderSettingsTab.TTS) }
+                Box(modifier = Modifier.height(180.dp)) {
+                    ReaderSettingsSheet(
+                        settings = ReaderSettings(),
+                        themePalette = ReaderThemePalette(
+                            background = Color.White,
+                            surface = Color(0xFFF4F4F4),
+                            content = Color.Black,
+                        ),
+                        activeTab = activeTab,
+                        availableVoices = listOf(
+                            ReaderTtsVoiceOption(name = "voice-a", displayName = "系统女声"),
+                            ReaderTtsVoiceOption(name = "voice-b", displayName = "机械男声"),
+                        ),
+                        selectedVoiceName = "voice-a",
+                        ttsStatusText = "当前状态：未朗读",
+                        onSelectTab = { activeTab = it },
+                        onUpdateSettings = {},
+                        onUpdateTtsSettings = {},
+                    )
+                }
+            }
+        }
+
+        composeRule
+            .onNodeWithText("120 分钟")
+            .performScrollTo()
+            .assertIsDisplayed()
+
+        composeRule
+            .onNodeWithContentDescription("设置分页：阅读，未选中")
+            .performClick()
+
+        composeRule
+            .onNodeWithContentDescription("亮度：80%")
             .assertIsDisplayed()
     }
 }

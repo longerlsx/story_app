@@ -93,6 +93,7 @@ This is mandatory for both:
 | BUG-2026-034 | Reader chapter progress summary can wrap and inflate the navigation row | resolved | `reader`, `chrome`, `visual` | [BUG-2026-034-reader-chapter-progress-summary-wraps-navigation-row.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-034-reader-chapter-progress-summary-wraps-navigation-row.json) |
 | BUG-2026-035 | GBK-compatible TXT import decodes as UTF-8 and loses Chinese chapters | resolved | `txt`, `import`, `charset`, `chapter-parser` | [BUG-2026-035-gbk-txt-import-garbled-text.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-035-gbk-txt-import-garbled-text.json) |
 | BUG-2026-036 | Reader settings tabs scroll away with long TTS settings content | resolved | `reader`, `settings`, `tts`, `interaction`, `visual` | [BUG-2026-036-reader-settings-tabs-scroll-away.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-036-reader-settings-tabs-scroll-away.json) |
+| BUG-2026-037 | Reader settings tab body scroll state leaks between Reading and TTS tabs | resolved | `reader`, `settings`, `tts`, `interaction`, `visual` | [BUG-2026-037-reader-settings-tab-scroll-state-leak.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-037-reader-settings-tab-scroll-state-leak.json) |
 
 ## Retrieval Hints For Future Threads
 
@@ -126,6 +127,7 @@ This is mandatory for both:
 - If the bottom chapter-navigation row grows taller or jumps when the progress summary is long, start with `BUG-2026-034`; the confirmed fix is to constrain the progress text to one line with ellipsis and verify height against a single-line action.
 - If importing a Chinese TXT produces unreadable text, missing title/author, or a single fallback body chapter, start with `BUG-2026-035`; the confirmed fix is strict UTF-8 validation before falling back to GB18030 for GBK/GB2312-compatible inputs.
 - If the reader settings tab switcher disappears after scrolling through long TTS settings, start with `BUG-2026-036`; the confirmed fix is to keep the tab row outside the scrollable body and verify after scrolling to the bottom timer option.
+- If switching between Reading and TTS settings opens the new tab midway down instead of at its top controls, start with `BUG-2026-037`; the confirmed fix is to scope the scroll state per settings tab.
 
 ## Authoring Rules
 

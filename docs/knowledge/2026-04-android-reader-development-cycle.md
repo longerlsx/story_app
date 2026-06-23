@@ -84,6 +84,7 @@ Key bugs:
 - [BUG-2026-034](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-034-reader-chapter-progress-summary-wraps-navigation-row.json)
 - [BUG-2026-035](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-035-gbk-txt-import-garbled-text.json)
 - [BUG-2026-036](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-036-reader-settings-tabs-scroll-away.json)
+- [BUG-2026-037](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-037-reader-settings-tab-scroll-state-leak.json)
 
 ## How Future Threads Should Use This
 

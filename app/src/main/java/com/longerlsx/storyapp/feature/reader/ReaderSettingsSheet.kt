@@ -49,6 +49,12 @@ fun ReaderSettingsSheet(
     onUpdateSettings: (ReaderSettings) -> Unit,
     onUpdateTtsSettings: (ReaderTtsSettings) -> Unit,
 ) {
+    val readingScrollState = rememberScrollState()
+    val ttsScrollState = rememberScrollState()
+    val activeBodyScrollState = when (activeTab) {
+        ReaderSettingsTab.READING -> readingScrollState
+        ReaderSettingsTab.TTS -> ttsScrollState
+    }
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -61,7 +67,7 @@ fun ReaderSettingsSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState()),
+                .verticalScroll(activeBodyScrollState),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             when (activeTab) {
