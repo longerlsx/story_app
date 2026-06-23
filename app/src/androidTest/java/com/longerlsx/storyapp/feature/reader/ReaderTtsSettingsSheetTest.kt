@@ -274,20 +274,4 @@ class ReaderTtsSettingsSheetTest {
         composeRule.onAllNodesWithText("护眼模式").assertCountEquals(0)
     }
 
-    private fun androidx.compose.ui.graphics.PixelMap.containsTrapColor(trapColor: Color): Boolean {
-        for (x in 0 until width) {
-            for (y in 0 until height) {
-                val pixel = this[x, y]
-                if (
-                    pixel.alpha > 0.2f &&
-                    kotlin.math.abs(pixel.red - trapColor.red) < 0.05f &&
-                    kotlin.math.abs(pixel.green - trapColor.green) < 0.05f &&
-                    kotlin.math.abs(pixel.blue - trapColor.blue) < 0.05f
-                ) {
-                    return true
-                }
-            }
-        }
-        return false
-    }
 }

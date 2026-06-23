@@ -854,8 +854,8 @@ class ReaderTtsFollowTest {
         composeRule.onNodeWithText(message).assertIsDisplayed()
         val rootPixels = composeRule.onRoot().captureToImage().toPixelMap()
 
-        org.junit.Assert.assertFalse(rootPixels.containsTrapColor(materialSurfaceTrap))
-        org.junit.Assert.assertFalse(rootPixels.containsTrapColor(materialOnSurfaceTrap))
+        org.junit.Assert.assertFalse(rootPixels.containsTrapColor(materialSurfaceTrap, channelTolerance = 0.08f))
+        org.junit.Assert.assertFalse(rootPixels.containsTrapColor(materialOnSurfaceTrap, channelTolerance = 0.08f))
     }
 
     private fun createRepository(
@@ -909,20 +909,4 @@ class ReaderTtsFollowTest {
         return ReaderSettingsStore(root).also { it.save(initial) }
     }
 
-    private fun androidx.compose.ui.graphics.PixelMap.containsTrapColor(trapColor: Color): Boolean {
-        for (x in 0 until width) {
-            for (y in 0 until height) {
-                val pixel = this[x, y]
-                if (
-                    pixel.alpha > 0.2f &&
-                    kotlin.math.abs(pixel.red - trapColor.red) < 0.08f &&
-                    kotlin.math.abs(pixel.green - trapColor.green) < 0.08f &&
-                    kotlin.math.abs(pixel.blue - trapColor.blue) < 0.08f
-                ) {
-                    return true
-                }
-            }
-        }
-        return false
-    }
 }
