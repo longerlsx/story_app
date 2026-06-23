@@ -1,0 +1,31 @@
+{
+  "id": "BUG-2026-023",
+  "title": "Reader chapter progress counts synthetic preface as a numbered chapter",
+  "symptom": "When opening the real corpus file `/Users/longshengxi/Downloads/小说测试集/我在古代搞建设.txt`, the reader top header shows `第1章 乘船` while the bottom page-mode progress shows `2/180章`. The mismatch is visible on the Pixel 8 / Android 14 emulator after revealing the reader chrome.",
+  "root_cause": "ReaderScreen formatted bottom chapter progress from the selected chapter's raw position in the imported chapter list. ChapterAssembler intentionally inserts a non-empty leading `前言` chapter for front matter before the first detected heading, and OpeningChapterSelector intentionally opens the first non-preface chapter by default. The display layer then counted that synthetic preface as chapter 1, so the first real chapter displayed as position 2.",
+  "fix": [
+    "Add ReaderChapterProgressFormatter as a pure reader display helper.",
+    "When the first imported chapter is a synthetic `前言` and later entries are real chapter titles, exclude that leading preface from numbered chapter progress.",
+    "Keep fallback `正文` chunks counted by raw position so long fallback imports still have stable progress.",
+    "Render the synthetic preface itself as `前言` instead of pretending it is a numbered chapter.",
+    "Route ReaderScreen progressSummary through the formatter without changing parser output, directory contents, anchor persistence, or chapter navigation."
+  ],
+  "failed_attempts": [
+    "Do not fix this by removing the leading `前言` chapter from ChapterAssembler; it preserves real front matter offsets and content.",
+    "Do not change OpeningChapterSelector to open the preface just to make raw position counting line up; the existing default of opening the first non-preface chapter is intentional.",
+    "Do not reuse ChapterPatterns.isChapterTitle for this formatter without extending coverage, because it does not include numeric headings that the parser accepts."
+  ],
+  "impact": "Keeps the visible chapter title and bottom progress label semantically aligned for real TXT files with front matter, reducing confusion in page-mode chrome.",
+  "tags": [
+    "android",
+    "compose",
+    "reader",
+    "txt",
+    "visual",
+    "progress",
+    "resolved"
+  ],
+  "confidence": 0.9,
+  "created_at": "2026-06-22",
+  "updated_at": "2026-06-23"
+}

@@ -1,0 +1,29 @@
+{
+  "id": "BUG-2026-011",
+  "title": "Page-mode right-edge chapter-boundary tap can no-op at the end of a chapter",
+  "symptom": "In page mode, tapping the right reading area on the last page of the current chapter sometimes does nothing. The operation-layer next-chapter control still works.",
+  "root_cause": "The page-mode pager state was remembered across chapter/content transitions and boundary decisions used PagerState.currentPage. During restore, content load, or settling windows, currentPage could describe an intermediate pager page rather than the stable visible page for the loaded chapter, so the right tap could take the wrong branch or use an implicit adjacent chapter lookup.",
+  "fix": [
+    "Key the pager state by book and chapter so a new chapter cannot inherit the previous chapter's pager position.",
+    "Resolve left/right page turns through a pure helper that requires contentLoaded, restoredPosition, non-empty pages, and no active pager scroll.",
+    "Gate left/right page-turn decisions while a chapter-boundary transition animation is already active.",
+    "Use PagerState.settledPage for page-boundary decisions.",
+    "Pass the explicit target chapter index through boundary callbacks and open that chapter directly."
+  ],
+  "failed_attempts": [
+    "Including boundaryTransition in a Compose pointerInput key only restarts the gesture detector; it does not by itself prevent a new tap from entering page-turn decision logic while the boundary animation is active."
+  ],
+  "impact": "Prevents reader navigation from getting stuck at chapter ends and makes page-mode boundary behavior deterministic.",
+  "tags": [
+    "android",
+    "compose",
+    "reader",
+    "page-mode",
+    "chapter-boundary",
+    "pager-state",
+    "resolved"
+  ],
+  "confidence": 0.9,
+  "created_at": "2026-05-21",
+  "updated_at": "2026-06-22"
+}

@@ -1,0 +1,25 @@
+{
+  "id": "BUG-2026-012",
+  "title": "Cross-chapter page transition preview reflows when the real chapter page mounts",
+  "symptom": "During a chapter-boundary page turn, the text is first drawn once and then visibly jumps when the final chapter page is rendered with paragraph spacing.",
+  "root_cause": "The boundary animation stored only String text and rendered it with one raw Text composable, while the real pager page rendered ReaderPageSlice.rawText through ReaderPageParagraphContent and ReaderParagraphContent with paragraph splitting, paragraph spacing, and includeFontPadding=false. The preview and final page therefore had different layout contracts.",
+  "fix": [
+    "Store ReaderPageSlice values in ReaderBoundaryPageTransition instead of raw strings.",
+    "Extract ReaderPageSurface for the real pager page layout.",
+    "Render boundary animation layers through the same ReaderPageSurface, using the same padding, font size, line height, paragraph spacing, theme, and paragraph renderer as the real pager."
+  ],
+  "failed_attempts": [],
+  "impact": "Removes the visible cross-chapter text jump and keeps page transition preview layout aligned with the final rendered page.",
+  "tags": [
+    "android",
+    "compose",
+    "reader",
+    "page-mode",
+    "chapter-boundary",
+    "text-layout",
+    "resolved"
+  ],
+  "confidence": 0.9,
+  "created_at": "2026-05-21",
+  "updated_at": "2026-05-21"
+}

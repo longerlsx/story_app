@@ -1,0 +1,29 @@
+{
+  "id": "BUG-2026-016",
+  "title": "Timed TTS bottom-bar labels wrap and inflate the reader chrome",
+  "symptom": "When TTS is active or paused with a countdown timer, labels such as “继续朗读 · 90m” can wrap inside the four-slot reader bottom action bar. On the Pixel 8 / Android 14 baseline, the focused Compose instrumentation regression measured the label node at 60.190475dp before the fix, which is a two-line action label and increases the bottom chrome height.",
+  "root_cause": "ReaderControls rendered every primary action with MaterialTheme.typography.bodyMedium and allowed normal Text wrapping. The bottom bar splits the available width into four equal action slots, so the longer timed TTS labels do not fit in one slot and Compose wraps them instead of preserving a stable one-line control.",
+  "fix": [
+    "Add a shared ReaderActionLabelText helper for reader bottom-bar and immersive action labels.",
+    "Use a smaller label style for longer action labels while keeping short labels on the existing body style.",
+    "Set action labels to maxLines = 1, softWrap = false, and TextOverflow.Ellipsis so long TTS labels cannot inflate the bottom chrome.",
+    "Add an instrumented Compose bounds regression for a 360dp four-slot bottom bar with the label “继续朗读 · 90m”."
+  ],
+  "failed_attempts": [
+    "A text-presence test is not enough for bottom-bar visual stability; the original tests could see the full label but did not assert that it stayed single-line.",
+    "Using a fixed 28dp or 42dp threshold for the Text node is less stable than comparing the timed TTS label height to a known single-line sibling action in the same bottom bar, because the semantics bounds include padding and can vary with font scale."
+  ],
+  "impact": "Prevents timed TTS labels from causing bottom chrome height jumps or crowding when the reader shows all four primary actions.",
+  "tags": [
+    "android",
+    "compose",
+    "reader",
+    "tts",
+    "chrome",
+    "visual",
+    "resolved"
+  ],
+  "confidence": 0.9,
+  "created_at": "2026-06-22",
+  "updated_at": "2026-06-22"
+}

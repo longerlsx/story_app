@@ -1,0 +1,29 @@
+{
+  "id": "BUG-2026-018",
+  "title": "Page-mode progress persistence uses raw page offsets instead of visible page starts",
+  "symptom": "ReaderPageSlice already records both raw page bounds and visible page bounds after trimming leading newlines, but ReaderPageAnchorMapper.anchorForPageIndex returned startCharOffset. In page mode, savePageProgress() and updateReaderSettings() both use that mapper, so a page that renders after trimming leading newlines can persist an anchor before the first visible character. The focused regression failed with a page whose raw start was 100 and visible start was 102.",
+  "root_cause": "The page slice model was partially migrated to visible/raw offsets, but the shared anchor mapper kept the older raw-start behavior. That left page-top TTS start on the visible offset path while progress persistence and settings-change anchoring still used the raw page start.",
+  "fix": [
+    "Change ReaderPageAnchorMapper.anchorForPageIndex() to return visibleStartCharOffset.",
+    "Move raw-text to visible-offset ReaderPageSlice construction into a shared helper and use it from both ReaderScreen pagination and ReaderPageLinePaginator.",
+    "Add a unit regression where a page trims leading newlines and must persist the visible start offset.",
+    "Add a ReaderPageLinePaginator regression so standalone pagination cannot reintroduce raw-start slices when a page begins with leading newlines.",
+    "Run adjacent page-mode, settings-persistence, and restore instrumentation tests on the Pixel 8 Android 14 emulator to check that the mapper change does not break existing interaction paths."
+  ],
+  "failed_attempts": [
+    "Existing page-mode UI tests without pages that start on trimmed leading newlines are insufficient evidence for this bug; they cover adjacent interactions but cannot prove the raw/visible offset boundary.",
+    "Keeping separate ReaderPageSlice construction paths lets an unused or later-reused paginator silently fall back to default raw offsets; centralize raw/visible slice construction instead."
+  ],
+  "impact": "Reduces page-mode restore, setting-change re-anchor, and future TTS-start divergence when a rendered page begins after raw newline characters that are not visible to the reader.",
+  "tags": [
+    "android",
+    "reader",
+    "page-mode",
+    "anchor-restore",
+    "offset",
+    "resolved"
+  ],
+  "confidence": 0.88,
+  "created_at": "2026-06-22",
+  "updated_at": "2026-06-22"
+}

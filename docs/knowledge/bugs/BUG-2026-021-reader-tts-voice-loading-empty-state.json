@@ -1,0 +1,32 @@
+{
+  "id": "BUG-2026-021",
+  "title": "Reader TTS settings tab treats voice loading as no available mainland voices",
+  "symptom": "When the reader opens the TTS settings tab before the system voice catalog has loaded, the sheet can display the empty-result message \"已筛除非大陆中文音色，当前将使用系统默认音色。\" and stale default-voice status even though the voice list is still loading.",
+  "root_cause": "ReaderTtsRuntimeState only stored availableVoices as a list. An empty list represented both 'not loaded yet' and 'loaded but no selectable voices remain', so ReaderTtsSettingsSheet could not render an accurate loading state.",
+  "fix": [
+    "Added availableVoicesLoaded to ReaderTtsRuntimeState.",
+    "Changed ReaderTtsController.updateAvailableVoices to mark the voice catalog loaded even when the result list is empty.",
+    "Changed StoryApplication.preloadReaderTtsVoices to stop using non-empty voices as the only preload-complete signal.",
+    "Changed preload to pass the raw voice-loading Result into ReaderTtsController so initialization failure does not mark the catalog as loaded.",
+    "Changed ReaderSettingsSheet and ReaderTtsSettingsSheet to render a loading message before the voice catalog has loaded, and only show default/empty-result status after loading completes.",
+    "Passed the loaded flag from ReaderScreen into the settings sheet and suppressed stale system-default voice status while voices are still loading."
+  ],
+  "failed_attempts": [
+    "Do not infer voice-catalog load completion from availableVoices.isEmpty(); empty is a valid loaded result after mainland-Chinese filtering.",
+    "Do not show the system-default fallback message while availableVoicesLoaded is false, because a persisted voice may still become selectable once loading completes.",
+    "Do not convert a failed voice-catalog Result to emptyList before updating runtime state; that permanently confuses initialization failure with a successful loaded-empty catalog and prevents preload retry."
+  ],
+  "impact": "Prevents the TTS settings tab from briefly or permanently presenting an inaccurate no-voice/default-voice state while the system voice catalog is still being loaded.",
+  "tags": [
+    "android",
+    "compose",
+    "reader",
+    "tts",
+    "settings",
+    "visual",
+    "resolved"
+  ],
+  "confidence": 0.91,
+  "created_at": "2026-06-22",
+  "updated_at": "2026-06-22"
+}

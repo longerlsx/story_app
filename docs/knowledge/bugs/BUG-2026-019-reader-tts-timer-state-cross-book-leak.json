@@ -1,0 +1,26 @@
+{
+  "id": "BUG-2026-019",
+  "title": "Reader TTS timer state can leak from another book into the current reader settings UI",
+  "symptom": "ReaderScreen derived the bottom-bar TTS label, immersive TTS label, settings status text, and remaining timer label directly from ReaderTtsRuntimeState. The status/toggle labels checked that the runtime belonged to the currently opened book, but the remaining timer label was computed unconditionally from remainingTimerMillis. If another book had an active timed TTS session, opening the current book's settings could show current status as 未朗读 while still displaying a remaining time.",
+  "root_cause": "Reader-side TTS UI state was split across ad hoc Compose expressions instead of a single current-book-aware resolver. Some expressions filtered by currentBookId and others did not.",
+  "fix": [
+    "Add ReaderTtsReaderUiStateResolver as a pure current-book-aware derivation for reader-side TTS toggle labels, immersive labels, status text, and remaining timer label.",
+    "Route ReaderScreen's TTS toggle state, status text, and settings remaining-time label through the resolver.",
+    "Add unit coverage for current-book timed playback, paused timed playback, and another-book playback that must not expose a remaining timer label in the current reader."
+  ],
+  "failed_attempts": [
+    "Checking currentBookId only at individual call sites is easy to miss for related UI fields. Keep reader-side TTS display state in one pure resolver and let Compose consume the resolved result."
+  ],
+  "impact": "Prevents contradictory reader settings UI such as 未朗读 plus a stale countdown from another book, and reduces future drift between bottom-bar and settings TTS copy.",
+  "tags": [
+    "android",
+    "reader",
+    "tts",
+    "settings",
+    "visual",
+    "resolved"
+  ],
+  "confidence": 0.86,
+  "created_at": "2026-06-22",
+  "updated_at": "2026-06-22"
+}

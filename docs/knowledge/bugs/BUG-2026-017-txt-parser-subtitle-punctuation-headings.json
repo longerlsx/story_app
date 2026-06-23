@@ -1,0 +1,31 @@
+{
+  "id": "BUG-2026-017",
+  "title": "TXT parser rejects real chapter titles that end with punctuation after subtitle separators",
+  "symptom": "In the external novel corpus at /Users/longshengxi/Downloads/小说测试集, 《玩家救世指南》 contains many real chapter headings such as “第2章 独行者2:穿越者？玩家？神？” and “第84章 幸福玛丽孤儿院1:“我愿意在你的胞宫中沉睡，直到世界的纱幕再一次掀起……””. Before the fix, ChapterParser.parseDetailed reported only 70 scanned/merged candidates for this file even though the file has 200 real `第N章` headings. The optional external corpus smoke test failed on the chapter coverage assertion.",
+  "root_cause": "ChapterDetectionRules.isLikelyHeading treated any candidate ending in sentence punctuation as body text and capped heading length at 40 characters. This correctly rejected simple body lines like “第1章 开始了。” but also rejected legitimate chapter titles that use a colon subtitle pattern and naturally end with punctuation or are slightly longer than 40 characters.",
+  "fix": [
+    "Allow sentence-ending punctuation only when the heading contains an explicit subtitle separator `:` or `：` after the chapter suffix.",
+    "Raise MAX_HEADING_LENGTH from 40 to 48 to cover observed real chapter titles while keeping very long body-like lines rejected.",
+    "Scope the subtitle-punctuation exception to Chinese numbered chapter rules only; numeric, special-marker, and volume rules keep the default sentence-ending punctuation guard.",
+    "Add detection-rule and parser-level regression tests for real subtitle-punctuation chapter title formats, including full-width `：`.",
+    "Add an ImportCoordinator regression so imported stored chapters preserve subtitle-punctuation titles, body text, and offsets.",
+    "Add an optional host-side external corpus smoke test that parses /Users/longshengxi/Downloads/小说测试集 when present and validates chapter coverage plus exact offsets."
+  ],
+  "failed_attempts": [
+    "Counting every `第N回` line in a simple external-corpus scan is too broad for this corpus because some chapters contain numbered in-story rounds such as “第八回 ...” as body text. Use `第N章` as the coarse coverage baseline for this smoke test.",
+    "Blindly allowing every heading-like line that ends with `。/！/？` would reintroduce body false positives such as “第1章 开始了。”; punctuation should only be allowed for headings with an explicit subtitle separator.",
+    "Putting the subtitle-punctuation exception in the shared heading filter was still too broad because numeric-title rules could then accept body-like lines such as “1. 这章：开始了吗？”. Keep that exception on Chinese numbered chapter rules only."
+  ],
+  "impact": "Improves real TXT chapter recognition and reduces missing TOC entries or oversized merged chapters for novels whose chapter titles are sentence-like subtitles.",
+  "tags": [
+    "android",
+    "txt",
+    "chapter-parser",
+    "toc",
+    "offset",
+    "resolved"
+  ],
+  "confidence": 0.9,
+  "created_at": "2026-06-22",
+  "updated_at": "2026-06-22"
+}

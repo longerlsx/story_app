@@ -1,0 +1,30 @@
+{
+  "id": "BUG-2026-024",
+  "title": "TXT parser rejects numbered subtitle chapter titles that end with punctuation",
+  "symptom": "In the external novel corpus at `/Users/longshengxi/Downloads/小说测试集`, real standalone chapter headings such as `第1章 001 系统都能绑错？`, `第51章 050 丹道比试，第一！`, `第122章 121 嗯呐么哒。么么。`, and `第6章 006 好好吃！` were missing from parsed chapter titles. A corpus diagnostic showed these titles as `MISSING` even though `rg -n -C 3` confirmed they are isolated heading lines followed by body text.",
+  "root_cause": "ChapterDetectionRules.isLikelyHeading rejected every Chinese numbered candidate ending in sentence punctuation unless the heading had an explicit subtitle separator `:` or `：` after the chapter suffix. BUG-2026-017 intentionally added that narrow exception to avoid body false positives like `第1章 开始了。`, but real corpus files also use a numbered subtitle marker pattern: chapter suffix, whitespace, 2-4 digit subtitle number, whitespace, then a punctuation-ending title.",
+  "fix": [
+    "Keep the punctuation exception scoped to Chinese numbered chapter rules through `allowSubtitlePunctuation=true`.",
+    "Allow punctuation-ending Chinese numbered headings when the chapter suffix is followed by whitespace, a 2-4 digit Arabic or full-width subtitle number, whitespace, and non-blank title text.",
+    "Preserve existing body-line guards so `第1章 开始了。`, `第1章 1 开始了。`, `第1章 001开始了。`, and numeric-title body lines remain rejected.",
+    "Add detection-rule, parser-level, ImportCoordinator, and external-corpus regression coverage for the specific missing headings and exact parser offsets."
+  ],
+  "failed_attempts": [
+    "Do not blindly allow every Chinese numbered heading that ends with `。/！/？`; that would reintroduce BUG-2026-002/BUG-2026-017 body false positives such as `第1章 开始了。`.",
+    "Do not rely on the external corpus smoke test's coarse 80% chapter-count threshold alone; it passed while specific real headings were still missing.",
+    "Do not make the 48-character heading-length allowance global; numeric, special-marker, and volume rules should keep the narrower default length boundary.",
+    "Do not mix this fix with the separate `第141章 番外一` / `番外一` double-title issue, which involves CHAPTER+SPECIAL merging rather than numbered subtitle punctuation."
+  ],
+  "impact": "New imports of TXT novels that number chapter subtitles inside the visible title keep their intended TOC entries, body ranges, and exact offsets instead of merging those sections into neighboring chapters.",
+  "tags": [
+    "android",
+    "txt",
+    "toc",
+    "chapter-parser",
+    "offset",
+    "resolved"
+  ],
+  "confidence": 0.9,
+  "created_at": "2026-06-23",
+  "updated_at": "2026-06-23"
+}

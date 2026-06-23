@@ -1,0 +1,29 @@
+{
+  "id": "BUG-2026-025",
+  "title": "TXT parser drops numbered chapter titles when a repeated special subtitle follows",
+  "symptom": "In the external novel corpus at `/Users/longshengxi/Downloads/小说测试集`, 《星际第一种瓜王！》 has real adjacent double-title sequences such as `第141章 番外一` followed by `番外一`, and `第142章 番外二` followed by `番外二`. Before the fix, parsed chapter titles contained `番外一` and `番外二` instead of the source boundary titles `第141章 番外一` and `第142章 番外二`.",
+  "root_cause": "ChapterCandidateScanner correctly emitted both the numbered chapter candidate and the repeated special-marker candidate, and ChapterCandidateFilter kept both. ChapterCandidateMerger only merged adjacent `CHAPTER + CHAPTER` candidates, so it left the `CHAPTER + SPECIAL` pair separate. ChapterAssembler then skipped the first candidate because its body range was blank before the repeated short title, making the visible TOC use the second physical title line.",
+  "fix": [
+    "Extend ChapterCandidateMerger to merge adjacent `CHAPTER + SPECIAL` candidates only when there is no meaningful text between them and the special title exactly equals the normalized tail after the numbered chapter prefix.",
+    "Keep the first physical title line as `ParsedChapter.title`, preserving the parser plan's double-title semantics.",
+    "Keep independent special chapters separate when body text appears before the special marker.",
+    "Add merger, parser, ImportCoordinator, and external-corpus regression coverage for numbered chapter titles followed by repeated special subtitles."
+  ],
+  "failed_attempts": [
+    "Do not fix this in ChapterDetectionRules; detection already produces both candidates and changing special-marker detection would hide legitimate standalone `番外` chapters.",
+    "Do not implement the match as broad `contains`, `endsWith`, or prefix matching; the repeated special title must exactly equal the normalized chapter-title tail after the chapter suffix.",
+    "Do not merge `SPECIAL + CHAPTER` or pairs with meaningful body text between them; that would collapse independent `番外` chapters into neighboring numbered chapters."
+  ],
+  "impact": "TOC titles and persisted imported chapters now keep the source's stable numbered chapter boundary while still dropping the repeated short subtitle line from chapter body text.",
+  "tags": [
+    "android",
+    "txt",
+    "toc",
+    "chapter-parser",
+    "offset",
+    "resolved"
+  ],
+  "confidence": 0.9,
+  "created_at": "2026-06-23",
+  "updated_at": "2026-06-23"
+}

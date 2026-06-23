@@ -1,0 +1,30 @@
+{
+  "id": "BUG-2026-026",
+  "title": "TXT parser treats in-body round attempt lines ending with ellipsis as chapters",
+  "symptom": "In the external novel corpus at `/Users/longshengxi/Downloads/小说测试集`, 《玩家救世指南》 contains in-body retry/round markers inside `第26章`, including `第十一回 。`, `第十二回 。`, `第十三回 ……`, and `第十九回 。`. Before the fix, only `第十三回 ……` was parsed as a chapter title because ellipsis was not covered by the existing punctuation guard, producing an extra TOC entry and splitting the real chapter body.",
+  "root_cause": "ChapterDetectionRules rejected Chinese numbered candidates that ended in sentence punctuation such as `。`, but it did not reject the `回` suffix when the text after the suffix was only an ellipsis. The corpus evidence showed this shape was a body retry marker, while real pure-ellipsis chapter titles in the same corpus used the `章` suffix, such as `第95章 ……`, `第107章 ……`, and `第140章 ……` in 《我在古代搞建设》.",
+  "fix": [
+    "Add a narrow Chinese numbered heading guard that rejects only `回` candidates whose tail after the suffix is non-empty and contains only punctuation or ellipsis characters.",
+    "Keep `章`, `节`, `话`, and `集` behavior unchanged so real chapter titles such as `第95章 ……` remain valid.",
+    "Keep `第十回` and `第十回 标题……` valid because they are either empty-tail chapter headings or contain real title text after the suffix.",
+    "Add parser-level coverage that keeps `第十三回 ……` and its following prose inside the surrounding chapter body, plus external-corpus assertions for both the false positive and real ellipsis-ending titles."
+  ],
+  "failed_attempts": [
+    "Do not add `…` to the global `sentenceEndings` set; that rejects real corpus headings like `第95章 ……`.",
+    "Do not reject pure-punctuation tails for every Chinese numbered suffix; the confirmed bad shape is `回` as an in-story retry marker, while `章` has confirmed real headings ending with pure ellipsis.",
+    "Do not rely on the external corpus smoke test's coarse 80% chapter-count threshold alone; it can pass while a specific false-positive TOC entry remains.",
+    "Do not treat the remaining `EXTRA | 番外` diagnostic in 《末世反派是我的工作搭子》 as this bug; `rg` context shows it is an isolated special chapter heading followed by new body text."
+  ],
+  "impact": "New imports of TXT novels no longer create a false TOC chapter from in-story retry markers like `第十三回 ……`, while preserving real ellipsis-ending chapter titles and exact body offsets.",
+  "tags": [
+    "android",
+    "txt",
+    "toc",
+    "chapter-parser",
+    "chapter-boundary",
+    "resolved"
+  ],
+  "confidence": 0.9,
+  "created_at": "2026-06-23",
+  "updated_at": "2026-06-23"
+}

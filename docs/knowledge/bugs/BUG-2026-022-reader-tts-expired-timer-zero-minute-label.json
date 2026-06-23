@@ -1,0 +1,32 @@
+{
+  "id": "BUG-2026-022",
+  "title": "Reader TTS can briefly show a 0m countdown label when the timer expires",
+  "symptom": "At TTS timer expiry, the reader bottom-bar or notification state can briefly project an ongoing session with a remaining-time label such as \"停止朗读 · 0m\" or \"0m\" before the service finishes stopping playback.",
+  "root_cause": "ReaderTtsService publishes updatedRemaining = 0 to ReaderTtsController and refreshes the notification before calling stopByTimer and stopping the playback service. ReaderTtsReaderUiStateResolver and ReaderTtsNotificationFactory formatted any non-null remainingTimerMillis through ReaderTtsTimeLabelFormatter, and the formatter coerced zero or negative values to \"0m\" instead of treating expired budgets as not displayable.",
+  "fix": [
+    "Add ReaderTtsTimeLabelFormatter.formatPositiveRemainingMillisOrNull so shared UI code only displays positive timer budgets.",
+    "Route reader-side TTS toggle labels, immersive labels, and settings remaining-time labels through the positive-budget formatter.",
+    "Route notification remaining-time copy through the same positive-budget formatter.",
+    "Extract ReaderTtsNotificationTextResolver so notification content text follows the same remaining-time-or-stable-state rule without needing Android notification object inspection.",
+    "Add unit coverage for formatter rounding, expired-budget suppression, current-book reader UI states with zero or negative timer budgets, and notification content text for timed, untimed, paused, expired, and blank-summary states."
+  ],
+  "failed_attempts": [
+    "Do not use formatRemainingMillis directly for live UI or notification labels; it is a low-level numeric formatter and intentionally still formats zero as \"0m\" for callers that want that literal representation.",
+    "Filtering only in ReaderTtsReaderUiStateResolver would leave the notification path able to show the same expired \"0m\" intermediate state.",
+    "Leaving notification text derivation inside ReaderTtsNotificationFactory makes the countdown/state rule hard to test directly, because assertions would need to inspect Android Notification objects instead of pure text output."
+  ],
+  "impact": "Prevents timer-expiry edge states from showing contradictory countdown copy while playback is in the process of stopping, and keeps bottom-bar, settings, immersive, and notification timer visibility rules aligned.",
+  "tags": [
+    "android",
+    "compose",
+    "reader",
+    "tts",
+    "timer",
+    "notification",
+    "visual",
+    "resolved"
+  ],
+  "confidence": 0.88,
+  "created_at": "2026-06-22",
+  "updated_at": "2026-06-22"
+}
