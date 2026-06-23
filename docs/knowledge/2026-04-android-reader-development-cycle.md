@@ -72,6 +72,18 @@ Related documents:
 - [2026-04-20-reader-topbar-and-page-transition-design.md](/Users/longshengxi/proj/story_app/docs/superpowers/specs/2026-04-20-reader-topbar-and-page-transition-design.md)
 - [2026-04-20-reader-topbar-and-page-transition.md](/Users/longshengxi/proj/story_app/docs/superpowers/plans/2026-04-20-reader-topbar-and-page-transition.md)
 
+### 2026-06-23: TXT import encoding and reader UI stabilization
+
+- Tightened reader overlay state and visual regressions with focused pure resolvers and Compose layout tests.
+- Added GBK/GB2312-compatible TXT import coverage at the import layer, not only parser-layer external corpus tests.
+- Clarified that parser tests using already-decoded text cannot prove the full import path handles real-world TXT encodings.
+
+Key bugs:
+
+- [BUG-2026-033](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-033-reader-tts-transient-message-cross-book-clear.json)
+- [BUG-2026-034](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-034-reader-chapter-progress-summary-wraps-navigation-row.json)
+- [BUG-2026-035](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-035-gbk-txt-import-garbled-text.json)
+
 ## How Future Threads Should Use This
 
 1. Read [docs/knowledge/bugs/INDEX.md](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/INDEX.md) first.

@@ -1,6 +1,7 @@
 package com.longerlsx.storyapp.data.book
 
 import com.longerlsx.storyapp.core.model.ImportSourceType
+import java.nio.charset.Charset
 import java.nio.file.Files
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -296,6 +297,43 @@ class ImportCoordinatorTest {
             assertEquals("谢钊很迅速地起了床。", repository.getChapterText(result.book.id, secondChapter.chapterIndex))
             assertEquals("N年以后。", normalized.substring(firstChapter.startOffset, firstChapter.endOffset))
             assertEquals("谢钊很迅速地起了床。", normalized.substring(secondChapter.startOffset, secondChapter.endOffset))
+        } finally {
+            tempDir.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun importTxtDecodesGbkChineseTextBeforeMetadataAndChapterParsing() = runTest {
+        val tempDir = Files.createTempDirectory("story-app-import-gbk-test")
+        try {
+            val repository = InMemoryBookRepository()
+            val coordinator = ImportCoordinator(
+                repository = repository,
+                storage = ImportedBookStorage(tempDir.toFile()),
+                textContentLoader = TextContentLoader(),
+            )
+            val content = """
+                《编码测试》
+                作者：编码作者
+
+                第1章 开始
+                中文正文第一段。
+            """.trimIndent()
+            val bytes = content.toByteArray(Charset.forName("GBK"))
+
+            val result = coordinator.importTxt(
+                fileName = "编码测试.txt",
+                bytes = bytes,
+                sourceType = ImportSourceType.LOCAL_FILE,
+                importedAt = 100L,
+            )
+
+            val chapter = result.chapters.first { it.title == "第1章 开始" }
+
+            assertEquals("编码测试", result.book.title)
+            assertEquals("编码作者", result.book.author)
+            assertEquals("GB18030", result.book.charset)
+            assertEquals("中文正文第一段。", repository.getChapterText(result.book.id, chapter.chapterIndex))
         } finally {
             tempDir.toFile().deleteRecursively()
         }

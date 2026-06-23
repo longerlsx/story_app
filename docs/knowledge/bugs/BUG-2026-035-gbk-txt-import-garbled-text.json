@@ -1,0 +1,28 @@
+{
+  "id": "BUG-2026-035",
+  "title": "GBK-compatible TXT import decodes as UTF-8 and loses Chinese chapters",
+  "symptom": "Importing a Chinese TXT encoded as GBK without a BOM could silently decode through UTF-8 replacement, turning title, author, and chapter headings into garbled text. A focused import test reproduced the issue by encoding `《编码测试》` and `第1章 开始` as GBK bytes; the import could not find the parsed `第1章 开始` chapter before the fix.",
+  "root_cause": "TxtCharsetDetector only recognized UTF-8 BOM and UTF-16 BOM markers, then defaulted every other byte stream to UTF-8. Java/Kotlin string decoding replaces malformed UTF-8 by default, so the downstream metadata extractor and chapter parser received corrupted text instead of a clear encoding decision.",
+  "fix": [
+    "Changed TxtCharsetDetector to strictly validate BOM-less UTF-8 before selecting UTF-8.",
+    "Fallback to GB18030 when strict UTF-8 decoding reports malformed or unmappable input, covering common GBK/GB2312-compatible Chinese TXT files.",
+    "Added detector-level tests for GBK-compatible Chinese bytes and UTF-8 Chinese bytes.",
+    "Added an import-level regression that verifies GBK bytes decode before metadata extraction, chapter parsing, charset persistence, and chapter text storage."
+  ],
+  "failed_attempts": [
+    "Parser-only external corpus tests are not sufficient evidence for import encoding support because they read already-decoded text and bypass TextContentLoader.",
+    "Using normal UTF-8 string construction as a probe is unsafe because malformed bytes can be replaced instead of failing clearly."
+  ],
+  "impact": "Prevents common Chinese TXT files saved in GBK/GB2312-compatible encodings from importing as unreadable garbled text and losing their chapter structure.",
+  "tags": [
+    "android",
+    "txt",
+    "import",
+    "charset",
+    "chapter-parser",
+    "resolved"
+  ],
+  "confidence": 0.88,
+  "created_at": "2026-06-23",
+  "updated_at": "2026-06-23"
+}

@@ -1,8 +1,13 @@
 package com.longerlsx.storyapp.data.book
 
+import java.nio.ByteBuffer
+import java.nio.charset.CharacterCodingException
 import java.nio.charset.Charset
+import java.nio.charset.CodingErrorAction
 
 object TxtCharsetDetector {
+    private val Gb18030: Charset = Charset.forName("GB18030")
+
     fun detect(bytes: ByteArray): Charset {
         if (bytes.size >= 3 &&
             bytes[0] == 0xEF.toByte() &&
@@ -24,6 +29,26 @@ object TxtCharsetDetector {
             return Charsets.UTF_16BE
         }
 
-        return Charsets.UTF_8
+        return if (canDecodeStrictly(bytes, Charsets.UTF_8)) {
+            Charsets.UTF_8
+        } else {
+            Gb18030
+        }
+    }
+
+    private fun canDecodeStrictly(
+        bytes: ByteArray,
+        charset: Charset,
+    ): Boolean {
+        val decoder = charset
+            .newDecoder()
+            .onMalformedInput(CodingErrorAction.REPORT)
+            .onUnmappableCharacter(CodingErrorAction.REPORT)
+        return try {
+            decoder.decode(ByteBuffer.wrap(bytes))
+            true
+        } catch (_: CharacterCodingException) {
+            false
+        }
     }
 }
