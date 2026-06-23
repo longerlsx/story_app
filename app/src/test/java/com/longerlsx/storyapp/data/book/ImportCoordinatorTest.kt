@@ -163,4 +163,141 @@ class ImportCoordinatorTest {
             tempDir.toFile().deleteRecursively()
         }
     }
+
+    @Test
+    fun importTxtStoresSubtitlePunctuationChapterTitles() = runTest {
+        val tempDir = Files.createTempDirectory("story-app-import-subtitle-punctuation-test")
+        try {
+            val repository = InMemoryBookRepository()
+            val coordinator = ImportCoordinator(
+                repository = repository,
+                storage = ImportedBookStorage(tempDir.toFile()),
+                textContentLoader = TextContentLoader(),
+            )
+            val bytes = """
+                《副标题测试》
+                作者：测试作者
+
+                第1章 独行者1:“杀人犯终于被抓住了！”
+                正文一。
+
+                第2章 标题：副题？
+                正文二。
+            """.trimIndent().encodeToByteArray()
+
+            val result = coordinator.importTxt(
+                fileName = "副标题测试.txt",
+                bytes = bytes,
+                sourceType = ImportSourceType.LOCAL_FILE,
+                importedAt = 100L,
+            )
+
+            val firstChapter = result.chapters.first { it.title == "第1章 独行者1:“杀人犯终于被抓住了！”" }
+            val secondChapter = result.chapters.first { it.title == "第2章 标题：副题？" }
+            val normalized = TxtNormalizer.normalize(bytes.decodeToString())
+
+            assertEquals(
+                listOf("第1章 独行者1:“杀人犯终于被抓住了！”", "第2章 标题：副题？"),
+                result.chapters.map { it.title }.filterNot { it == "前言" },
+            )
+            assertEquals("正文一。", repository.getChapterText(result.book.id, firstChapter.chapterIndex))
+            assertEquals("正文二。", repository.getChapterText(result.book.id, secondChapter.chapterIndex))
+            assertEquals("正文一。", normalized.substring(firstChapter.startOffset, firstChapter.endOffset))
+            assertEquals("正文二。", normalized.substring(secondChapter.startOffset, secondChapter.endOffset))
+        } finally {
+            tempDir.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun importTxtStoresNumberedSubtitlePunctuationChapterTitles() = runTest {
+        val tempDir = Files.createTempDirectory("story-app-import-numbered-subtitle-punctuation-test")
+        try {
+            val repository = InMemoryBookRepository()
+            val coordinator = ImportCoordinator(
+                repository = repository,
+                storage = ImportedBookStorage(tempDir.toFile()),
+                textContentLoader = TextContentLoader(),
+            )
+            val bytes = """
+                《数字副标题测试》
+                作者：测试作者
+
+                第1章 001 系统都能绑错？
+                正文一。
+
+                第51章 050 丹道比试，第一！
+                正文二。
+            """.trimIndent().encodeToByteArray()
+
+            val result = coordinator.importTxt(
+                fileName = "数字副标题测试.txt",
+                bytes = bytes,
+                sourceType = ImportSourceType.LOCAL_FILE,
+                importedAt = 100L,
+            )
+
+            val firstChapter = result.chapters.first { it.title == "第1章 001 系统都能绑错？" }
+            val secondChapter = result.chapters.first { it.title == "第51章 050 丹道比试，第一！" }
+            val normalized = TxtNormalizer.normalize(bytes.decodeToString())
+
+            assertEquals(
+                listOf("第1章 001 系统都能绑错？", "第51章 050 丹道比试，第一！"),
+                result.chapters.map { it.title }.filterNot { it == "前言" },
+            )
+            assertEquals("正文一。", repository.getChapterText(result.book.id, firstChapter.chapterIndex))
+            assertEquals("正文二。", repository.getChapterText(result.book.id, secondChapter.chapterIndex))
+            assertEquals("正文一。", normalized.substring(firstChapter.startOffset, firstChapter.endOffset))
+            assertEquals("正文二。", normalized.substring(secondChapter.startOffset, secondChapter.endOffset))
+        } finally {
+            tempDir.toFile().deleteRecursively()
+        }
+    }
+
+    @Test
+    fun importTxtStoresNumberedChapterTitleWhenRepeatedSpecialSubtitleFollows() = runTest {
+        val tempDir = Files.createTempDirectory("story-app-import-special-double-title-test")
+        try {
+            val repository = InMemoryBookRepository()
+            val coordinator = ImportCoordinator(
+                repository = repository,
+                storage = ImportedBookStorage(tempDir.toFile()),
+                textContentLoader = TextContentLoader(),
+            )
+            val bytes = """
+                《番外双标题测试》
+                作者：测试作者
+
+                第141章 番外一
+                　　番外一
+                N年以后。
+
+                第142章 番外二
+                　　番外二
+                谢钊很迅速地起了床。
+            """.trimIndent().encodeToByteArray()
+
+            val result = coordinator.importTxt(
+                fileName = "番外双标题测试.txt",
+                bytes = bytes,
+                sourceType = ImportSourceType.LOCAL_FILE,
+                importedAt = 100L,
+            )
+
+            val firstChapter = result.chapters.first { it.title == "第141章 番外一" }
+            val secondChapter = result.chapters.first { it.title == "第142章 番外二" }
+            val normalized = TxtNormalizer.normalize(bytes.decodeToString())
+
+            assertEquals(
+                listOf("第141章 番外一", "第142章 番外二"),
+                result.chapters.map { it.title }.filterNot { it == "前言" },
+            )
+            assertEquals("N年以后。", repository.getChapterText(result.book.id, firstChapter.chapterIndex))
+            assertEquals("谢钊很迅速地起了床。", repository.getChapterText(result.book.id, secondChapter.chapterIndex))
+            assertEquals("N年以后。", normalized.substring(firstChapter.startOffset, firstChapter.endOffset))
+            assertEquals("谢钊很迅速地起了床。", normalized.substring(secondChapter.startOffset, secondChapter.endOffset))
+        } finally {
+            tempDir.toFile().deleteRecursively()
+        }
+    }
 }

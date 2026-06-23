@@ -1,0 +1,28 @@
+{
+  "id": "BUG-2026-028",
+  "title": "TXT parser treats chapter-like dialogue lines as real chapter headings",
+  "symptom": "Parser regression tests confirmed that body lines such as `第1章 她想：开始了吗？` and `第十三回合：还要继续吗？` were accepted as Chinese numbered chapter candidates. In a real chapter body, those lines would split the current chapter incorrectly and break downstream body offsets.",
+  "root_cause": "The Chinese numbered chapter rule allowed sentence-ending punctuation whenever a colon appeared after the chapter suffix. That kept real subtitle-style headings like `第2章 独行者2:穿越者？玩家？神？`, but it was too broad for body dialogue and for words such as `回合` where `回` was parsed as the chapter suffix and the following `合：...？` became a subtitle tail.",
+  "fix": [
+    "Reject `回` suffix matches when the tail starts with `合`, so in-body `回合` markers are not chapter candidates.",
+    "Reject sentence-ending colon tails whose prefix looks like dialogue or thought narration such as `她想` before the colon.",
+    "Add rule, scanner, parser, import, and checked-in representative corpus tests so the false positives stay in body text while real subtitle-punctuation chapter titles remain accepted.",
+    "Keep the external absolute-path corpus smoke test as supplemental evidence, not the only regression guard."
+  ],
+  "failed_attempts": [
+    "Do not solve this by banning all colon subtitles with sentence punctuation; real corpus headings use this form.",
+    "Do not rely only on `/Users/longshengxi/Downloads/小说测试集`; that optional test can be skipped on machines without the local corpus."
+  ],
+  "impact": "Prevents chapter-like prose inside a chapter from creating false TOC entries and corrupting body-offset based reading anchors.",
+  "tags": [
+    "android",
+    "txt",
+    "toc",
+    "chapter-parser",
+    "offset",
+    "resolved"
+  ],
+  "confidence": 0.9,
+  "created_at": "2026-06-23",
+  "updated_at": "2026-06-23"
+}

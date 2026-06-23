@@ -39,6 +39,20 @@ class ChapterCandidateMergerTest {
     }
 
     @Test
+    fun mergesChapterTitleFollowedByRepeatedSpecialSubtitle() {
+        val content = """
+            第141章 番外一
+            　　番外一
+            正文。
+        """.trimIndent()
+
+        val merged = mergedCandidates(content)
+
+        assertEquals(listOf("第141章 番外一"), merged.map { it.title })
+        assertEquals(content.indexOf("正文。"), merged.first().bodyStartOffset)
+    }
+
+    @Test
     fun doesNotMergeDifferentShortChaptersOnlyBecauseTheyAreClose() {
         val content = """
             第1章
@@ -50,6 +64,34 @@ class ChapterCandidateMergerTest {
         val merged = mergedCandidates(content)
 
         assertEquals(listOf("第1章", "第2章"), merged.map { it.title })
+    }
+
+    @Test
+    fun doesNotMergeIndependentSpecialChapterAfterBodyText() {
+        val content = """
+            第1章 开始
+            正文。
+
+            番外一
+            番外正文。
+        """.trimIndent()
+
+        val merged = mergedCandidates(content)
+
+        assertEquals(listOf("第1章 开始", "番外一"), merged.map { it.title })
+    }
+
+    @Test
+    fun doesNotMergeAdjacentSpecialSubtitleUnlessTailMatchesExactly() {
+        val content = """
+            第141章 番外一（上）
+            　　番外一
+            正文。
+        """.trimIndent()
+
+        val merged = mergedCandidates(content)
+
+        assertEquals(listOf("第141章 番外一（上）", "番外一"), merged.map { it.title })
     }
 
     private fun mergedCandidates(content: String): List<ChapterCandidate> {

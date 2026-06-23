@@ -84,6 +84,7 @@ This is mandatory for both:
 | BUG-2026-025 | TXT parser drops numbered chapter titles when a repeated special subtitle follows | resolved | `txt`, `toc`, `chapter-parser`, `offset` | [BUG-2026-025-txt-parser-special-double-title-merge.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-025-txt-parser-special-double-title-merge.json) |
 | BUG-2026-026 | TXT parser treats in-body round attempt lines ending with ellipsis as chapters | resolved | `txt`, `toc`, `chapter-parser`, `chapter-boundary` | [BUG-2026-026-txt-parser-round-punctuation-body-line.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-026-txt-parser-round-punctuation-body-line.json) |
 | BUG-2026-027 | External TXT import crashes when a file URI cannot be opened | resolved | `txt`, `external-intent`, `crash` | [BUG-2026-027-external-import-unreadable-file-uri-crash.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-027-external-import-unreadable-file-uri-crash.json) |
+| BUG-2026-028 | TXT parser treats chapter-like dialogue lines as real chapter headings | resolved | `txt`, `chapter-parser`, `offset` | [BUG-2026-028-txt-parser-chapter-like-dialogue-false-positive.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-028-txt-parser-chapter-like-dialogue-false-positive.json) |
 
 ## Retrieval Hints For Future Threads
 
@@ -108,6 +109,7 @@ This is mandatory for both:
 - If the bottom reader chrome grows, jumps, or crowds after enabling a TTS countdown, start with `BUG-2026-016`; the confirmed fix is single-line shared action-label rendering for long timed TTS labels.
 - If a real TXT opens at `第1章` but the bottom chapter progress shows `2/N章`, start with `BUG-2026-023`; the confirmed fix is to format reader progress through a display helper that excludes a leading synthetic `前言` from numbered chapter counts without changing parser offsets or navigation.
 - If an external TXT open/share intent returns to the launcher or force-closes the app, start with `BUG-2026-027`; the confirmed fix is to treat URI query/open failures as a non-importable payload instead of letting `ContentResolver.openInputStream` exceptions escape.
+- If a body line that starts like a chapter heading, such as `第1章 她想：开始了吗？` or `第十三回合：还要继续吗？`, appears as a TOC entry, start with `BUG-2026-028`; the confirmed fix is to keep colon-subtitle punctuation support narrow and reject dialogue-like tails.
 
 ## Authoring Rules
 

@@ -6,6 +6,9 @@ data class ChapterCandidateMergeResult(
 )
 
 object ChapterCandidateMerger {
+    private val chapterTitleWithSuffixRegex =
+        Regex("""^第[\s　]*[0-9０-９一二三四五六七八九十百千零〇两]+[\s　]*[章节回话集]\s*(.*)$""")
+
     fun merge(content: String, candidates: List<ChapterCandidate>): List<ChapterCandidate> {
         return mergeDetailed(content, candidates).candidates
     }
@@ -48,6 +51,9 @@ object ChapterCandidateMerger {
         if (ChapterCandidateFilter.hasMeaningfulText(content, current.bodyStartOffset, next.headingStartOffset)) {
             return false
         }
+        if (isChapterFollowedByRepeatedSpecialSubtitle(current, next)) {
+            return true
+        }
         if (current.kind != ChapterTitleKind.CHAPTER || next.kind != ChapterTitleKind.CHAPTER) {
             return false
         }
@@ -56,6 +62,22 @@ object ChapterCandidateMerger {
         val nextNumber = next.number?.value
         return currentNumber != null && currentNumber == nextNumber ||
             normalizeTitle(current.title) == normalizeTitle(next.title)
+    }
+
+    private fun isChapterFollowedByRepeatedSpecialSubtitle(
+        current: ChapterCandidate,
+        next: ChapterCandidate,
+    ): Boolean {
+        if (current.kind != ChapterTitleKind.CHAPTER || next.kind != ChapterTitleKind.SPECIAL) {
+            return false
+        }
+        val titleTail = chapterTitleWithSuffixRegex
+            .matchEntire(current.title)
+            ?.groups
+            ?.get(1)
+            ?.value
+            ?: return false
+        return titleTail.isNotBlank() && normalizeTitle(titleTail) == normalizeTitle(next.title)
     }
 
     private fun normalizeTitle(title: String): String {

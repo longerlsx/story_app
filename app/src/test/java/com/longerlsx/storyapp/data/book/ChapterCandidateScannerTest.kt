@@ -111,6 +111,57 @@ class ChapterCandidateScannerTest {
     }
 
     @Test
+    fun scannerDoesNotTreatNumericBodyLineWithChapterWordAndColonAsHeading() {
+        val content = """
+            1. 初见
+            正文。
+            1. 这章：开始了吗？
+            这只是正文里的句子。
+
+            2. 重逢
+            正文。
+        """.trimIndent()
+
+        val candidates = scan(content)
+
+        assertEquals(listOf("1. 初见", "2. 重逢"), candidates.map { it.title })
+    }
+
+    @Test
+    fun scannerDoesNotTreatChineseBodyDialogueWithColonAsHeading() {
+        val content = """
+            第1章 初见
+            正文。
+            第1章 她想：开始了吗？
+            这只是正文里的句子。
+
+            第2章 重逢
+            正文。
+        """.trimIndent()
+
+        val candidates = scan(content)
+
+        assertEquals(listOf("第1章 初见", "第2章 重逢"), candidates.map { it.title })
+    }
+
+    @Test
+    fun scannerDoesNotTreatRoundWordBodyLineAsChapterHeading() {
+        val content = """
+            第12章 训练
+            正文。
+            第十三回合：还要继续吗？
+            这只是正文里的句子。
+
+            第13章 结束
+            正文。
+        """.trimIndent()
+
+        val candidates = scan(content)
+
+        assertEquals(listOf("第12章 训练", "第13章 结束"), candidates.map { it.title })
+    }
+
+    @Test
     fun scannerReturnsSingleShortChapterCandidate() {
         val candidates = scan(
             """
