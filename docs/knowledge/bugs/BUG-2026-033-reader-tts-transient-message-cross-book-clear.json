@@ -1,0 +1,28 @@
+{
+  "id": "BUG-2026-033",
+  "title": "Reader TTS transient message cleanup can clear another book's local feedback",
+  "symptom": "A delayed cleanup for a temporary TTS status/error message could clear the current ReaderTtsRuntimeState local error or status solely because the text matched the previously displayed message. If the runtime switched to another book during the delay and reused the same feedback text, that other book's local feedback could disappear without being displayed in its own reader context.",
+  "root_cause": "ReaderScreen's transient-message cleanup effect captured only the displayed text. After the 2.5 second delay it compared latestRuntime.localErrorMessage and latestRuntime.localStatusMessage to that text, but did not verify that latestRuntime.currentBookId still matched the book that scheduled the cleanup.",
+  "fix": [
+    "Added ReaderTtsTransientMessageClearancePolicy to derive cleanup actions from current book id, latest runtime state, and displayed message.",
+    "Changed ReaderScreen to clear local TTS error/status messages only when the delayed runtime still belongs to the same book.",
+    "Added unit coverage for current-book error cleanup, current-book status cleanup, cross-book matching text suppression, and missing displayed-message suppression."
+  ],
+  "failed_attempts": [
+    "Comparing transient feedback by display text alone is not enough because common strings such as stop/start failures can appear for multiple books.",
+    "A visual presence test alone would not prove the cleanup target is correct; the important evidence is the delayed cleanup decision against the latest runtime state."
+  ],
+  "impact": "Keeps temporary TTS feedback scoped to the reader instance that produced it, preventing cross-book status/error messages from being silently cleared during navigation or rapid reader switching.",
+  "tags": [
+    "android",
+    "compose",
+    "reader",
+    "tts",
+    "interaction",
+    "visual",
+    "resolved"
+  ],
+  "confidence": 0.86,
+  "created_at": "2026-06-23",
+  "updated_at": "2026-06-23"
+}

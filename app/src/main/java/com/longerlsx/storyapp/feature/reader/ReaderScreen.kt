@@ -757,10 +757,15 @@ private fun ReaderReadyContent(
         }
         delay(2_500)
         val latestRuntime = ttsController.runtimeState.value
-        if (latestRuntime.localErrorMessage == transientTtsMessage) {
+        val clearance = ReaderTtsTransientMessageClearancePolicy.resolve(
+            currentBookId = state.book.id,
+            runtimeState = latestRuntime,
+            displayedMessage = transientTtsMessage,
+        )
+        if (clearance.clearLocalErrorMessage) {
             ttsController.clearLocalErrorMessage()
         }
-        if (latestRuntime.localStatusMessage == transientTtsMessage) {
+        if (clearance.clearLocalStatusMessage) {
             ttsController.clearLocalStatusMessage()
         }
     }

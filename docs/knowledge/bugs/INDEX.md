@@ -89,6 +89,7 @@ This is mandatory for both:
 | BUG-2026-030 | Bookshelf and source entry expose implementation-progress copy | resolved | `bookshelf`, `source-entry`, `visual`, `copy` | [BUG-2026-030-bookshelf-source-developer-copy.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-030-bookshelf-source-developer-copy.json) |
 | BUG-2026-031 | Reader theme swatch borders leak Material surface colors | resolved | `reader`, `settings`, `theme`, `visual` | [BUG-2026-031-reader-theme-swatch-border-theme-leak.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-031-reader-theme-swatch-border-theme-leak.json) |
 | BUG-2026-032 | Reader TTS transient message leaks Material surface colors | resolved | `reader`, `tts`, `theme`, `visual` | [BUG-2026-032-reader-tts-transient-message-theme-leak.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-032-reader-tts-transient-message-theme-leak.json) |
+| BUG-2026-033 | Reader TTS transient message cleanup can clear another book's local feedback | resolved | `reader`, `tts`, `interaction`, `visual` | [BUG-2026-033-reader-tts-transient-message-cross-book-clear.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-033-reader-tts-transient-message-cross-book-clear.json) |
 
 ## Retrieval Hints For Future Threads
 
@@ -118,6 +119,7 @@ This is mandatory for both:
 - If first-run bookshelf or unavailable source screens show implementation-progress wording such as “已经打通” or “能力已预留”, start with `BUG-2026-030`; the confirmed fix is to keep entry-surface copy user-facing and cover old phrases with Compose text regressions.
 - If reader settings color swatches show colors that do not belong to the active reader palette, start with `BUG-2026-031`; the confirmed fix is to render swatch borders from `ReaderThemePalette` and verify surface-role leaks with pixel trap colors.
 - If a temporary TTS status/error message over the reader uses colors that do not match the active reader theme, start with `BUG-2026-032`; the confirmed fix is to route `ReaderTransientTtsMessage` through `ReaderThemePalette` and verify the full reader root with Material surface/onSurface trap colors.
+- If a temporary TTS status/error message disappears after switching books or after another book produces the same feedback text, start with `BUG-2026-033`; the confirmed fix is to make delayed cleanup current-book-aware instead of clearing by text match alone.
 
 ## Authoring Rules
 
