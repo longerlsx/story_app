@@ -70,13 +70,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.PlatformTextStyle
-import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
@@ -2016,10 +2013,12 @@ private fun ReaderParagraphContent(
                 mutableStateOf<TextLayoutResult?>(null)
             }
             Text(
-                text = paragraph.annotatedText(
+                text = ReaderHighlightAnnotator.annotate(
+                    text = paragraph.text,
+                    textStartCharOffset = baseCharOffset + paragraph.startCharOffset,
+                    textEndCharOffset = baseCharOffset + paragraph.endCharOffset,
                     highlightRange = highlightRange,
                     highlightColor = themePalette.content.copy(alpha = 0.18f),
-                    baseCharOffset = baseCharOffset,
                 ),
                 modifier = if (
                     (onLongPressCharOffset != null || onTapText != null) &&
@@ -2215,53 +2214,6 @@ private fun pageTextFitsViewport(
         return true
     }
     return lines.last().bottomPx <= availableHeightPx
-}
-
-private fun ReaderDisplayParagraph.annotatedText(
-    highlightRange: ReaderTtsCharacterRange?,
-    highlightColor: Color,
-    baseCharOffset: Int = 0,
-): AnnotatedString {
-    val absoluteStartCharOffset = baseCharOffset + startCharOffset
-    val absoluteEndCharOffset = baseCharOffset + endCharOffset
-    if (highlightRange == null || absoluteEndCharOffset <= absoluteStartCharOffset) {
-        return AnnotatedString(text)
-    }
-    val localHighlightStart = maxOf(highlightRange.startCharOffset, absoluteStartCharOffset) - absoluteStartCharOffset
-    val localHighlightEnd = minOf(highlightRange.endCharOffset, absoluteEndCharOffset) - absoluteStartCharOffset
-    if (localHighlightStart >= localHighlightEnd) {
-        return AnnotatedString(text)
-    }
-    return buildAnnotatedString {
-        append(text)
-        addStyle(
-            style = SpanStyle(background = highlightColor),
-            start = localHighlightStart,
-            end = localHighlightEnd,
-        )
-    }
-}
-
-private fun ReaderPageSlice.annotatedPageText(
-    highlightRange: ReaderTtsCharacterRange?,
-    highlightColor: Color,
-): AnnotatedString {
-    if (highlightRange == null || visibleEndCharOffset <= visibleStartCharOffset) {
-        return AnnotatedString(text)
-    }
-    val localHighlightStart = maxOf(highlightRange.startCharOffset, visibleStartCharOffset) - visibleStartCharOffset
-    val localHighlightEnd = minOf(highlightRange.endCharOffset, visibleEndCharOffset) - visibleStartCharOffset
-    if (localHighlightStart >= localHighlightEnd) {
-        return AnnotatedString(text)
-    }
-    return buildAnnotatedString {
-        append(text)
-        addStyle(
-            style = SpanStyle(background = highlightColor),
-            start = localHighlightStart,
-            end = localHighlightEnd,
-        )
-    }
 }
 
 @Composable
