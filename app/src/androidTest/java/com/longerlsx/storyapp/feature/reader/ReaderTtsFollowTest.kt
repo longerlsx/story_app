@@ -1,14 +1,20 @@
 package com.longerlsx.storyapp.feature.reader
+
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
-import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.swipeLeft
 import com.longerlsx.storyapp.core.model.Book
 import com.longerlsx.storyapp.core.model.Chapter
@@ -17,15 +23,15 @@ import com.longerlsx.storyapp.core.model.ReaderSettings
 import com.longerlsx.storyapp.core.model.ReadingMode
 import com.longerlsx.storyapp.data.book.InMemoryBookRepository
 import com.longerlsx.storyapp.data.reader.ReaderSettingsStore
+import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsCharacterRange
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsController
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsPlaybackSnapshot
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsSegment
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsStartRequest
-import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsCharacterRange
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import java.io.File
@@ -796,6 +802,62 @@ class ReaderTtsFollowTest {
         }
     }
 
+    @Test
+    fun transientTtsMessageUsesReaderPaletteInsteadOfMaterialSurfaceColors() {
+        val bookId = "book-transient-message-theme"
+        val message = "已停止朗读，重新开始将从当前位置开始"
+        val materialSurfaceTrap = Color(0xFFFF00FF)
+        val materialOnSurfaceTrap = Color(0xFF00FFFF)
+        val repository = createRepository(
+            bookId = bookId,
+            chapterTexts = mapOf(0 to "第一段正文。"),
+        )
+        val settingsStore = createSettingsStore(
+            name = "reader-tts-transient-message-theme",
+            initial = ReaderSettings(readingMode = ReadingMode.SCROLL),
+        )
+        val controller = ReaderTtsController(
+            launchForegroundService = { true },
+            sendStopCommand = {},
+        )
+        controller.start(
+            request = ReaderTtsStartRequest(
+                bookId = bookId,
+                bookTitle = "瞬时消息配色测试",
+                chapterIndex = 0,
+                charOffset = 0,
+                chapterTitleOrSummary = "第一章",
+                activeStateLabel = "朗读中",
+            ),
+            settings = settingsStore.load().ttsSettings,
+        )
+        controller.onPlaybackStarted()
+        controller.stopByNavigation(message)
+
+        composeRule.setContent {
+            MaterialTheme(
+                colorScheme = lightColorScheme(
+                    surface = materialSurfaceTrap,
+                    onSurface = materialOnSurfaceTrap,
+                ),
+            ) {
+                ReaderScreen(
+                    bookId = bookId,
+                    repository = repository,
+                    settingsStore = settingsStore,
+                    ttsController = controller,
+                    onBack = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText(message).assertIsDisplayed()
+        val rootPixels = composeRule.onRoot().captureToImage().toPixelMap()
+
+        org.junit.Assert.assertFalse(rootPixels.containsTrapColor(materialSurfaceTrap))
+        org.junit.Assert.assertFalse(rootPixels.containsTrapColor(materialOnSurfaceTrap))
+    }
+
     private fun createRepository(
         bookId: String,
         chapterTexts: Map<Int, String>,
@@ -845,5 +907,22 @@ class ReaderTtsFollowTest {
             mkdirs()
         }
         return ReaderSettingsStore(root).also { it.save(initial) }
+    }
+
+    private fun androidx.compose.ui.graphics.PixelMap.containsTrapColor(trapColor: Color): Boolean {
+        for (x in 0 until width) {
+            for (y in 0 until height) {
+                val pixel = this[x, y]
+                if (
+                    pixel.alpha > 0.2f &&
+                    kotlin.math.abs(pixel.red - trapColor.red) < 0.08f &&
+                    kotlin.math.abs(pixel.green - trapColor.green) < 0.08f &&
+                    kotlin.math.abs(pixel.blue - trapColor.blue) < 0.08f
+                ) {
+                    return true
+                }
+            }
+        }
+        return false
     }
 }

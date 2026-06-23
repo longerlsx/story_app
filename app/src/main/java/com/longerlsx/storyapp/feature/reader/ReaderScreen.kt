@@ -1217,6 +1217,7 @@ private fun ReaderReadyContent(
         if (!transientTtsMessage.isNullOrBlank()) {
             ReaderTransientTtsMessage(
                 message = transientTtsMessage,
+                themePalette = themePalette,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .padding(top = 72.dp),
@@ -1371,6 +1372,7 @@ private fun ReaderReadyContent(
 @Composable
 private fun ReaderTransientTtsMessage(
     message: String,
+    themePalette: ReaderThemePalette,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -1378,13 +1380,13 @@ private fun ReaderTransientTtsMessage(
         shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp),
         tonalElevation = 6.dp,
         shadowElevation = 6.dp,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+        color = themePalette.surface.copy(alpha = 0.96f),
     ) {
         Text(
             text = message,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface,
+            color = themePalette.content,
         )
     }
 }
