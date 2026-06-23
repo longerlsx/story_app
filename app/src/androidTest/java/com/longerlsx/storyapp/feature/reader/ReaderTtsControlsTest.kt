@@ -170,4 +170,49 @@ class ReaderTtsControlsTest {
             labelHeight <= singleLineActionHeight,
         )
     }
+
+    @Test
+    fun chapterProgressSummaryStaysSingleLineBetweenNavigationActions() {
+        val progressSummary = "很长很长的前言标题会挤压章节导航栏"
+
+        composeRule.setContent {
+            Box(modifier = Modifier.width(320.dp)) {
+                ReaderControls(
+                    chromeMode = ReaderChromeMode.CHROME_VISIBLE,
+                    appearanceMode = ReaderAppearanceMode.DAY,
+                    progressSummary = progressSummary,
+                    showChapterNavigationRow = true,
+                    canOpenPreviousChapter = true,
+                    canOpenNextChapter = true,
+                    themePalette = ReaderThemePalette(
+                        background = androidx.compose.ui.graphics.Color.White,
+                        surface = androidx.compose.ui.graphics.Color(0xFFF4F4F4),
+                        content = androidx.compose.ui.graphics.Color.Black,
+                    ),
+                    ttsToggleState = null,
+                    onOpenPreviousChapter = {},
+                    onOpenNextChapter = {},
+                    onOpenToc = {},
+                    onToggleAppearanceMode = {},
+                    onOpenSettings = {},
+                )
+            }
+        }
+
+        val progressBounds = composeRule
+            .onNodeWithText(progressSummary)
+            .assertIsDisplayed()
+            .getUnclippedBoundsInRoot()
+        val progressHeight = progressBounds.bottom - progressBounds.top
+        val actionBounds = composeRule
+            .onNodeWithText("上一章")
+            .assertIsDisplayed()
+            .getUnclippedBoundsInRoot()
+        val actionHeight = actionBounds.bottom - actionBounds.top
+
+        assertTrue(
+            "Chapter progress summary should stay single-line between navigation actions; actual height=$progressHeight, reference single-line height=$actionHeight",
+            progressHeight <= actionHeight,
+        )
+    }
 }

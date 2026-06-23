@@ -295,6 +295,9 @@ private fun ReaderChapterNavigationRow(
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
             color = themePalette.content.copy(alpha = 0.8f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            softWrap = false,
         )
         ReaderBarAction(
             label = "下一章",
