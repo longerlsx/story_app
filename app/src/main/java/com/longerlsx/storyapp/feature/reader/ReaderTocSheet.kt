@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -25,6 +26,10 @@ fun ReaderTocSheet(
     themePalette: ReaderThemePalette,
     onSelectChapter: (Int) -> Unit,
 ) {
+    val selectedChapterPosition = chapters
+        .indexOfFirst { it.chapterIndex == selectedChapterIndex }
+        .coerceAtLeast(0)
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = selectedChapterPosition)
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -43,6 +48,7 @@ fun ReaderTocSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(max = 320.dp),
+            state = listState,
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(chapters, key = { it.chapterIndex }) { chapter ->

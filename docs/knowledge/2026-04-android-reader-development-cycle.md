@@ -85,6 +85,7 @@ Key bugs:
 - [BUG-2026-035](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-035-gbk-txt-import-garbled-text.json)
 - [BUG-2026-036](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-036-reader-settings-tabs-scroll-away.json)
 - [BUG-2026-037](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-037-reader-settings-tab-scroll-state-leak.json)
+- [BUG-2026-038](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-038-reader-toc-current-chapter-not-visible.json)
 
 ## How Future Threads Should Use This
 

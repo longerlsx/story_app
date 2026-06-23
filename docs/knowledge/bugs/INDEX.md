@@ -94,6 +94,7 @@ This is mandatory for both:
 | BUG-2026-035 | GBK-compatible TXT import decodes as UTF-8 and loses Chinese chapters | resolved | `txt`, `import`, `charset`, `chapter-parser` | [BUG-2026-035-gbk-txt-import-garbled-text.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-035-gbk-txt-import-garbled-text.json) |
 | BUG-2026-036 | Reader settings tabs scroll away with long TTS settings content | resolved | `reader`, `settings`, `tts`, `interaction`, `visual` | [BUG-2026-036-reader-settings-tabs-scroll-away.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-036-reader-settings-tabs-scroll-away.json) |
 | BUG-2026-037 | Reader settings tab body scroll state leaks between Reading and TTS tabs | resolved | `reader`, `settings`, `tts`, `interaction`, `visual` | [BUG-2026-037-reader-settings-tab-scroll-state-leak.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-037-reader-settings-tab-scroll-state-leak.json) |
+| BUG-2026-038 | Reader TOC opens long directories at the top instead of the current chapter | resolved | `reader`, `toc`, `interaction`, `visual` | [BUG-2026-038-reader-toc-current-chapter-not-visible.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-038-reader-toc-current-chapter-not-visible.json) |
 
 ## Retrieval Hints For Future Threads
 
@@ -128,6 +129,7 @@ This is mandatory for both:
 - If importing a Chinese TXT produces unreadable text, missing title/author, or a single fallback body chapter, start with `BUG-2026-035`; the confirmed fix is strict UTF-8 validation before falling back to GB18030 for GBK/GB2312-compatible inputs.
 - If the reader settings tab switcher disappears after scrolling through long TTS settings, start with `BUG-2026-036`; the confirmed fix is to keep the tab row outside the scrollable body and verify after scrolling to the bottom timer option.
 - If switching between Reading and TTS settings opens the new tab midway down instead of at its top controls, start with `BUG-2026-037`; the confirmed fix is to scope the scroll state per settings tab.
+- If a long TOC opens at the first chapters instead of showing the active reading chapter, start with `BUG-2026-038`; the confirmed fix is to initialize the TOC LazyColumn at the selected chapter's list position.
 
 ## Authoring Rules
 

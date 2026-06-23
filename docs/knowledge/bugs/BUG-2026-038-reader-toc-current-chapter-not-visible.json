@@ -1,0 +1,28 @@
+{
+  "id": "BUG-2026-038",
+  "title": "Reader TOC opens long directories at the top instead of the current chapter",
+  "symptom": "Opening a long chapter directory while reading a later chapter could show the first chapters instead of the current reading position. A Pixel 8 / Android 14 Compose regression reproduced the issue with an 80-chapter TOC and `selectedChapterIndex = 70`; `第70章` and `当前阅读` were not displayed before the fix.",
+  "root_cause": "ReaderTocSheet highlighted the selected chapter only when its row was composed, but the LazyColumn did not use selectedChapterIndex to initialize its scroll position. Long directories therefore always opened at the top and forced users to manually scroll to find the current chapter.",
+  "fix": [
+    "Computed the selected chapter's list position from chapters and selectedChapterIndex.",
+    "Initialized the TOC LazyColumn with rememberLazyListState(initialFirstVisibleItemIndex = selectedChapterPosition).",
+    "Added an instrumented Compose regression that opens a long directory and asserts the selected chapter row and `当前阅读` marker are immediately visible."
+  ],
+  "failed_attempts": [
+    "Styling the selected row is insufficient when the row is not initially composed or visible.",
+    "Directory tests that only assert the directory can open do not prove it opens near the active reading position."
+  ],
+  "impact": "Makes long TOCs usable from later chapters by surfacing the current reading location immediately, reducing manual scrolling and selection errors.",
+  "tags": [
+    "android",
+    "compose",
+    "reader",
+    "toc",
+    "interaction",
+    "visual",
+    "resolved"
+  ],
+  "confidence": 0.9,
+  "created_at": "2026-06-23",
+  "updated_at": "2026-06-23"
+}
