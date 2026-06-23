@@ -18,7 +18,7 @@ object ReaderPageTextLayout {
             return emptyList()
         }
 
-        val paragraphs = content.toDisplayParagraphs()
+        val paragraphs = ReaderParagraphModel.toDisplayParagraphs(content)
         if (paragraphs.isEmpty()) {
             return emptyList()
         }

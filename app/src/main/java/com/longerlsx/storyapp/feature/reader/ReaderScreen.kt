@@ -1999,7 +1999,7 @@ private fun ReaderParagraphContent(
     onTapText: (() -> Unit)? = null,
     onLongPressCharOffset: ((Int) -> Unit)? = null,
 ) {
-    val paragraphs = remember(text) { text.toDisplayParagraphs() }
+    val paragraphs = remember(text) { ReaderParagraphModel.toDisplayParagraphs(text) }
     val paragraphTextStyle = remember(fontSize, lineHeight, includeFontPadding) {
         TextStyle(
             fontSize = fontSize,
@@ -2080,53 +2080,6 @@ private fun TextLayoutResult.resolveBodyCharOffset(
         .coerceIn(0, maxCharOffset)
 }
 
-internal fun String.toDisplayParagraphs(): List<ReaderDisplayParagraph> {
-    if (isBlank()) {
-        return listOf(
-            ReaderDisplayParagraph(
-                text = "当前章节暂无正文。",
-                startCharOffset = 0,
-                endCharOffset = 0,
-            ),
-        )
-    }
-
-    val paragraphs = mutableListOf<ReaderDisplayParagraph>()
-    var lineStart = 0
-    while (lineStart <= lastIndex) {
-        val rawLineEnd = indexOf('\n', startIndex = lineStart)
-            .takeIf { it >= 0 }
-            ?: length
-        val rawLine = substring(lineStart, rawLineEnd)
-        val trimmedStart = rawLine.indexOfFirst { !it.isWhitespace() }
-        val trimmedEnd = rawLine.indexOfLast { !it.isWhitespace() }
-        if (trimmedStart >= 0 && trimmedEnd >= trimmedStart) {
-            val startOffset = lineStart + trimmedStart
-            val endOffset = lineStart + trimmedEnd + 1
-            paragraphs += ReaderDisplayParagraph(
-                text = substring(startOffset, endOffset),
-                startCharOffset = startOffset,
-                endCharOffset = endOffset,
-            )
-        }
-        if (rawLineEnd >= length) {
-            break
-        }
-        lineStart = rawLineEnd + 1
-    }
-    return if (paragraphs.isEmpty()) {
-        listOf(
-            ReaderDisplayParagraph(
-                text = "当前章节暂无正文。",
-                startCharOffset = 0,
-                endCharOffset = 0,
-            ),
-        )
-    } else {
-        paragraphs
-    }
-}
-
 private fun buildPendingRestartVisualRange(
     location: ReaderTextStartLocation,
     chapterText: String,
@@ -2186,12 +2139,6 @@ private fun ReaderVisibleChapterItem.bodyOffsetWithinItemPx(): Int {
 private data class ReaderFeedChapterContent(
     val chapter: Chapter,
     val text: String,
-)
-
-internal data class ReaderDisplayParagraph(
-    val text: String,
-    val startCharOffset: Int,
-    val endCharOffset: Int,
 )
 
 private data class ReaderLoadedChapterContent(
