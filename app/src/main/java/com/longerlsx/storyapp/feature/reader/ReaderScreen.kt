@@ -700,19 +700,13 @@ private fun ReaderReadyContent(
         ttsRuntime.currentBookId == state.book.id &&
             ttsRuntime.playbackState.isPausedSession()
     val isCurrentBookTtsOngoing = isCurrentBookTtsPlaying || isCurrentBookTtsPaused
-    val selectedVoiceName = readerSettings.ttsSettings.voiceName
-        ?.takeIf { voiceName ->
-            ttsRuntime.availableVoices.any { it.name == voiceName }
-        }
-    val ttsSystemDefaultVoiceStatus = if (
-        ttsRuntime.availableVoicesLoaded &&
-        readerSettings.ttsSettings.voiceName != null &&
-        selectedVoiceName == null
-    ) {
-        "当前使用系统默认音色"
-    } else {
-        null
-    }
+    val ttsVoiceSelection = ReaderTtsVoiceSelectionResolver.resolve(
+        persistedVoiceName = readerSettings.ttsSettings.voiceName,
+        availableVoices = ttsRuntime.availableVoices,
+        availableVoicesLoaded = ttsRuntime.availableVoicesLoaded,
+    )
+    val selectedVoiceName = ttsVoiceSelection.selectedVoiceName
+    val ttsSystemDefaultVoiceStatus = ttsVoiceSelection.systemDefaultVoiceStatus
     val livePlaybackVisualRange = if (isCurrentBookTtsPlaying) {
         ttsRuntime.playbackSnapshot.activeVisualRangeOrNull()
     } else {
