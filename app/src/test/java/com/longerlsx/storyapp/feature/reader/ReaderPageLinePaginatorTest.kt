@@ -73,6 +73,29 @@ class ReaderPageLinePaginatorTest {
     }
 
     @Test
+    fun backsOffLastVisibleLineWhenCandidatePageDoesNotFitAfterReflow() {
+        val content = "第一行\n第二行\n第三行\n第四行"
+        val lines = listOf(
+            ReaderPageLine(0, 3, topPx = 0f, bottomPx = 24f),
+            ReaderPageLine(4, 7, topPx = 24f, bottomPx = 48f),
+            ReaderPageLine(8, 11, topPx = 48f, bottomPx = 72f),
+            ReaderPageLine(12, content.length, topPx = 72f, bottomPx = 96f),
+        )
+
+        val pages = ReaderPageLinePaginator.paginate(
+            content = content,
+            lines = lines,
+            availableHeightPx = 72f,
+            pageFitsViewport = { page -> !page.text.contains("第三行") },
+        )
+
+        assertEquals(3, pages.size)
+        assertEquals("第一行\n第二行", pages[0].text)
+        assertEquals("第三行", pages[1].text)
+        assertEquals("第四行", pages[2].text)
+    }
+
+    @Test
     fun recordsVisibleOffsetsWhenPageStartsWithLeadingNewlines() {
         val content = "\n\n正文第一行\n正文第二行"
         val lines = listOf(

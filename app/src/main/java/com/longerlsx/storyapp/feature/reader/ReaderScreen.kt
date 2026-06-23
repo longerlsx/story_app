@@ -2179,79 +2179,20 @@ private fun paginatePageSlices(
         textStyle = textStyle,
         paragraphSpacingPx = paragraphSpacingPx,
     )
-    if (lines.isEmpty()) {
-        return listOf(
-            ReaderPageSlice(
-                startCharOffset = 0,
-                endCharOffset = 0,
-                text = "当前章节暂无正文。",
-            ),
-        )
-    }
-
-    val pages = mutableListOf<ReaderPageSlice>()
-    var lineIndex = 0
-    while (lineIndex < lines.size) {
-        val pageStartLine = lines[lineIndex]
-        val pageTop = pageStartLine.topPx
-        val pageBottomLimit = pageTop + availableHeightPx.coerceAtLeast(1).toFloat()
-
-        var lastVisibleLineIndex = lineIndex
-        while (
-            lastVisibleLineIndex < lines.lastIndex &&
-            lines[lastVisibleLineIndex + 1].bottomPx <= pageBottomLimit
-        ) {
-            lastVisibleLineIndex += 1
-        }
-
-        var candidateLineIndex = lastVisibleLineIndex
-        var candidatePage = buildReaderPageSlice(
-            content = content,
-            lines = lines,
-            startLineIndex = lineIndex,
-            endLineIndex = candidateLineIndex,
-        )
-        while (
-            candidateLineIndex > lineIndex &&
-            !pageTextFitsViewport(
-                page = candidatePage,
+    return ReaderPageLinePaginator.paginate(
+        content = content,
+        lines = lines,
+        availableHeightPx = availableHeightPx.coerceAtLeast(1).toFloat(),
+        pageFitsViewport = { page ->
+            pageTextFitsViewport(
+                page = page,
                 availableWidthPx = availableWidthPx,
                 availableHeightPx = availableHeightPx,
                 paragraphSpacingPx = paragraphSpacingPx,
                 textMeasurer = textMeasurer,
                 textStyle = textStyle,
             )
-        ) {
-            candidateLineIndex -= 1
-            candidatePage = buildReaderPageSlice(
-                content = content,
-                lines = lines,
-                startLineIndex = lineIndex,
-                endLineIndex = candidateLineIndex,
-            )
-        }
-
-        pages += candidatePage
-        lineIndex = candidateLineIndex + 1
-    }
-
-    return pages
-}
-
-private fun buildReaderPageSlice(
-    content: String,
-    lines: List<ReaderPageLine>,
-    startLineIndex: Int,
-    endLineIndex: Int,
-): ReaderPageSlice {
-    val startCharOffset = lines[startLineIndex].startCharOffset
-    val endCharOffset = lines[endLineIndex].endCharOffset
-        .coerceAtLeast((startCharOffset + 1).coerceAtMost(content.length))
-    val rawText = content.substring(startCharOffset, endCharOffset)
-    return readerPageSliceFromRawText(
-        startCharOffset = startCharOffset,
-        endCharOffset = endCharOffset,
-        rawText = rawText,
+        },
     )
 }
 

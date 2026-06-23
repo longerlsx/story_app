@@ -12,6 +12,7 @@ object ReaderPageLinePaginator {
         content: String,
         lines: List<ReaderPageLine>,
         availableHeightPx: Float,
+        pageFitsViewport: (ReaderPageSlice) -> Boolean = { true },
     ): List<ReaderPageSlice> {
         if (content.isBlank() || lines.isEmpty()) {
             return listOf(
@@ -37,18 +38,47 @@ object ReaderPageLinePaginator {
                 lastVisibleLineIndex += 1
             }
 
-            val startCharOffset = pageStartLine.startCharOffset
-            val endCharOffset = lines[lastVisibleLineIndex].endCharOffset
-                .coerceAtLeast((startCharOffset + 1).coerceAtMost(content.length))
-            val rawText = content.substring(startCharOffset, endCharOffset)
-            pages += readerPageSliceFromRawText(
-                startCharOffset = startCharOffset,
-                endCharOffset = endCharOffset,
-                rawText = rawText,
+            var candidateLineIndex = lastVisibleLineIndex
+            var candidatePage = buildPageSlice(
+                content = content,
+                lines = lines,
+                startLineIndex = lineIndex,
+                endLineIndex = candidateLineIndex,
             )
-            lineIndex = lastVisibleLineIndex + 1
+            while (
+                candidateLineIndex > lineIndex &&
+                !pageFitsViewport(candidatePage)
+            ) {
+                candidateLineIndex -= 1
+                candidatePage = buildPageSlice(
+                    content = content,
+                    lines = lines,
+                    startLineIndex = lineIndex,
+                    endLineIndex = candidateLineIndex,
+                )
+            }
+
+            pages += candidatePage
+            lineIndex = candidateLineIndex + 1
         }
 
         return pages
+    }
+
+    private fun buildPageSlice(
+        content: String,
+        lines: List<ReaderPageLine>,
+        startLineIndex: Int,
+        endLineIndex: Int,
+    ): ReaderPageSlice {
+        val startCharOffset = lines[startLineIndex].startCharOffset
+        val endCharOffset = lines[endLineIndex].endCharOffset
+            .coerceAtLeast((startCharOffset + 1).coerceAtMost(content.length))
+        val rawText = content.substring(startCharOffset, endCharOffset)
+        return readerPageSliceFromRawText(
+            startCharOffset = startCharOffset,
+            endCharOffset = endCharOffset,
+            rawText = rawText,
+        )
     }
 }
