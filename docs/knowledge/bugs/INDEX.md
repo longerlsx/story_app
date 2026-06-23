@@ -87,6 +87,7 @@ This is mandatory for both:
 | BUG-2026-028 | TXT parser treats chapter-like dialogue lines as real chapter headings | resolved | `txt`, `chapter-parser`, `offset` | [BUG-2026-028-txt-parser-chapter-like-dialogue-false-positive.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-028-txt-parser-chapter-like-dialogue-false-positive.json) |
 | BUG-2026-029 | Page-mode body text center taps can miss reader chrome toggle | resolved | `reader`, `page-mode`, `chrome`, `interaction` | [BUG-2026-029-page-mode-body-center-tap-missed.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-029-page-mode-body-center-tap-missed.json) |
 | BUG-2026-030 | Bookshelf and source entry expose implementation-progress copy | resolved | `bookshelf`, `source-entry`, `visual`, `copy` | [BUG-2026-030-bookshelf-source-developer-copy.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-030-bookshelf-source-developer-copy.json) |
+| BUG-2026-031 | Reader theme swatch borders leak Material surface colors | resolved | `reader`, `settings`, `theme`, `visual` | [BUG-2026-031-reader-theme-swatch-border-theme-leak.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-031-reader-theme-swatch-border-theme-leak.json) |
 
 ## Retrieval Hints For Future Threads
 
@@ -114,6 +115,7 @@ This is mandatory for both:
 - If a body line that starts like a chapter heading, such as `第1章 她想：开始了吗？` or `第十三回合：还要继续吗？`, appears as a TOC entry, start with `BUG-2026-028`; the confirmed fix is to keep colon-subtitle punctuation support narrow and reject dialogue-like tails.
 - If page mode turns pages from right-edge taps but center taps on dense body text do not reveal the reader chrome, start with `BUG-2026-029`; the confirmed fix is to observe tap zones on the `HorizontalPager` gesture path and cover shell-level `input tap`, not only `UiDevice.click`.
 - If first-run bookshelf or unavailable source screens show implementation-progress wording such as “已经打通” or “能力已预留”, start with `BUG-2026-030`; the confirmed fix is to keep entry-surface copy user-facing and cover old phrases with Compose text regressions.
+- If reader settings color swatches show colors that do not belong to the active reader palette, start with `BUG-2026-031`; the confirmed fix is to render swatch borders from `ReaderThemePalette` and verify surface-role leaks with pixel trap colors.
 
 ## Authoring Rules
 

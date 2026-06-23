@@ -9,6 +9,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.longerlsx.storyapp.core.model.ReaderSettings
@@ -198,8 +199,53 @@ class ReaderTtsSettingsSheetTest {
         val selectedVoice = composeRule.onNodeWithText("机械男声").captureToImage().toPixelMap()
         val selectedRate = composeRule.onNodeWithText("1.0x").captureToImage().toPixelMap()
 
-        org.junit.Assert.assertFalse(selectedVoice.containsMaterialPrimaryTrap())
-        org.junit.Assert.assertFalse(selectedRate.containsMaterialPrimaryTrap())
+        org.junit.Assert.assertFalse(selectedVoice.containsTrapColor(materialPrimaryTrap))
+        org.junit.Assert.assertFalse(selectedRate.containsTrapColor(materialPrimaryTrap))
+    }
+
+    @Test
+    fun readingTabThemeSwatchBordersUseReaderPaletteInsteadOfMaterialSurfaceColors() {
+        val materialOnSurfaceTrap = Color(0xFFFF00FF)
+        val materialOutlineTrap = Color(0xFF00FFFF)
+
+        composeRule.setContent {
+            MaterialTheme(
+                colorScheme = lightColorScheme(
+                    onSurface = materialOnSurfaceTrap,
+                    outline = materialOutlineTrap,
+                ),
+            ) {
+                ReaderSettingsSheet(
+                    settings = ReaderSettings(
+                        dayThemePreset = ReaderThemePreset.PAPER,
+                    ),
+                    themePalette = ReaderThemePalette(
+                        background = Color(0xFF141820),
+                        surface = Color(0xFF1D2330),
+                        content = Color(0xFFE6EAF2),
+                    ),
+                    activeTab = ReaderSettingsTab.READING,
+                    availableVoices = emptyList(),
+                    selectedVoiceName = null,
+                    ttsStatusText = "当前状态：未朗读",
+                    onSelectTab = {},
+                    onUpdateSettings = {},
+                    onUpdateTtsSettings = {},
+                )
+            }
+        }
+
+        val selectedSwatch = composeRule
+            .onNodeWithContentDescription("当前主题：纸白")
+            .captureToImage()
+            .toPixelMap()
+        val unselectedSwatch = composeRule
+            .onNodeWithContentDescription("切换主题：暖黄")
+            .captureToImage()
+            .toPixelMap()
+
+        org.junit.Assert.assertFalse(selectedSwatch.containsTrapColor(materialOnSurfaceTrap))
+        org.junit.Assert.assertFalse(unselectedSwatch.containsTrapColor(materialOutlineTrap))
     }
 
     @Test
@@ -228,15 +274,15 @@ class ReaderTtsSettingsSheetTest {
         composeRule.onAllNodesWithText("护眼模式").assertCountEquals(0)
     }
 
-    private fun androidx.compose.ui.graphics.PixelMap.containsMaterialPrimaryTrap(): Boolean {
+    private fun androidx.compose.ui.graphics.PixelMap.containsTrapColor(trapColor: Color): Boolean {
         for (x in 0 until width) {
             for (y in 0 until height) {
                 val pixel = this[x, y]
                 if (
                     pixel.alpha > 0.2f &&
-                    pixel.red > 0.75f &&
-                    pixel.green < 0.25f &&
-                    pixel.blue > 0.75f
+                    kotlin.math.abs(pixel.red - trapColor.red) < 0.05f &&
+                    kotlin.math.abs(pixel.green - trapColor.green) < 0.05f &&
+                    kotlin.math.abs(pixel.blue - trapColor.blue) < 0.05f
                 ) {
                     return true
                 }

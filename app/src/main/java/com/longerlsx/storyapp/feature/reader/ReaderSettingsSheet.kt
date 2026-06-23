@@ -370,6 +370,7 @@ private fun ReaderThemeRow(
                 ReaderThemeSwatch(
                     preset = preset,
                     selected = preset == selectedPreset,
+                    themePalette = themePalette,
                     onClick = { onSelectPreset(preset) },
                 )
             }
@@ -381,6 +382,7 @@ private fun ReaderThemeRow(
 private fun ReaderThemeSwatch(
     preset: ReaderThemePreset,
     selected: Boolean,
+    themePalette: ReaderThemePalette,
     onClick: () -> Unit,
 ) {
     val palette = preset.palette()
@@ -398,7 +400,7 @@ private fun ReaderThemeSwatch(
         color = palette.background,
         border = androidx.compose.foundation.BorderStroke(
             width = if (selected) 2.dp else 1.dp,
-            color = if (selected) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline,
+            color = themePalette.content.copy(alpha = if (selected) 0.78f else 0.28f),
         ),
         onClick = onClick,
     ) {

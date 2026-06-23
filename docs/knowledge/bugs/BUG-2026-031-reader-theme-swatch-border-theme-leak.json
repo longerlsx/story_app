@@ -1,0 +1,28 @@
+{
+  "id": "BUG-2026-031",
+  "title": "Reader theme swatch borders leak Material surface colors",
+  "symptom": "The reader settings color swatches rendered their selected and unselected borders from MaterialTheme colorScheme values instead of the active reader palette. A Pixel 8 / Android 14 Compose pixel regression confirmed the selected swatch could display a Material onSurface trap color and the unselected swatch could display a Material outline trap color.",
+  "root_cause": "ReaderThemeSwatch used preset colors for the swatch fill but kept the border on a separate styling path through MaterialTheme.colorScheme.onSurface and outline. That repeated the settings-sheet theme leak class where child controls are not fully driven by ReaderThemePalette.",
+  "fix": [
+    "Pass ReaderThemePalette into ReaderThemeSwatch.",
+    "Render selected and unselected swatch borders from themePalette.content with different alpha values.",
+    "Add an instrumented Compose pixel-capture regression that sets Material onSurface and outline to trap colors and asserts theme swatches do not render them."
+  ],
+  "failed_attempts": [
+    "Checking only semantic labels such as `当前主题：纸白` would not catch this class; the labels remain correct while the rendered border color leaks.",
+    "Only testing primary/accent colors is not sufficient for reader settings controls because Material surface roles such as onSurface and outline can also leak into overlay children."
+  ],
+  "impact": "Keeps the reader settings color picker visually consistent with the active day/night reader theme and prevents unrelated Material surface colors from appearing in the reader overlay.",
+  "tags": [
+    "android",
+    "compose",
+    "reader",
+    "settings",
+    "theme",
+    "visual",
+    "resolved"
+  ],
+  "confidence": 0.92,
+  "created_at": "2026-06-23",
+  "updated_at": "2026-06-23"
+}
