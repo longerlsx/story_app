@@ -1,6 +1,7 @@
 package com.longerlsx.storyapp.feature.importer
 
 import android.content.Intent
+import android.net.Uri
 import androidx.core.content.FileProvider
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.core.app.ActivityScenario
@@ -11,6 +12,8 @@ import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
 import com.longerlsx.storyapp.MainActivity
 import java.io.File
+import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -50,5 +53,18 @@ class ExternalImportFlowTest {
 
             assertTrue(imported)
         }
+    }
+
+    @Test
+    fun unreadableViewIntentReturnsNullInsteadOfCrashing() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(
+                Uri.parse("file:///sdcard/Download/story-app-unreadable-import.txt"),
+                "text/plain",
+            )
+        }
+
+        assertNull(ExternalImportHandler.extractPayload(context, intent))
     }
 }

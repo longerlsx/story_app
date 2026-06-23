@@ -1,0 +1,28 @@
+{
+  "id": "BUG-2026-027",
+  "title": "External TXT import crashes when a file URI cannot be opened",
+  "symptom": "On the Pixel 8 / Android 14 emulator, launching the app through `ACTION_VIEW` with `file:///sdcard/Download/ancient-construction.txt` after pushing a real corpus TXT to `/sdcard/Download` crashed the app. Logcat showed `java.io.FileNotFoundException: /sdcard/Download/ancient-construction.txt: open failed: EACCES (Permission denied)` from `ExternalImportHandler.extractPayload(ExternalImportHandler.kt:35)`, followed by `AndroidRuntime` force-finishing `MainActivity`.",
+  "root_cause": "ExternalImportHandler treated third-party external intent URIs as readable once their file name or MIME type looked like TXT. `ContentResolver.openInputStream(uri)` can still throw `FileNotFoundException`, `SecurityException`, or `IllegalArgumentException` for file URIs without grants, missing files, inaccessible providers, or malformed URIs. The exception escaped a Compose `LaunchedEffect`, terminating the app instead of rejecting the unsupported import payload.",
+  "fix": [
+    "Wrap external URI display-name lookup, MIME-type lookup, and byte reading in small safe helpers.",
+    "Return `null` from `extractPayload` when an external URI cannot be queried or opened, allowing the app to consume the intent without crashing.",
+    "Keep the existing FileProvider + grant success path unchanged.",
+    "Add an instrumented regression that verifies an unreadable `ACTION_VIEW` file URI returns `null` instead of throwing."
+  ],
+  "failed_attempts": [
+    "Do not rely only on the successful FileProvider import instrumentation path; it has a valid URI grant and does not cover real external file URIs that Android denies.",
+    "Do not treat `am start` success as evidence that import succeeded or failed safely; the original crash happened asynchronously after `MainActivity` launched and only logcat exposed the root exception."
+  ],
+  "impact": "Prevents malformed, missing, or permission-denied external TXT imports from crashing the reader app and keeps real external-share/open flows fail-safe.",
+  "tags": [
+    "android",
+    "import",
+    "txt",
+    "external-intent",
+    "crash",
+    "resolved"
+  ],
+  "confidence": 0.93,
+  "created_at": "2026-06-23",
+  "updated_at": "2026-06-23"
+}

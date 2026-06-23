@@ -83,6 +83,7 @@ This is mandatory for both:
 | BUG-2026-024 | TXT parser rejects numbered subtitle chapter titles that end with punctuation | resolved | `txt`, `toc`, `chapter-parser`, `offset` | [BUG-2026-024-txt-parser-numbered-subtitle-punctuation-headings.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-024-txt-parser-numbered-subtitle-punctuation-headings.json) |
 | BUG-2026-025 | TXT parser drops numbered chapter titles when a repeated special subtitle follows | resolved | `txt`, `toc`, `chapter-parser`, `offset` | [BUG-2026-025-txt-parser-special-double-title-merge.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-025-txt-parser-special-double-title-merge.json) |
 | BUG-2026-026 | TXT parser treats in-body round attempt lines ending with ellipsis as chapters | resolved | `txt`, `toc`, `chapter-parser`, `chapter-boundary` | [BUG-2026-026-txt-parser-round-punctuation-body-line.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-026-txt-parser-round-punctuation-body-line.json) |
+| BUG-2026-027 | External TXT import crashes when a file URI cannot be opened | resolved | `txt`, `external-intent`, `crash` | [BUG-2026-027-external-import-unreadable-file-uri-crash.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-027-external-import-unreadable-file-uri-crash.json) |
 
 ## Retrieval Hints For Future Threads
 
@@ -106,6 +107,7 @@ This is mandatory for both:
 - If UIAutomator reader tests pass alone but fail in mixed groups, or logcat says a non-clickable Compose semantics node was clicked, start with `BUG-2026-015`; the confirmed fix is center-coordinate clicks plus helpers that leave chrome in a known state.
 - If the bottom reader chrome grows, jumps, or crowds after enabling a TTS countdown, start with `BUG-2026-016`; the confirmed fix is single-line shared action-label rendering for long timed TTS labels.
 - If a real TXT opens at `第1章` but the bottom chapter progress shows `2/N章`, start with `BUG-2026-023`; the confirmed fix is to format reader progress through a display helper that excludes a leading synthetic `前言` from numbered chapter counts without changing parser offsets or navigation.
+- If an external TXT open/share intent returns to the launcher or force-closes the app, start with `BUG-2026-027`; the confirmed fix is to treat URI query/open failures as a non-importable payload instead of letting `ContentResolver.openInputStream` exceptions escape.
 
 ## Authoring Rules
 
