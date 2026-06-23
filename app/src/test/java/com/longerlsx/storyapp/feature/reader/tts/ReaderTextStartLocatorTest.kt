@@ -170,4 +170,48 @@ class ReaderTextStartLocatorTest {
 
         assertNull(location)
     }
+
+    @Test
+    fun restartVisualRangeUsesShortForwardPreviewFromResolvedLocation() {
+        val range = ReaderTextStartLocation(
+            chapterIndex = 3,
+            charOffset = 2,
+        ).restartVisualRangeOrNull("0123456789abcdef")
+
+        assertEquals(
+            ReaderTtsActiveVisualRange(
+                chapterIndex = 3,
+                startCharOffset = 2,
+                endCharOffset = 10,
+            ),
+            range,
+        )
+    }
+
+    @Test
+    fun restartVisualRangeClampsLocationInsideChapterText() {
+        val range = ReaderTextStartLocation(
+            chapterIndex = 5,
+            charOffset = 99,
+        ).restartVisualRangeOrNull("正文")
+
+        assertEquals(
+            ReaderTtsActiveVisualRange(
+                chapterIndex = 5,
+                startCharOffset = 1,
+                endCharOffset = 2,
+            ),
+            range,
+        )
+    }
+
+    @Test
+    fun restartVisualRangeReturnsNullForEmptyChapterText() {
+        val range = ReaderTextStartLocation(
+            chapterIndex = 1,
+            charOffset = 0,
+        ).restartVisualRangeOrNull("")
+
+        assertNull(range)
+    }
 }

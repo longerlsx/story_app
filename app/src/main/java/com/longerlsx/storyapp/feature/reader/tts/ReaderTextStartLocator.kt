@@ -10,6 +10,25 @@ data class ReaderTextStartLocation(
     val charOffset: Int,
 )
 
+private const val RESTART_VISUAL_RANGE_CHAR_COUNT = 8
+
+internal fun ReaderTextStartLocation.restartVisualRangeOrNull(
+    chapterText: String,
+): ReaderTtsActiveVisualRange? {
+    if (chapterText.isEmpty()) {
+        return null
+    }
+    val startCharOffset = charOffset.coerceIn(0, chapterText.lastIndex)
+    val endCharOffset = (startCharOffset + RESTART_VISUAL_RANGE_CHAR_COUNT)
+        .coerceAtMost(chapterText.length)
+        .coerceAtLeast(startCharOffset + 1)
+    return ReaderTtsActiveVisualRange(
+        chapterIndex = chapterIndex,
+        startCharOffset = startCharOffset,
+        endCharOffset = endCharOffset,
+    )
+}
+
 object ReaderTextStartLocator {
     fun resolveScrollTopLocation(
         visibleItems: List<ReaderVisibleChapterItem>,

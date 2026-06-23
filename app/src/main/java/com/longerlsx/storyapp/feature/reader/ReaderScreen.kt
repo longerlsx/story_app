@@ -110,6 +110,7 @@ import com.longerlsx.storyapp.feature.reader.tts.activeVisualRangeOrNull
 import com.longerlsx.storyapp.feature.reader.tts.isOngoingSession
 import com.longerlsx.storyapp.feature.reader.tts.isPausedSession
 import com.longerlsx.storyapp.feature.reader.tts.isSpeakingSession
+import com.longerlsx.storyapp.feature.reader.tts.restartVisualRangeOrNull
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
@@ -653,8 +654,7 @@ private fun ReaderReadyContent(
         ) {
             return
         }
-        pendingRestartVisualRange = buildPendingRestartVisualRange(
-            location = location,
+        pendingRestartVisualRange = location.restartVisualRangeOrNull(
             chapterText = chapterTextByIndex[location.chapterIndex].orEmpty(),
         )
         localRestartFeedbackMessage = "从这里重新朗读"
@@ -2078,23 +2078,6 @@ private fun TextLayoutResult.resolveBodyCharOffset(
         .coerceAtLeast(1) - 1
     return getOffsetForPosition(Offset(clampedX, clampedY))
         .coerceIn(0, maxCharOffset)
-}
-
-private fun buildPendingRestartVisualRange(
-    location: ReaderTextStartLocation,
-    chapterText: String,
-): ReaderTtsActiveVisualRange? {
-    if (chapterText.isEmpty()) {
-        return null
-    }
-    val startCharOffset = location.charOffset.coerceIn(0, chapterText.lastIndex)
-    val endCharOffset = (startCharOffset + 8).coerceAtMost(chapterText.length)
-        .coerceAtLeast(startCharOffset + 1)
-    return ReaderTtsActiveVisualRange(
-        chapterIndex = location.chapterIndex,
-        startCharOffset = startCharOffset,
-        endCharOffset = endCharOffset,
-    )
 }
 
 private data class ReaderScrollBodyMetrics(
