@@ -130,6 +130,68 @@ class ReaderChromeTest {
     }
 
     @Test
+    fun scrollModeShellTapOnBodyTextRevealsReaderChrome() {
+        val application = ApplicationProvider.getApplicationContext<StoryApplication>()
+        application.readerSettingsStore.save(ReaderSettings(readingMode = ReadingMode.SCROLL))
+        val importFile = File(application.cacheDir, "reader-scroll-body-shell-tap.txt").apply {
+            writeText(
+                """
+                《滚动正文点击测试》
+                作者：测试作者
+
+                第1章 开始
+                顶部铺垫正文，用于确认初始沉浸阅读态。
+                第二段铺垫正文，用于把后续正文推到屏幕中部。
+                滚动中心命中正文标记，这一段需要足够长，让 Text 的可见边界横跨屏幕中心；点击正文文字本身时应打开阅读器顶部栏和底部操作栏，而不是只停留在沉浸式阅读头部。继续补充真实小说式长句，确保中间区域是正文文本本身，不是段落间空白或容器背景。
+                底部补充正文，用于让当前屏保持接近真实小说的一屏正文密度。
+                """.trimIndent(),
+            )
+        }
+        val uri = FileProvider.getUriForFile(
+            application,
+            "${application.packageName}.fileprovider",
+            importFile,
+        )
+        val externalIntent = Intent(Intent.ACTION_VIEW).apply {
+            setClass(application, MainActivity::class.java)
+            setDataAndType(uri, "text/plain")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+
+        ActivityScenario.launch<MainActivity>(externalIntent).use {
+            assertTrue(device.wait(Until.hasObject(By.textContains("滚动中心命中正文标记")), 8_000))
+            assertTrue(device.wait(Until.hasObject(By.desc("沉浸式阅读头部")), 3_000))
+            assertFalse(device.hasObject(By.desc("阅读器顶部栏")))
+            assertFalse(device.hasObject(By.text("目录")) || device.hasObject(By.desc("目录")))
+            assertFalse(device.hasObject(By.text("设置")) || device.hasObject(By.desc("设置")))
+            assertFalse(device.hasObject(By.text("朗读")) || device.hasObject(By.desc("朗读")))
+
+            val targetText = device.wait(Until.findObject(By.textContains("滚动中心命中正文标记")), 3_000)
+            assertNotNull(targetText)
+            val targetBounds = targetText!!.visibleBounds
+            val centerX = device.displayWidth / 2
+            assertTrue(targetBounds.left < centerX)
+            assertTrue(targetBounds.right > centerX)
+
+            device.shellTap(centerX, targetBounds.centerY())
+
+            assertTrue(
+                "滚动模式正文中心点击后应显示阅读器顶部栏",
+                device.wait(Until.hasObject(By.desc("阅读器顶部栏")), 2_000),
+            )
+            assertTrue(
+                "滚动模式正文中心点击后应显示底部操作栏",
+                device.wait(Until.hasObject(By.text("设置")), 1_000) ||
+                    device.wait(Until.hasObject(By.desc("设置")), 1_000) ||
+                    device.wait(Until.hasObject(By.text("朗读")), 1_000) ||
+                    device.wait(Until.hasObject(By.desc("朗读")), 1_000),
+            )
+        }
+    }
+
+    @Test
     fun pageModeCenterTapRevealsTwoLayerReaderChromeFromReadingOnly() {
         val application = ApplicationProvider.getApplicationContext<StoryApplication>()
         application.readerSettingsStore.save(ReaderSettings(readingMode = ReadingMode.PAGE))
