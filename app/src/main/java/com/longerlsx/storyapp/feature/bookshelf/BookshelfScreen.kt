@@ -81,7 +81,7 @@ private fun BookshelfContent(
                     onClick = onOpenSourceEntry,
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text(text = "在线书源入口")
+                    Text(text = "在线书源")
                 }
             }
         }
@@ -110,11 +110,11 @@ private fun EmptyBookshelfCard() {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = "先导入一本 TXT，书架会显示真实书本。",
+            text = "还没有导入书籍",
             style = MaterialTheme.typography.titleMedium,
         )
         Text(
-            text = "当前版本已经打通文件复制、解析、入书架和基础阅读页。",
+            text = "导入本地 TXT 后会在这里继续阅读。",
             modifier = Modifier.padding(top = 12.dp),
             style = MaterialTheme.typography.bodyMedium,
         )

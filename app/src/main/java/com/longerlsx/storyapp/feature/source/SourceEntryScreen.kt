@@ -6,8 +6,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -25,7 +26,7 @@ fun SourceEntryScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(text = "在线书源入口")
+                    Text(text = "在线书源")
                 },
             )
         },
@@ -50,7 +51,15 @@ private fun SourceEntryContent(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(text = "书源能力已预留，首期暂不接入真实网络源。")
+        Text(
+            text = "在线书源暂未开放",
+            style = MaterialTheme.typography.titleMedium,
+        )
+        Text(
+            text = "当前可以先导入本地 TXT 阅读。",
+            modifier = Modifier.padding(top = 12.dp),
+            style = MaterialTheme.typography.bodyMedium,
+        )
         Button(
             onClick = onBack,
             modifier = Modifier

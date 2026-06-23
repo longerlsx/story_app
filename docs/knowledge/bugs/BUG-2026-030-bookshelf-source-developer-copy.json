@@ -1,0 +1,28 @@
+{
+  "id": "BUG-2026-030",
+  "title": "Bookshelf and source entry expose implementation-progress copy",
+  "symptom": "The empty bookshelf displayed copy such as \"当前版本已经打通文件复制、解析、入书架和基础阅读页。\", and the online source entry displayed \"书源能力已预留，首期暂不接入真实网络源。\". These are implementation-status notes rather than user-facing product states.",
+  "root_cause": "BookshelfScreen and SourceEntryScreen used early development placeholder copy directly in visible Composables, so internal progress/status wording leaked into normal app UI.",
+  "fix": [
+    "Replace the empty bookshelf implementation-progress note with a concise empty state: no imported books yet, import local TXT to continue reading.",
+    "Rename the bookshelf online-source action and source top bar from \"在线书源入口\" to \"在线书源\".",
+    "Replace the source placeholder with a clear unavailable state and local TXT fallback guidance.",
+    "Add an instrumented Compose copy regression that renders both entry surfaces and asserts the old implementation-progress phrases are not visible."
+  ],
+  "failed_attempts": [
+    "Manual screenshot inspection surfaced the issue, but static screenshots alone do not protect against copy regressions; visible copy needs a Compose text assertion."
+  ],
+  "impact": "Keeps first-run and unavailable-feature screens user-facing and avoids exposing internal implementation progress in normal visual flows.",
+  "tags": [
+    "android",
+    "compose",
+    "bookshelf",
+    "source-entry",
+    "visual",
+    "copy",
+    "resolved"
+  ],
+  "confidence": 0.94,
+  "created_at": "2026-06-23",
+  "updated_at": "2026-06-23"
+}
