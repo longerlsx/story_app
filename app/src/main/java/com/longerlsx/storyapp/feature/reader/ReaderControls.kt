@@ -234,14 +234,6 @@ fun BoxScope.ReaderTopBar(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Box(modifier = Modifier.align(Alignment.CenterEnd)) {
-            ReaderTopBarGlyphButton(
-                glyph = "⋯",
-                contentDescription = "更多",
-                tint = themePalette.content.copy(alpha = 0.9f),
-                onClick = {},
-            )
-        }
     }
 }
 

@@ -95,6 +95,7 @@ This is mandatory for both:
 | BUG-2026-036 | Reader settings tabs scroll away with long TTS settings content | resolved | `reader`, `settings`, `tts`, `interaction`, `visual` | [BUG-2026-036-reader-settings-tabs-scroll-away.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-036-reader-settings-tabs-scroll-away.json) |
 | BUG-2026-037 | Reader settings tab body scroll state leaks between Reading and TTS tabs | resolved | `reader`, `settings`, `tts`, `interaction`, `visual` | [BUG-2026-037-reader-settings-tab-scroll-state-leak.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-037-reader-settings-tab-scroll-state-leak.json) |
 | BUG-2026-038 | Reader TOC opens long directories at the top instead of the current chapter | resolved | `reader`, `toc`, `interaction`, `visual` | [BUG-2026-038-reader-toc-current-chapter-not-visible.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-038-reader-toc-current-chapter-not-visible.json) |
+| BUG-2026-039 | Reader top bar exposes a dead More action | resolved | `reader`, `chrome`, `interaction`, `visual` | [BUG-2026-039-reader-top-bar-dead-more-action.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-039-reader-top-bar-dead-more-action.json) |
 
 ## Retrieval Hints For Future Threads
 
@@ -130,6 +131,7 @@ This is mandatory for both:
 - If the reader settings tab switcher disappears after scrolling through long TTS settings, start with `BUG-2026-036`; the confirmed fix is to keep the tab row outside the scrollable body and verify after scrolling to the bottom timer option.
 - If switching between Reading and TTS settings opens the new tab midway down instead of at its top controls, start with `BUG-2026-037`; the confirmed fix is to scope the scroll state per settings tab.
 - If a long TOC opens at the first chapters instead of showing the active reading chapter, start with `BUG-2026-038`; the confirmed fix is to initialize the TOC LazyColumn at the selected chapter's list position.
+- If the reader top bar shows an action that can be tapped but has no visible result, start with `BUG-2026-039`; the confirmed fix is to hide placeholder actions until a real menu/callback exists and avoid tests depending on dead controls.
 
 ## Authoring Rules
 

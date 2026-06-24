@@ -67,8 +67,7 @@ internal fun UiDevice.waitForReaderTopBar(
     timeoutMs: Long = 2_000,
 ): Boolean {
     return wait(Until.hasObject(By.desc("阅读器顶部栏")), timeoutMs) ||
-        wait(Until.hasObject(By.descContains(titleHint)), timeoutMs) ||
-        wait(Until.hasObject(By.desc("更多")), timeoutMs)
+        wait(Until.hasObject(By.descContains(titleHint)), timeoutMs)
 }
 
 internal fun UiDevice.tapPrimaryAction(slot: ReaderPrimaryActionSlot): Boolean {

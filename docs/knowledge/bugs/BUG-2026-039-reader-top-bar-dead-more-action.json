@@ -1,0 +1,28 @@
+{
+  "id": "BUG-2026-039",
+  "title": "Reader top bar exposes a dead More action",
+  "symptom": "When the reader chrome was revealed on a Pixel 8 / Android 14 emulator, the top bar showed a right-side `更多` action. Current code rendered it as a clickable glyph with `onClick = {}`, so tapping it produced no user-visible behavior.",
+  "root_cause": "ReaderTopBar kept a placeholder trailing action in the production UI even though no menu or callback existed. The UIAutomator helper and chrome test also treated the placeholder as part of the expected top bar, making the no-op control look intentional.",
+  "fix": [
+    "Removed the unused `更多` glyph from ReaderTopBar while keeping the back action and centered title/subtitle.",
+    "Changed the reader top-bar UIAutomator helper to wait for the top bar or title instead of the placeholder action.",
+    "Updated the chrome regression to assert the revealed reader top bar does not expose the dead `更多` action."
+  ],
+  "failed_attempts": [
+    "Using a placeholder button for future functionality creates a visible interaction target with no result; hide it until an actual menu exists.",
+    "Tests should not anchor top-bar presence to a non-functional control, because that turns the placeholder into a required behavior."
+  ],
+  "impact": "Prevents users from tapping a visible top-bar action that cannot respond, and keeps chrome tests focused on real reader controls.",
+  "tags": [
+    "android",
+    "compose",
+    "reader",
+    "chrome",
+    "interaction",
+    "visual",
+    "resolved"
+  ],
+  "confidence": 0.92,
+  "created_at": "2026-06-24",
+  "updated_at": "2026-06-24"
+}

@@ -108,7 +108,7 @@ class ReaderChromeTest {
             assertTrue(device.waitForReaderTopBar("阅读器交互测试", timeoutMs = 4_000))
             assertTrue(device.hasObject(By.descContains("阅读器交互测试")))
             assertTrue(device.hasObject(By.descContains("第1章 开始")))
-            assertTrue(device.hasObject(By.desc("更多")))
+            assertFalse(device.hasObject(By.desc("更多")))
             assertFalse(device.hasObject(By.desc("沉浸式阅读头部")))
             assertTrue(
                 device.wait(Until.hasObject(By.text("设置")), 2_000) ||
