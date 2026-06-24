@@ -598,14 +598,10 @@ private fun ReaderReadyContent(
                 }
             }
         }
-        val summary = state.chapters.firstOrNull { it.chapterIndex == startLocation.chapterIndex }?.title ?: "正文"
-        return ReaderTtsStartRequest(
-            bookId = state.book.id,
-            bookTitle = state.book.title,
-            chapterIndex = startLocation.chapterIndex,
-            charOffset = startLocation.charOffset,
-            chapterTitleOrSummary = summary,
-            activeStateLabel = "朗读中",
+        return ReaderTtsStartRequestFactory.create(
+            book = state.book,
+            chapters = state.chapters,
+            startLocation = startLocation,
         )
     }
 
