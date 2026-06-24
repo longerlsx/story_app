@@ -87,9 +87,26 @@ Key bugs:
 - [BUG-2026-037](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-037-reader-settings-tab-scroll-state-leak.json)
 - [BUG-2026-038](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-038-reader-toc-current-chapter-not-visible.json)
 
+### 2026-06-24: Agent operating agreements and page-mode focus
+
+- Added a durable required-read record for thread-level operating agreements so
+  future sessions do not rely on chat memory after context compaction.
+- Captured evidence rules, Computer Use/emulator expectations, recording
+  guidance, local video tooling, real TXT corpus location, subagent limits, and
+  git cadence.
+- Re-centered new reader investigation on page-mode risks, including anchors,
+  cross-chapter turns, tap zones, layout invalidation, clipping, and dynamic
+  transition evidence.
+
+Related documents:
+
+- [agent-operating-agreements.md](/Users/longshengxi/proj/story_app/docs/knowledge/agent-operating-agreements.md)
+
 ## How Future Threads Should Use This
 
-1. Read [docs/knowledge/bugs/INDEX.md](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/INDEX.md) first.
-2. If the issue smells similar, open the matching JSON record and compare `symptom`, `root_cause`, and `failed_attempts`.
-3. Only after that, jump into implementation files or test code.
-4. If a new issue is resolved, add a new JSON record instead of burying the knowledge in conversation history.
+1. Read [docs/knowledge/README.md](/Users/longshengxi/proj/story_app/docs/knowledge/README.md) first.
+2. Read [agent-operating-agreements.md](/Users/longshengxi/proj/story_app/docs/knowledge/agent-operating-agreements.md).
+3. Read [docs/knowledge/bugs/INDEX.md](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/INDEX.md).
+4. If the issue smells similar, open the matching JSON record and compare `symptom`, `root_cause`, and `failed_attempts`.
+5. Only after that, jump into implementation files or test code.
+6. If a new issue is resolved, add a new JSON record instead of burying the knowledge in conversation history.

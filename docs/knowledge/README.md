@@ -4,6 +4,7 @@ This directory stores reusable project knowledge that should survive beyond a si
 
 Current entries:
 
+- [agent-operating-agreements.md](/Users/longshengxi/proj/story_app/docs/knowledge/agent-operating-agreements.md): required operating agreements for future agent threads, including evidence rules, emulator/Computer Use expectations, subagent lifecycle, tool notes, and the current page-mode focus.
 - [2026-04-android-reader-development-cycle.md](/Users/longshengxi/proj/story_app/docs/knowledge/2026-04-android-reader-development-cycle.md): high-level implementation and debugging summary for the current Android reader build-out.
 - [gradle-android-environment-troubleshooting.md](/Users/longshengxi/proj/story_app/docs/knowledge/gradle-android-environment-troubleshooting.md): Gradle, Android SDK, proxy, and repository-resolution lessons from project bootstrap.
 - [bugs/INDEX.md](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/INDEX.md): structured bug index with links to per-bug JSON records.
@@ -12,9 +13,11 @@ Current entries:
 Recommended read order for a new thread:
 
 1. Open this file.
-2. Read [bugs/INDEX.md](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/INDEX.md).
-3. Open the matching bug JSON by tags or symptom.
-4. Only then jump into code or test files.
+2. Read [agent-operating-agreements.md](/Users/longshengxi/proj/story_app/docs/knowledge/agent-operating-agreements.md).
+3. Read [bugs/INDEX.md](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/INDEX.md).
+4. Open the matching bug JSON by tags or symptom.
+5. Read relevant specs/plans under [docs/superpowers/specs](/Users/longshengxi/proj/story_app/docs/superpowers/specs) and [docs/superpowers/plans](/Users/longshengxi/proj/story_app/docs/superpowers/plans).
+6. Only then jump into code or test files.
 
 ## Required Maintenance Rule
 

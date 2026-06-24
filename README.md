@@ -18,6 +18,16 @@ The current emulator baseline is:
 - `Pixel 8`
 - `Android 14 / API 34`
 
+## Agent Context
+
+Before reader/parser/TTS/settings work, start from the knowledge-base entry
+point:
+
+- [docs/knowledge/README.md](/Users/longshengxi/proj/story_app/docs/knowledge/README.md)
+
+That read path includes the agent operating agreements, bug index, matching bug
+records, and relevant specs/plans.
+
 ## Build Notes
 
 - The project is pinned to tool versions that are likely to hit the machine's existing Gradle and Android dependency caches first.
