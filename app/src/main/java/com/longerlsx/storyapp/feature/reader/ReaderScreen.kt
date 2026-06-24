@@ -103,7 +103,6 @@ import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsCharacterRange
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsController
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsFollowSuppressionPolicy
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsStartRequest
-import com.longerlsx.storyapp.feature.reader.tts.activeVisualRangeOrNull
 import com.longerlsx.storyapp.feature.reader.tts.restartVisualRangeOrNull
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -696,12 +695,14 @@ private fun ReaderReadyContent(
     )
     val selectedVoiceName = ttsVoiceSelection.selectedVoiceName
     val ttsSystemDefaultVoiceStatus = ttsVoiceSelection.systemDefaultVoiceStatus
-    val livePlaybackVisualRange = if (isCurrentBookTtsPlaying) {
-        ttsRuntime.playbackSnapshot.activeVisualRangeOrNull()
-    } else {
-        null
-    }
-    val activePlaybackVisualRange = pendingRestartVisualRange ?: livePlaybackVisualRange
+    val livePlaybackVisualRange = ReaderTtsActiveVisualRangeResolver.resolveLiveRange(
+        runtimeState = ttsRuntime,
+        currentBookSession = currentBookTtsSession,
+    )
+    val activePlaybackVisualRange = ReaderTtsActiveVisualRangeResolver.resolveActiveRange(
+        pendingRange = pendingRestartVisualRange,
+        liveRange = livePlaybackVisualRange,
+    )
     val isFollowSuppressed = ReaderTtsFollowSuppressionPolicy.shouldSuppressFollow(
         lastInterruptionAtMs = lastManualFollowInterruptionAtMs,
         nowMs = SystemClock.elapsedRealtime(),
