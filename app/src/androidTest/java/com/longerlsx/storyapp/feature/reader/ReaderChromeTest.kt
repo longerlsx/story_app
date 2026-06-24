@@ -64,7 +64,14 @@ class ReaderChromeTest {
 
         ActivityScenario.launch<MainActivity>(externalIntent).use {
             assertTrue(device.wait(Until.hasObject(By.textContains("第一章正文")), 8_000))
-            assertTrue(device.wait(Until.hasObject(By.desc("沉浸式阅读头部")), 3_000))
+            val immersiveHeader = device.wait(Until.findObject(By.desc("沉浸式阅读头部")), 3_000)
+            assertNotNull(immersiveHeader)
+            val firstBodyText = device.wait(Until.findObject(By.textContains("第一章正文")), 3_000)
+            assertNotNull(firstBodyText)
+            assertTrue(
+                "沉浸式头部不应压到首屏正文：header=${immersiveHeader!!.visibleBounds}, body=${firstBodyText!!.visibleBounds}",
+                immersiveHeader.visibleBounds.bottom + 8 <= firstBodyText.visibleBounds.top,
+            )
             assertTrue(device.hasObject(By.desc("返回")))
             assertTrue(device.hasObject(By.descContains("沉浸式章节：第1章 开始")))
             assertFalse(device.hasObject(By.desc("阅读器顶部栏")))

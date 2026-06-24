@@ -117,7 +117,7 @@ private val ReaderScrollViewportTopInset = 52.dp
 private val ReaderScrollReadableTopSpacing = 8.dp
 private val ReaderTopPadding = 12.dp
 private val ReaderBottomPadding = 96.dp
-private val ReaderPageTopPadding = 44.dp
+private val ReaderPageTopPadding = 52.dp
 private val ReaderPageBottomPadding = 56.dp
 
 @Composable
