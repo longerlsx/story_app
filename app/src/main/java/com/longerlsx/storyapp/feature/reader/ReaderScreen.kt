@@ -2048,39 +2048,29 @@ private fun TextLayoutResult.resolveBodyCharOffset(
         .coerceIn(0, maxCharOffset)
 }
 
-private data class ReaderScrollBodyMetrics(
-    val topWithinItemPx: Int,
-    val heightPx: Int,
-)
-
 private fun buildScrollVisibleChapterItems(
     listState: LazyListState,
     scrollFeed: List<ReaderFeedChapterContent>,
     bodyMetricsByChapter: Map<Int, ReaderScrollBodyMetrics>,
 ): List<ReaderVisibleChapterItem> {
     val layoutInfo = listState.layoutInfo
-    return layoutInfo.visibleItemsInfo.mapNotNull { item ->
-        val chapterContent = scrollFeed.getOrNull(item.index) ?: return@mapNotNull null
-        val offsetPx = item.offset - layoutInfo.viewportStartOffset
-        val bodyMetrics = bodyMetricsByChapter[chapterContent.chapter.chapterIndex]
-        val bodyOffsetWithinItemPx = bodyMetrics
-            ?.topWithinItemPx
-            ?.coerceIn(0, item.size.coerceAtLeast(0))
-            ?: 0
-        val maxBodyHeightPx = (item.size - bodyOffsetWithinItemPx).coerceAtLeast(1)
-        val bodyHeightPx = bodyMetrics
-            ?.heightPx
-            ?.coerceIn(1, maxBodyHeightPx)
-            ?: item.size.coerceAtLeast(1)
-        ReaderVisibleChapterItem(
+    val rawItems = layoutInfo.visibleItemsInfo.map { item ->
+        ReaderRawVisibleScrollItem(
             itemIndex = item.index,
-            chapterIndex = chapterContent.chapter.chapterIndex,
-            offsetPx = offsetPx,
+            offsetPx = item.offset - layoutInfo.viewportStartOffset,
             sizePx = item.size,
-            bodyOffsetPx = offsetPx + bodyOffsetWithinItemPx,
-            bodyHeightPx = bodyHeightPx,
         )
     }
+    val chapterIndexByItemIndex = layoutInfo.visibleItemsInfo.mapNotNull { item ->
+        val chapterIndex = scrollFeed.getOrNull(item.index)?.chapter?.chapterIndex
+            ?: return@mapNotNull null
+        item.index to chapterIndex
+    }.toMap()
+    return ReaderScrollVisibleItemBuilder.build(
+        rawItems = rawItems,
+        chapterIndexByItemIndex = chapterIndexByItemIndex,
+        bodyMetricsByChapter = bodyMetricsByChapter,
+    )
 }
 
 private fun ReaderVisibleChapterItem.bodyOffsetWithinItemPx(): Int {
