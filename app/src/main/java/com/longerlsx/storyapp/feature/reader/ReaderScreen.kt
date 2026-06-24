@@ -782,15 +782,12 @@ private fun ReaderReadyContent(
         ttsRuntime.playbackState,
     ) {
         val pendingRange = pendingRestartVisualRange ?: return@LaunchedEffect
-        if (!currentBookTtsSession.isOngoing) {
-            pendingRestartVisualRange = null
-            return@LaunchedEffect
-        }
-        val liveRange = livePlaybackVisualRange ?: return@LaunchedEffect
         if (
-            liveRange.chapterIndex == pendingRange.chapterIndex &&
-            liveRange.startCharOffset <= pendingRange.startCharOffset &&
-            liveRange.endCharOffset >= pendingRange.startCharOffset
+            ReaderTtsRestartVisualRangeClearancePolicy.shouldClearPendingRange(
+                pendingRange = pendingRange,
+                liveRange = livePlaybackVisualRange,
+                currentBookSession = currentBookTtsSession,
+            )
         ) {
             pendingRestartVisualRange = null
         }
