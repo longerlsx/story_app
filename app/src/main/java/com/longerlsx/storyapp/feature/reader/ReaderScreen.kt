@@ -1670,16 +1670,16 @@ private fun PageReaderContent(
 
                             is ReaderPageTurnAction.Chapter -> {
                                 onManualFollowInterruption()
-                                val activePage = pagerState.settledPage.coerceIn(0, safePages.lastIndex)
-                                val sourcePage = safePages.getOrNull(activePage)
-                                val previewPage = previousPages.lastOrNull()
-                                if (sourcePage != null && previewPage != null) {
-                                    boundaryTransition = ReaderBoundaryPageTransition(
-                                        direction = ReaderPageTurnDirection.PREVIOUS,
-                                        sourcePage = sourcePage,
-                                        previewPage = previewPage,
-                                        targetChapterIndex = action.chapterIndex,
-                                    )
+                                val transition = ReaderPageBoundaryTransitionResolver.resolve(
+                                    direction = ReaderPageTurnDirection.PREVIOUS,
+                                    settledPage = pagerState.settledPage,
+                                    currentPages = safePages,
+                                    previousPages = previousPages,
+                                    nextPages = nextPages,
+                                    targetChapterIndex = action.chapterIndex,
+                                )
+                                if (transition != null) {
+                                    boundaryTransition = transition
                                     boundaryTransitionProgress.snapTo(0f)
                                     boundaryTransitionProgress.animateTo(
                                         targetValue = 1f,
@@ -1715,16 +1715,16 @@ private fun PageReaderContent(
 
                             is ReaderPageTurnAction.Chapter -> {
                                 onManualFollowInterruption()
-                                val activePage = pagerState.settledPage.coerceIn(0, safePages.lastIndex)
-                                val sourcePage = safePages.getOrNull(activePage)
-                                val previewPage = nextPages.firstOrNull()
-                                if (sourcePage != null && previewPage != null) {
-                                    boundaryTransition = ReaderBoundaryPageTransition(
-                                        direction = ReaderPageTurnDirection.NEXT,
-                                        sourcePage = sourcePage,
-                                        previewPage = previewPage,
-                                        targetChapterIndex = action.chapterIndex,
-                                    )
+                                val transition = ReaderPageBoundaryTransitionResolver.resolve(
+                                    direction = ReaderPageTurnDirection.NEXT,
+                                    settledPage = pagerState.settledPage,
+                                    currentPages = safePages,
+                                    previousPages = previousPages,
+                                    nextPages = nextPages,
+                                    targetChapterIndex = action.chapterIndex,
+                                )
+                                if (transition != null) {
+                                    boundaryTransition = transition
                                     boundaryTransitionProgress.snapTo(0f)
                                     boundaryTransitionProgress.animateTo(
                                         targetValue = 1f,
@@ -2067,13 +2067,6 @@ private data class ReaderFeedChapterContent(
 private data class ReaderLoadedChapterContent(
     val chapterIndex: Int,
     val text: String,
-)
-
-private data class ReaderBoundaryPageTransition(
-    val direction: ReaderPageTurnDirection,
-    val sourcePage: ReaderPageSlice,
-    val previewPage: ReaderPageSlice,
-    val targetChapterIndex: Int,
 )
 
 private sealed interface ReaderScreenState {
