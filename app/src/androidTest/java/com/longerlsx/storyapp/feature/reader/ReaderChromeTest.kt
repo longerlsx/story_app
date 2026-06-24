@@ -309,8 +309,7 @@ class ReaderChromeTest {
             var targetText = device.wait(Until.findObject(By.textContains("后续页中心命中正文标记")), 500)
             repeat(10) {
                 if (targetText == null) {
-                    device.click(rightX, centerY)
-                    device.waitForIdle()
+                    device.shellTap(rightX, centerY)
                     targetText = device.wait(Until.findObject(By.textContains("后续页中心命中正文标记")), 500)
                 }
             }
@@ -331,6 +330,66 @@ class ReaderChromeTest {
             assertTrue(
                 "后续页正文中心点击后应显示底部操作栏",
                 device.wait(Until.hasObject(By.text("设置")), 1_000) ||
+                    device.wait(Until.hasObject(By.desc("设置")), 1_000) ||
+                    device.wait(Until.hasObject(By.text("朗读")), 1_000) ||
+                    device.wait(Until.hasObject(By.desc("朗读")), 1_000),
+            )
+        }
+    }
+
+    @Test
+    fun pageModeCenterTapOnShortPageBlankAreaRevealsReaderChrome() {
+        val application = ApplicationProvider.getApplicationContext<StoryApplication>()
+        application.readerSettingsStore.save(ReaderSettings(readingMode = ReadingMode.PAGE))
+        val importFile = File(application.cacheDir, "reader-page-short-blank-center-tap.txt").apply {
+            writeText(
+                """
+                《短页空白点击测试》
+                作者：测试作者
+
+                第1章 开始
+                短页第一段正文，用于让页面下半部分保留可点击空白。
+                短页第二段正文，用户点击空白阅读区时仍应能唤起阅读器操作栏。
+                """.trimIndent(),
+            )
+        }
+        val uri = FileProvider.getUriForFile(
+            application,
+            "${application.packageName}.fileprovider",
+            importFile,
+        )
+        val externalIntent = Intent(Intent.ACTION_VIEW).apply {
+            setClass(application, MainActivity::class.java)
+            setDataAndType(uri, "text/plain")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+
+        ActivityScenario.launch<MainActivity>(externalIntent).use {
+            val bodyText = device.wait(Until.findObject(By.textContains("短页第二段正文")), 8_000)
+            assertNotNull(bodyText)
+            assertTrue(device.wait(Until.hasObject(By.desc("沉浸式阅读头部")), 3_000))
+            assertFalse(device.hasObject(By.desc("阅读器顶部栏")))
+
+            val centerX = device.displayWidth / 2
+            val blankTapY = (device.displayHeight * 0.72f).toInt()
+            assertTrue(
+                "测试页应在点击位置上方留出明显空白：body=${bodyText!!.visibleBounds}, tapY=$blankTapY",
+                bodyText.visibleBounds.bottom + 160 < blankTapY,
+            )
+
+            device.shellTap(centerX, blankTapY)
+
+            assertTrue(
+                "翻页模式短页空白中心点击后应显示阅读器顶部栏",
+                device.wait(Until.hasObject(By.desc("阅读器顶部栏")), 2_000),
+            )
+            assertTrue(
+                "翻页模式短页空白中心点击后应显示底部操作栏",
+                device.wait(Until.hasObject(By.text("目录")), 1_000) ||
+                    device.wait(Until.hasObject(By.desc("目录")), 1_000) ||
+                    device.wait(Until.hasObject(By.text("设置")), 1_000) ||
                     device.wait(Until.hasObject(By.desc("设置")), 1_000) ||
                     device.wait(Until.hasObject(By.text("朗读")), 1_000) ||
                     device.wait(Until.hasObject(By.desc("朗读")), 1_000),
