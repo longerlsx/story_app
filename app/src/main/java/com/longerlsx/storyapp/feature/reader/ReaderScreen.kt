@@ -1620,18 +1620,14 @@ private fun PageReaderContent(
         }
 
         LaunchedEffect(followTargetCharOffset, restoredPosition, safePages) {
-            val targetCharOffset = followTargetCharOffset ?: return@LaunchedEffect
-            if (!restoredPosition || safePages.isEmpty()) {
-                return@LaunchedEffect
-            }
-            val targetPage = ReaderPageAnchorMapper.pageIndexForCharOffset(
+            val targetPage = ReaderPageFollowScrollResolver.resolveTargetPage(
                 pages = safePages,
-                charOffset = targetCharOffset,
-            )
-            if (pagerState.currentPage != targetPage) {
-                pendingProgrammaticSettledPage = targetPage
-                pagerState.scrollToPage(targetPage)
-            }
+                followTargetCharOffset = followTargetCharOffset,
+                currentPage = pagerState.currentPage,
+                restoredPosition = restoredPosition,
+            ) ?: return@LaunchedEffect
+            pendingProgrammaticSettledPage = targetPage
+            pagerState.scrollToPage(targetPage)
         }
 
         LaunchedEffect(chapterIndex, contentLoaded, restoredPosition, boundaryTransition?.targetChapterIndex) {
