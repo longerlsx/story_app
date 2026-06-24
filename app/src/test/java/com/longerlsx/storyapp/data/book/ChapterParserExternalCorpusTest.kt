@@ -23,6 +23,11 @@ class ChapterParserExternalCorpusTest {
         var checkedXianyuSystem = false
         var checkedGuawang = false
         var checkedAncientConstruction = false
+        var checkedDoomsdayPartner = false
+        var checkedSpaceCat = false
+        var checkedXiuluochang = false
+        var checkedHospitalPalace = false
+        var checkedBraisedPork = false
         files.forEach { file ->
             val content = file.readText()
             val normalized = TxtNormalizer.normalize(content)
@@ -92,12 +97,64 @@ class ChapterParserExternalCorpusTest {
                 assertTrue(titles.contains("第177章 关于嫁儿子……"))
                 assertTrue(titles.contains("第178章 关于嫁儿子……"))
             }
+            if (file.name.contains("末世反派是我的工作搭子")) {
+                checkedDoomsdayPartner = true
+                val titles = result.chapters.map { it.title }
+                assertTrue(
+                    "${file.name} should keep bare numbered chapter headings",
+                    result.chapters.size >= 80,
+                )
+                assertTrue(titles.contains("第1章"))
+                assertTrue(titles.contains("第80章"))
+            }
+            if (file.name.contains("小猫咪在星际监狱")) {
+                checkedSpaceCat = true
+                val titles = result.chapters.map { it.title }
+                assertTrue(
+                    "${file.name} should keep the main bare-numbered chapter sequence",
+                    result.chapters.size >= 60,
+                )
+                assertTrue(titles.contains("第1章"))
+                assertTrue(titles.contains("第66章"))
+            }
+            if (file.name.contains("这该死的修罗场")) {
+                checkedXiuluochang = true
+                val titles = result.chapters.map { it.title }
+                assertTrue(titles.contains("第59章"))
+                assertTrue(titles.contains("第65章 黄金城之战（上）"))
+                assertTrue(titles.contains("第66章 黄金城之战（中）"))
+                assertTrue(titles.contains("第67章 黄金城之战（下）"))
+                assertTrue(titles.contains("第77章 大结局"))
+            }
+            if (file.name.contains("这座仙宫叫医院")) {
+                checkedHospitalPalace = true
+                val titles = result.chapters.map { it.title }
+                assertTrue(
+                    "${file.name} should keep the long bare-numbered chapter sequence",
+                    result.chapters.size >= 120,
+                )
+                assertTrue(titles.contains("第1章"))
+                assertTrue(titles.contains("第120章"))
+            }
+            if (file.name.contains("半夜想吃前任做的红烧肉怎么办")) {
+                checkedBraisedPork = true
+                val titles = result.chapters.map { it.title }
+                assertTrue(titles.contains("第1章 第一块红烧肉"))
+                assertTrue(titles.contains("第31章 吃……第一口"))
+                assertTrue(titles.contains("第60章 吃……第三十口"))
+                assertTrue(titles.contains("第68章 正文完"))
+            }
         }
 
         assertTrue("External corpus should include 玩家救世指南 target file", checkedPlayersGuide)
         assertTrue("External corpus should include 咸鱼和反派错绑对方系统后 target file", checkedXianyuSystem)
         assertTrue("External corpus should include 星际第一种瓜王 target file", checkedGuawang)
         assertTrue("External corpus should include 我在古代搞建设 target file", checkedAncientConstruction)
+        assertTrue("External corpus should include 末世反派是我的工作搭子 target file", checkedDoomsdayPartner)
+        assertTrue("External corpus should include 小猫咪在星际监狱 target file", checkedSpaceCat)
+        assertTrue("External corpus should include 这该死的修罗场 target file", checkedXiuluochang)
+        assertTrue("External corpus should include 这座仙宫叫医院 target file", checkedHospitalPalace)
+        assertTrue("External corpus should include 半夜想吃前任做的红烧肉怎么办 target file", checkedBraisedPork)
     }
 
     private fun simpleChapterHeadingCount(content: String): Int {
