@@ -1,10 +1,5 @@
 package com.longerlsx.storyapp.feature.reader
 
-data class ReaderBoundaryTarget(
-    val chapterIndex: Int,
-    val charOffset: Int,
-)
-
 enum class ReaderPageTurnDirection {
     PREVIOUS,
     NEXT,
@@ -24,17 +19,6 @@ sealed interface ReaderPageTurnAction {
 }
 
 object ReaderPageBoundaryResolver {
-    fun previousChapterTarget(
-        previousChapterIndex: Int,
-        previousChapterPages: List<ReaderPageSlice>,
-    ): ReaderBoundaryTarget {
-        val lastPage = previousChapterPages.lastOrNull()
-        return ReaderBoundaryTarget(
-            chapterIndex = previousChapterIndex,
-            charOffset = lastPage?.startCharOffset ?: 0,
-        )
-    }
-
     fun resolvePageTurn(
         direction: ReaderPageTurnDirection,
         settledPage: Int,
