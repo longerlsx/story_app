@@ -1719,17 +1719,19 @@ private fun PageReaderContent(
                                 val change = event.changes.firstOrNull { it.id == down.id }
                                     ?: return@awaitEachGesture
                                 val distance = (change.position - down.position).getDistance()
-                                if (distance > viewConfiguration.touchSlop) {
-                                    movedBeyondTapSlop = true
-                                }
+                                movedBeyondTapSlop = ReaderPageTapGesturePolicy.hasMovedBeyondTapSlop(
+                                    wasMovedBeyondTapSlop = movedBeyondTapSlop,
+                                    distanceFromDownPx = distance,
+                                    touchSlopPx = viewConfiguration.touchSlop,
+                                )
                                 if (!change.pressed) {
-                                    if (!movedBeyondTapSlop) {
-                                        handlePageTap(
-                                            ReaderTapZone.resolve(
-                                                change.position.x,
-                                                size.width.toFloat(),
-                                            ),
-                                        )
+                                    val tapZone = ReaderPageTapGesturePolicy.resolveTapZoneOrNull(
+                                        movedBeyondTapSlop = movedBeyondTapSlop,
+                                        upX = change.position.x,
+                                        width = size.width.toFloat(),
+                                    )
+                                    if (tapZone != null) {
+                                        handlePageTap(tapZone)
                                     }
                                     return@awaitEachGesture
                                 }

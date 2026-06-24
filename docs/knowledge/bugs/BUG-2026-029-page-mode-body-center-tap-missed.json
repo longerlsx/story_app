@@ -11,7 +11,8 @@
   "failed_attempts": [
     "Do not rely only on UiDevice.click regressions; they can pass while shell-level or real lower-level taps still miss the chrome toggle.",
     "Do not attach a normal `detectTapGestures` handler inside the page surface; it can still lose events to the pager's scrollable gesture handling.",
-    "Do not treat static screenshots alone as proof for this bug; the failure depends on a specific tap delivery path after page navigation."
+    "Do not treat static screenshots alone as proof for this bug; the failure depends on a specific tap delivery path after page navigation.",
+    "When refactoring page-mode pointerInput handling, avoid routing stable taps through a local function reference such as `?.let(::handlePageTap)`. On Pixel 8 / Android 14 this caused ReaderPageModeTest cross-chapter right-tap paths to miss the final chapter switch, while the equivalent explicit `if (tapZone != null) handlePageTap(tapZone)` path passed."
   ],
   "impact": "Users could be trapped in immersive reading on dense real TXT pages unless they found a blank area or used another gesture, making settings, TOC, and TTS controls feel intermittently unavailable.",
   "tags": [
@@ -25,5 +26,5 @@
   ],
   "confidence": 0.87,
   "created_at": "2026-06-23",
-  "updated_at": "2026-06-23"
+  "updated_at": "2026-06-24"
 }
