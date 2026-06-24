@@ -15,7 +15,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.longerlsx.storyapp.core.model.Chapter
 
@@ -35,12 +34,10 @@ fun ReaderTocSheet(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Text(
+        ReaderSingleLineText(
             text = bookTitle,
             style = MaterialTheme.typography.titleMedium,
             color = themePalette.content,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
         )
         Text(
             text = "共 ${chapters.size} 章",
@@ -75,7 +72,7 @@ fun ReaderTocSheet(
                             .padding(horizontal = 16.dp, vertical = 14.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        Text(
+                        ReaderSingleLineText(
                             text = chapter.title,
                             style = MaterialTheme.typography.bodyLarge,
                             fontWeight = if (chapter.chapterIndex == selectedChapterIndex) {
@@ -84,8 +81,6 @@ fun ReaderTocSheet(
                                 FontWeight.Normal
                             },
                             color = themePalette.content,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
                         )
                         if (chapter.chapterIndex == selectedChapterIndex) {
                             Text(
