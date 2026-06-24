@@ -1150,21 +1150,13 @@ private fun ReaderReadyContent(
                         }
                     }
                 },
-                onOpenPreviousBoundary = { targetChapterIndex ->
+                onOpenBoundaryChapter = { targetChapterIndex, restoreToLastPage ->
                     stopTtsForNavigation()
                     markManualFollowInterruption()
                     openChapter(
                         chapterIndex = targetChapterIndex,
                         nextChromeMode = chromeMode,
-                        restoreToLastPage = true,
-                    )
-                },
-                onOpenNextBoundary = { targetChapterIndex ->
-                    stopTtsForNavigation()
-                    markManualFollowInterruption()
-                    openChapter(
-                        chapterIndex = targetChapterIndex,
-                        nextChromeMode = chromeMode,
+                        restoreToLastPage = restoreToLastPage,
                     )
                 },
                 onToggleChrome = {
@@ -1480,8 +1472,7 @@ private fun PageReaderContent(
     onPagesChanged: (List<ReaderPageSlice>) -> Unit,
     onRestored: (Int) -> Unit,
     onPageSettled: (Int) -> Unit,
-    onOpenPreviousBoundary: (targetChapterIndex: Int) -> Unit,
-    onOpenNextBoundary: (targetChapterIndex: Int) -> Unit,
+    onOpenBoundaryChapter: (targetChapterIndex: Int, restoreToLastPage: Boolean) -> Unit,
     onToggleChrome: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -1701,7 +1692,7 @@ private fun PageReaderContent(
                                         animationSpec = tween(durationMillis = 180),
                                     )
                                 }
-                                onOpenPreviousBoundary(action.chapterIndex)
+                                onOpenBoundaryChapter(action.chapterIndex, action.restoreToLastPage)
                             }
                         }
                     }
@@ -1746,7 +1737,7 @@ private fun PageReaderContent(
                                         animationSpec = tween(durationMillis = 180),
                                     )
                                 }
-                                onOpenNextBoundary(action.chapterIndex)
+                                onOpenBoundaryChapter(action.chapterIndex, action.restoreToLastPage)
                             }
                         }
                     }
