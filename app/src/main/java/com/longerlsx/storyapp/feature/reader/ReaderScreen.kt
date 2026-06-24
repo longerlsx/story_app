@@ -104,9 +104,6 @@ import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsController
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsFollowSuppressionPolicy
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsStartRequest
 import com.longerlsx.storyapp.feature.reader.tts.activeVisualRangeOrNull
-import com.longerlsx.storyapp.feature.reader.tts.isOngoingSession
-import com.longerlsx.storyapp.feature.reader.tts.isPausedSession
-import com.longerlsx.storyapp.feature.reader.tts.isSpeakingSession
 import com.longerlsx.storyapp.feature.reader.tts.restartVisualRangeOrNull
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -644,11 +641,13 @@ private fun ReaderReadyContent(
         )
     }
 
+    val currentBookTtsSession = ReaderTtsCurrentBookSessionResolver.resolve(
+        currentBookId = state.book.id,
+        runtimeState = ttsRuntime,
+    )
+
     fun restartTtsFromLocation(location: ReaderTextStartLocation) {
-        if (
-            ttsRuntime.currentBookId != state.book.id ||
-            !ttsRuntime.playbackState.isOngoingSession()
-        ) {
+        if (!currentBookTtsSession.isOngoing) {
             return
         }
         pendingRestartVisualRange = location.restartVisualRangeOrNull(
@@ -675,31 +674,21 @@ private fun ReaderReadyContent(
     }
 
     fun markManualFollowInterruption() {
-        if (
-            ttsRuntime.currentBookId != state.book.id ||
-            !ttsRuntime.playbackState.isOngoingSession()
-        ) {
+        if (!currentBookTtsSession.isOngoing) {
             return
         }
         lastManualFollowInterruptionAtMs = SystemClock.elapsedRealtime()
     }
 
     fun stopTtsForNavigation() {
-        if (
-            ttsRuntime.currentBookId == state.book.id &&
-            ttsRuntime.playbackState.isOngoingSession()
-        ) {
+        if (currentBookTtsSession.isOngoing) {
             ttsController.stopByNavigation("已停止朗读，重新开始将从当前位置开始")
         }
     }
 
-    val isCurrentBookTtsPlaying =
-        ttsRuntime.currentBookId == state.book.id &&
-            ttsRuntime.playbackState.isSpeakingSession()
-    val isCurrentBookTtsPaused =
-        ttsRuntime.currentBookId == state.book.id &&
-            ttsRuntime.playbackState.isPausedSession()
-    val isCurrentBookTtsOngoing = isCurrentBookTtsPlaying || isCurrentBookTtsPaused
+    val isCurrentBookTtsPlaying = currentBookTtsSession.isSpeaking
+    val isCurrentBookTtsPaused = currentBookTtsSession.isPaused
+    val isCurrentBookTtsOngoing = currentBookTtsSession.isOngoing
     val ttsVoiceSelection = ReaderTtsVoiceSelectionResolver.resolve(
         persistedVoiceName = readerSettings.ttsSettings.voiceName,
         availableVoices = ttsRuntime.availableVoices,
@@ -793,7 +782,7 @@ private fun ReaderReadyContent(
         ttsRuntime.playbackState,
     ) {
         val pendingRange = pendingRestartVisualRange ?: return@LaunchedEffect
-        if (ttsRuntime.currentBookId != state.book.id || !ttsRuntime.playbackState.isOngoingSession()) {
+        if (!currentBookTtsSession.isOngoing) {
             pendingRestartVisualRange = null
             return@LaunchedEffect
         }

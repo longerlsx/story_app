@@ -2,8 +2,6 @@ package com.longerlsx.storyapp.feature.reader
 
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsRuntimeState
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsTimeLabelFormatter
-import com.longerlsx.storyapp.feature.reader.tts.isPausedSession
-import com.longerlsx.storyapp.feature.reader.tts.isSpeakingSession
 
 data class ReaderTtsReaderUiState(
     val toggleState: ReaderTtsToggleUiState,
@@ -16,31 +14,31 @@ object ReaderTtsReaderUiStateResolver {
         currentBookId: String,
         runtimeState: ReaderTtsRuntimeState,
     ): ReaderTtsReaderUiState {
-        val isCurrentBook = runtimeState.currentBookId == currentBookId
-        val isPlaying = isCurrentBook && runtimeState.playbackState.isSpeakingSession()
-        val isPaused = isCurrentBook && runtimeState.playbackState.isPausedSession()
-        val isOngoing = isPlaying || isPaused
-        val remainingTimeLabel = if (isOngoing) {
+        val currentBookSession = ReaderTtsCurrentBookSessionResolver.resolve(
+            currentBookId = currentBookId,
+            runtimeState = runtimeState,
+        )
+        val remainingTimeLabel = if (currentBookSession.isOngoing) {
             ReaderTtsTimeLabelFormatter.formatPositiveRemainingMillisOrNull(runtimeState.remainingTimerMillis)
         } else {
             null
         }
         val toggleLabel = when {
-            isPaused && !remainingTimeLabel.isNullOrBlank() -> "继续朗读 · $remainingTimeLabel"
-            isPaused -> "继续朗读"
-            isPlaying && !remainingTimeLabel.isNullOrBlank() -> "停止朗读 · $remainingTimeLabel"
-            isPlaying -> "停止朗读"
+            currentBookSession.isPaused && !remainingTimeLabel.isNullOrBlank() -> "继续朗读 · $remainingTimeLabel"
+            currentBookSession.isPaused -> "继续朗读"
+            currentBookSession.isSpeaking && !remainingTimeLabel.isNullOrBlank() -> "停止朗读 · $remainingTimeLabel"
+            currentBookSession.isSpeaking -> "停止朗读"
             else -> "朗读"
         }
         val statusText = when {
-            isPaused -> "当前状态：已暂停"
-            isPlaying -> "当前状态：朗读中"
+            currentBookSession.isPaused -> "当前状态：已暂停"
+            currentBookSession.isSpeaking -> "当前状态：朗读中"
             else -> "当前状态：未朗读"
         }
         return ReaderTtsReaderUiState(
             toggleState = ReaderTtsToggleUiState(
                 actionLabel = toggleLabel,
-                showImmersiveAction = isOngoing,
+                showImmersiveAction = currentBookSession.isOngoing,
                 immersiveActionLabel = toggleLabel,
             ),
             statusText = statusText,
