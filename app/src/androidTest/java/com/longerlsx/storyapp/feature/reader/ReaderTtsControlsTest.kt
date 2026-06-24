@@ -5,11 +5,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
 import androidx.compose.material3.Text
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
@@ -214,5 +217,33 @@ class ReaderTtsControlsTest {
             "Chapter progress summary should stay single-line between navigation actions; actual height=$progressHeight, reference single-line height=$actionHeight",
             progressHeight <= actionHeight,
         )
+    }
+
+    @Test
+    fun disabledChapterNavigationActionsExposeDisabledSemantics() {
+        composeRule.setContent {
+            ReaderControls(
+                chromeMode = ReaderChromeMode.CHROME_VISIBLE,
+                appearanceMode = ReaderAppearanceMode.DAY,
+                progressSummary = "1/2章",
+                showChapterNavigationRow = true,
+                canOpenPreviousChapter = false,
+                canOpenNextChapter = true,
+                themePalette = ReaderThemePalette(
+                    background = androidx.compose.ui.graphics.Color.White,
+                    surface = androidx.compose.ui.graphics.Color(0xFFF4F4F4),
+                    content = androidx.compose.ui.graphics.Color.Black,
+                ),
+                ttsToggleState = null,
+                onOpenPreviousChapter = {},
+                onOpenNextChapter = {},
+                onOpenToc = {},
+                onToggleAppearanceMode = {},
+                onOpenSettings = {},
+            )
+        }
+
+        composeRule.onNodeWithContentDescription("上一章").assertIsNotEnabled()
+        composeRule.onNodeWithContentDescription("下一章").assertIsEnabled()
     }
 }
