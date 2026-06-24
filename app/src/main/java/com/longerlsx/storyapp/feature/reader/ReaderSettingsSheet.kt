@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.longerlsx.storyapp.core.model.ReaderAppearanceMode
@@ -437,6 +438,9 @@ internal fun ReaderInlinePill(
             textAlign = TextAlign.Center,
             style = MaterialTheme.typography.bodyMedium,
             color = if (selected) themePalette.content else themePalette.content.copy(alpha = 0.85f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            softWrap = false,
         )
     }
 }

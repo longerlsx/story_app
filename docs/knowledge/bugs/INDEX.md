@@ -98,6 +98,7 @@ This is mandatory for both:
 | BUG-2026-039 | Reader top bar exposes a dead More action | resolved | `reader`, `chrome`, `interaction`, `visual` | [BUG-2026-039-reader-top-bar-dead-more-action.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-039-reader-top-bar-dead-more-action.json) |
 | BUG-2026-040 | Page-mode immersive header overlaps the first body line | resolved | `reader`, `page-mode`, `immersive-header`, `visual` | [BUG-2026-040-page-mode-immersive-header-overlaps-body.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-040-page-mode-immersive-header-overlaps-body.json) |
 | BUG-2026-041 | Reader TOC long chapter titles wrap and inflate directory rows | resolved | `reader`, `toc`, `text-layout`, `visual` | [BUG-2026-041-reader-toc-long-title-row-wrap.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-041-reader-toc-long-title-row-wrap.json) |
+| BUG-2026-042 | Reader inline pill labels wrap and crowd settings choices | resolved | `reader`, `settings`, `tts`, `visual` | [BUG-2026-042-reader-inline-pill-long-label-wrap.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-042-reader-inline-pill-long-label-wrap.json) |
 
 ## Retrieval Hints For Future Threads
 
@@ -132,6 +133,7 @@ This is mandatory for both:
 - If importing a Chinese TXT produces unreadable text, missing title/author, or a single fallback body chapter, start with `BUG-2026-035`; the confirmed fix is strict UTF-8 validation before falling back to GB18030 for GBK/GB2312-compatible inputs.
 - If the reader settings tab switcher disappears after scrolling through long TTS settings, start with `BUG-2026-036`; the confirmed fix is to keep the tab row outside the scrollable body and verify after scrolling to the bottom timer option.
 - If switching between Reading and TTS settings opens the new tab midway down instead of at its top controls, start with `BUG-2026-037`; the confirmed fix is to scope the scroll state per settings tab.
+- If a settings pill, TTS voice choice, or reading-mode chip becomes much taller with a long label, start with `BUG-2026-042`; the confirmed fix is to constrain shared `ReaderInlinePill` labels to one line with ellipsis and compare against a normal pill, not an unpadded title.
 - If a long TOC opens at the first chapters instead of showing the active reading chapter, start with `BUG-2026-038`; the confirmed fix is to initialize the TOC LazyColumn at the selected chapter's list position.
 - If a TOC row becomes much taller or the directory feels crowded with long real-novel chapter names, start with `BUG-2026-041`; the confirmed fix is to constrain TOC chapter titles to one line with ellipsis and compare title heights against a normal single-line row.
 - If the reader top bar shows an action that can be tapped but has no visible result, start with `BUG-2026-039`; the confirmed fix is to hide placeholder actions until a real menu/callback exists and avoid tests depending on dead controls.

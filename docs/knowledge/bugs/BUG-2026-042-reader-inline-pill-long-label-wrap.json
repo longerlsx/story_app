@@ -1,0 +1,29 @@
+{
+  "id": "BUG-2026-042",
+  "title": "Reader inline pill labels wrap and crowd settings choices",
+  "symptom": "A long system TTS voice display name in the reader settings sheet could wrap inside a choice pill and push later choices out of the visible area. A Pixel 8 / Android 14 Compose regression reproduced this at 320dp width: the long voice label measured 60dp high before the fix, and the following normal voice choice was not displayed in the constrained settings panel.",
+  "root_cause": "ReaderInlinePill is shared by settings tabs, reading-mode choices, steppers, and TTS choices, but its Text did not enforce single-line overflow behavior. Variable labels from the system voice catalog could therefore expand the pill height instead of being ellipsized like other reader chrome labels.",
+  "fix": [
+    "Constrained ReaderInlinePill labels to one line.",
+    "Rendered overflowing shared pill labels with TextOverflow.Ellipsis and disabled soft wrapping.",
+    "Added a Compose instrumented regression with a long TTS system voice name and a normal voice choice in a 320dp-wide settings panel."
+  ],
+  "failed_attempts": [
+    "Fixing only the TTS voice choice wrapper would leave the same wrapping risk in settings tabs, reading-mode choices, and stepper pills that reuse ReaderInlinePill.",
+    "Comparing a padded pill's semantics bounds against an unpadded section title is too strict; compare long and normal pill bounds instead."
+  ],
+  "impact": "Keeps shared reader setting controls stable with long labels, preserves choice density, and prevents later options from being visually crowded out.",
+  "tags": [
+    "android",
+    "compose",
+    "reader",
+    "settings",
+    "tts",
+    "text-layout",
+    "visual",
+    "resolved"
+  ],
+  "confidence": 0.9,
+  "created_at": "2026-06-24",
+  "updated_at": "2026-06-24"
+}

@@ -2,6 +2,7 @@ package com.longerlsx.storyapp.feature.reader
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.getValue
@@ -14,6 +15,7 @@ import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -26,6 +28,7 @@ import com.longerlsx.storyapp.core.model.ReaderTtsSettings
 import com.longerlsx.storyapp.core.model.ReaderTtsTimerPreset
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsVoiceOption
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -210,6 +213,58 @@ class ReaderTtsSettingsSheetTest {
 
         org.junit.Assert.assertFalse(selectedVoice.containsTrapColor(materialPrimaryTrap))
         org.junit.Assert.assertFalse(selectedRate.containsTrapColor(materialPrimaryTrap))
+    }
+
+    @Test
+    fun ttsVoiceChoiceWithLongSystemNameStaysSingleLine() {
+        val longVoiceName = "中文（中国大陆）系统高质量自然女声音色增强版超长名称"
+
+        composeRule.setContent {
+            MaterialTheme {
+                Box(
+                    modifier = Modifier
+                        .width(320.dp)
+                        .height(220.dp),
+                ) {
+                    ReaderSettingsSheet(
+                        settings = ReaderSettings(
+                            ttsSettings = ReaderTtsSettings(voiceName = "voice-long"),
+                        ),
+                        themePalette = ReaderThemePalette(
+                            background = Color.White,
+                            surface = Color(0xFFF4F4F4),
+                            content = Color.Black,
+                        ),
+                        activeTab = ReaderSettingsTab.TTS,
+                        availableVoices = listOf(
+                            ReaderTtsVoiceOption(name = "voice-long", displayName = longVoiceName),
+                            ReaderTtsVoiceOption(name = "voice-short", displayName = "系统女声"),
+                        ),
+                        selectedVoiceName = "voice-long",
+                        ttsStatusText = "当前状态：未朗读",
+                        onSelectTab = {},
+                        onUpdateSettings = {},
+                        onUpdateTtsSettings = {},
+                    )
+                }
+            }
+        }
+
+        val longVoiceBounds = composeRule
+            .onNodeWithText(longVoiceName)
+            .assertIsDisplayed()
+            .getUnclippedBoundsInRoot()
+        val longVoiceHeight = longVoiceBounds.bottom - longVoiceBounds.top
+        val referenceVoiceBounds = composeRule
+            .onNodeWithText("系统女声")
+            .assertIsDisplayed()
+            .getUnclippedBoundsInRoot()
+        val referenceVoiceHeight = referenceVoiceBounds.bottom - referenceVoiceBounds.top
+
+        assertTrue(
+            "TTS voice choice labels should stay single-line; actual height=$longVoiceHeight, reference single-line height=$referenceVoiceHeight",
+            longVoiceHeight <= referenceVoiceHeight,
+        )
     }
 
     @Test
