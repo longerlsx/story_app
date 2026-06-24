@@ -17,6 +17,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import com.longerlsx.storyapp.core.model.ReaderAppearanceMode
+import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsRuntimeState
+import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsSessionState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -131,7 +133,14 @@ class ReaderTtsControlsTest {
 
     @Test
     fun timedTtsActionStaysSingleLineInFourSlotBottomBar() {
-        val label = "继续朗读 · 90m"
+        val label = ReaderTtsReaderUiStateResolver.resolve(
+            currentBookId = "book-1",
+            runtimeState = ReaderTtsRuntimeState(
+                playbackState = ReaderTtsSessionState.PAUSED_BY_USER,
+                currentBookId = "book-1",
+                remainingTimerMillis = 90 * 60_000L,
+            ),
+        ).toggleState.actionLabel
 
         composeRule.setContent {
             Box(modifier = Modifier.width(360.dp)) {
