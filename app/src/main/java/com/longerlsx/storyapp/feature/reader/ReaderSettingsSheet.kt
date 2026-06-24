@@ -152,14 +152,10 @@ private fun ReaderReadingSettingsBody(
         valueText = settings.fontSizeSp.toString(),
         themePalette = themePalette,
         onDecrease = {
-            onUpdateSettings(
-                settings.copy(fontSizeSp = (settings.fontSizeSp - 2).coerceAtLeast(14)),
-            )
+            onUpdateSettings(ReaderReadingSettingsAdjustmentPolicy.decreaseFontSize(settings))
         },
         onIncrease = {
-            onUpdateSettings(
-                settings.copy(fontSizeSp = (settings.fontSizeSp + 2).coerceAtMost(32)),
-            )
+            onUpdateSettings(ReaderReadingSettingsAdjustmentPolicy.increaseFontSize(settings))
         },
     )
 
@@ -168,18 +164,10 @@ private fun ReaderReadingSettingsBody(
         valueText = settings.lineHeightMultiplier.formatOneDecimal(),
         themePalette = themePalette,
         onDecrease = {
-            onUpdateSettings(
-                settings.copy(
-                    lineHeightMultiplier = (settings.lineHeightMultiplier - 0.1f).coerceAtLeast(1.2f),
-                ),
-            )
+            onUpdateSettings(ReaderReadingSettingsAdjustmentPolicy.decreaseLineHeight(settings))
         },
         onIncrease = {
-            onUpdateSettings(
-                settings.copy(
-                    lineHeightMultiplier = (settings.lineHeightMultiplier + 0.1f).coerceAtMost(2.2f),
-                ),
-            )
+            onUpdateSettings(ReaderReadingSettingsAdjustmentPolicy.increaseLineHeight(settings))
         },
     )
 
@@ -188,18 +176,10 @@ private fun ReaderReadingSettingsBody(
         valueText = settings.paragraphSpacingEm.formatOneDecimal(),
         themePalette = themePalette,
         onDecrease = {
-            onUpdateSettings(
-                settings.copy(
-                    paragraphSpacingEm = (settings.paragraphSpacingEm - 0.1f).coerceAtLeast(0.4f),
-                ),
-            )
+            onUpdateSettings(ReaderReadingSettingsAdjustmentPolicy.decreaseParagraphSpacing(settings))
         },
         onIncrease = {
-            onUpdateSettings(
-                settings.copy(
-                    paragraphSpacingEm = (settings.paragraphSpacingEm + 0.1f).coerceAtMost(1.8f),
-                ),
-            )
+            onUpdateSettings(ReaderReadingSettingsAdjustmentPolicy.increaseParagraphSpacing(settings))
         },
     )
 
