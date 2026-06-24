@@ -1631,8 +1631,13 @@ private fun PageReaderContent(
         }
 
         LaunchedEffect(chapterIndex, contentLoaded, restoredPosition, boundaryTransition?.targetChapterIndex) {
-            val activeTransition = boundaryTransition ?: return@LaunchedEffect
-            if (activeTransition.targetChapterIndex == chapterIndex && contentLoaded && restoredPosition) {
+            if (ReaderPageBoundaryTransitionClearancePolicy.shouldClear(
+                    transitionTargetChapterIndex = boundaryTransition?.targetChapterIndex,
+                    currentChapterIndex = chapterIndex,
+                    contentLoaded = contentLoaded,
+                    restoredPosition = restoredPosition,
+                )
+            ) {
                 boundaryTransition = null
                 boundaryTransitionProgress.snapTo(0f)
             }
