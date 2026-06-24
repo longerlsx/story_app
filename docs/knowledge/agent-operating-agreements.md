@@ -6,7 +6,9 @@ reader work.
 
 ## Required Read Position
 
-Before working on reader/parser/TTS/settings behavior, read these in order:
+Before working on reader/parser/TTS/settings behavior, read these in order.
+This applies to every new work slice and every continuation after context
+compaction, not only to a fresh thread:
 
 1. [README.md](/Users/longshengxi/proj/story_app/README.md)
 2. [docs/knowledge/README.md](/Users/longshengxi/proj/story_app/docs/knowledge/README.md)
@@ -17,6 +19,14 @@ Before working on reader/parser/TTS/settings behavior, read these in order:
 
 Do not treat this read order as proof of correctness. It only establishes
 context and hypotheses.
+
+For long-running goals, the minimum per-slice refresh inside this file is:
+
+1. `Initial Agreement Index`
+2. `Current Priority`
+3. `Emulator And UI Evidence`
+4. `Subagent Use`
+5. `Git Cadence`
 
 ## Initial Agreement Index
 
@@ -52,6 +62,11 @@ Standing agreements:
 
 As of 2026-06-24, bias new investigation and optimization work toward page mode
 unless a higher-priority regression is discovered.
+
+Page-mode work means discovering and reducing visual and interaction defects in
+the actual reading experience first. Code structure improvements are useful
+when they make page-mode behavior easier to prove, reuse, and maintain; they
+are not an end in themselves.
 
 Primary page-mode risk areas:
 
@@ -118,6 +133,24 @@ Available local video tools:
 
 - `/opt/homebrew/bin/ffmpeg`
 - `/opt/homebrew/bin/ffprobe`
+
+## Operating Memory Maintenance
+
+Keep this file current when a new standing agreement or reusable capability
+appears during the work.
+
+Record here:
+
+- user corrections to agent behavior that should apply beyond the current turn
+- tool and plugin capabilities that should be considered by default, such as
+  Computer Use for Android Studio/emulator interaction
+- video, screenshot, logcat, and emulator setup methods that improve evidence
+  quality
+- external test data paths and when they should be used
+- changes to subagent limits, lifecycle rules, or git cadence
+
+Do not record one-off debugging diaries here. Bug-specific root causes,
+failed attempts, and fixes belong in the matching bug JSON and bug index.
 
 ## Test Inputs And Real Corpus
 
