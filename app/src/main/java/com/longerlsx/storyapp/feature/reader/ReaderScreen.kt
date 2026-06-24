@@ -619,15 +619,23 @@ private fun ReaderReadyContent(
 
     fun startTtsFromCurrentLocation() {
         val request = buildTtsStartRequest()
-        val notificationsGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.POST_NOTIFICATIONS,
-            ) == PackageManager.PERMISSION_GRANTED
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !notificationsGranted) {
-            pendingNotificationPermissionStartRequest = request
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-            return
+        val notificationsGranted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) == PackageManager.PERMISSION_GRANTED
+        when (
+            ReaderTtsNotificationPermissionPolicy.resolve(
+                sdkInt = Build.VERSION.SDK_INT,
+                notificationPermissionGranted = notificationsGranted,
+            )
+        ) {
+            ReaderTtsNotificationPermissionDecision.RequestPermissionFirst -> {
+                pendingNotificationPermissionStartRequest = request
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                return
+            }
+
+            ReaderTtsNotificationPermissionDecision.StartImmediately -> Unit
         }
         ttsController.start(
             request = request,
