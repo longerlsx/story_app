@@ -39,6 +39,8 @@ fun ReaderTocSheet(
             text = bookTitle,
             style = MaterialTheme.typography.titleMedium,
             color = themePalette.content,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
         Text(
             text = "共 ${chapters.size} 章",

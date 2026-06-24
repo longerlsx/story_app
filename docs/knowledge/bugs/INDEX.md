@@ -99,6 +99,7 @@ This is mandatory for both:
 | BUG-2026-040 | Page-mode immersive header overlaps the first body line | resolved | `reader`, `page-mode`, `immersive-header`, `visual` | [BUG-2026-040-page-mode-immersive-header-overlaps-body.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-040-page-mode-immersive-header-overlaps-body.json) |
 | BUG-2026-041 | Reader TOC long chapter titles wrap and inflate directory rows | resolved | `reader`, `toc`, `text-layout`, `visual` | [BUG-2026-041-reader-toc-long-title-row-wrap.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-041-reader-toc-long-title-row-wrap.json) |
 | BUG-2026-042 | Reader inline pill labels wrap and crowd settings choices | resolved | `reader`, `settings`, `tts`, `visual` | [BUG-2026-042-reader-inline-pill-long-label-wrap.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-042-reader-inline-pill-long-label-wrap.json) |
+| BUG-2026-043 | Reader TOC long book titles wrap and crowd the directory header | resolved | `reader`, `toc`, `text-layout`, `visual` | [BUG-2026-043-reader-toc-long-book-title-wrap.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-043-reader-toc-long-book-title-wrap.json) |
 
 ## Retrieval Hints For Future Threads
 
@@ -136,6 +137,7 @@ This is mandatory for both:
 - If a settings pill, TTS voice choice, or reading-mode chip becomes much taller with a long label, start with `BUG-2026-042`; the confirmed fix is to constrain shared `ReaderInlinePill` labels to one line with ellipsis and compare against a normal pill, not an unpadded title.
 - If a long TOC opens at the first chapters instead of showing the active reading chapter, start with `BUG-2026-038`; the confirmed fix is to initialize the TOC LazyColumn at the selected chapter's list position.
 - If a TOC row becomes much taller or the directory feels crowded with long real-novel chapter names, start with `BUG-2026-041`; the confirmed fix is to constrain TOC chapter titles to one line with ellipsis and compare title heights against a normal single-line row.
+- If the directory header itself grows taller with a long imported book name, start with `BUG-2026-043`; the confirmed fix is to constrain the TOC header book title to one line with ellipsis and compare against a short header title.
 - If the reader top bar shows an action that can be tapped but has no visible result, start with `BUG-2026-039`; the confirmed fix is to hide placeholder actions until a real menu/callback exists and avoid tests depending on dead controls.
 - If page-mode first-page text appears pressed into or under the lightweight immersive header, start with `BUG-2026-040`; the confirmed fix is to keep the base page top padding high enough for the measured header band without tying it to temporary chrome-visible top-bar height.
 

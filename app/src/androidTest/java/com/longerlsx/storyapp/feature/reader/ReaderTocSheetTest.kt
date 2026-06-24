@@ -1,6 +1,7 @@
 package com.longerlsx.storyapp.feature.reader
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
@@ -122,6 +123,71 @@ class ReaderTocSheetTest {
         assertTrue(
             "TOC chapter titles should stay single-line; actual height=$longTitleHeight, reference single-line height=$referenceTitleHeight",
             longTitleHeight <= referenceTitleHeight,
+        )
+    }
+
+    @Test
+    fun longBookTitleStaysSingleLineInDirectoryHeader() {
+        val longBookTitle = "这本书的名字很长很长并且还带着副标题和作者信息会挤压目录面板顶部空间"
+        val shortBookTitle = "短书名参照"
+        val chapters = listOf(
+            Chapter(
+                bookId = "book",
+                chapterIndex = 1,
+                title = "第1章 开始",
+                startOffset = 100,
+                endOffset = 180,
+                wordCount = 80,
+            ),
+        )
+
+        composeRule.setContent {
+            MaterialTheme {
+                Column(modifier = Modifier.width(320.dp)) {
+                    Box(modifier = Modifier.height(120.dp)) {
+                        ReaderTocSheet(
+                            bookTitle = longBookTitle,
+                            chapters = chapters,
+                            selectedChapterIndex = 1,
+                            themePalette = ReaderThemePalette(
+                                background = Color.White,
+                                surface = Color(0xFFF4F4F4),
+                                content = Color.Black,
+                            ),
+                            onSelectChapter = {},
+                        )
+                    }
+                    Box(modifier = Modifier.height(120.dp)) {
+                        ReaderTocSheet(
+                            bookTitle = shortBookTitle,
+                            chapters = chapters,
+                            selectedChapterIndex = 1,
+                            themePalette = ReaderThemePalette(
+                                background = Color.White,
+                                surface = Color(0xFFF4F4F4),
+                                content = Color.Black,
+                            ),
+                            onSelectChapter = {},
+                        )
+                    }
+                }
+            }
+        }
+
+        val longBookTitleBounds = composeRule
+            .onNodeWithText(longBookTitle)
+            .assertIsDisplayed()
+            .getUnclippedBoundsInRoot()
+        val longBookTitleHeight = longBookTitleBounds.bottom - longBookTitleBounds.top
+        val shortBookTitleBounds = composeRule
+            .onNodeWithText(shortBookTitle)
+            .assertIsDisplayed()
+            .getUnclippedBoundsInRoot()
+        val shortBookTitleHeight = shortBookTitleBounds.bottom - shortBookTitleBounds.top
+
+        assertTrue(
+            "TOC book title should stay single-line; actual height=$longBookTitleHeight, reference single-line height=$shortBookTitleHeight",
+            longBookTitleHeight <= shortBookTitleHeight,
         )
     }
 }
