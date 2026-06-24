@@ -325,6 +325,9 @@ private fun ReaderReadyContent(
     val chapterTextByIndex = remember(scrollFeed) {
         scrollFeed.associate { it.chapter.chapterIndex to it.text }
     }
+    val chapterTextLengthByIndex = remember(chapterTextByIndex) {
+        chapterTextByIndex.mapValues { it.value.length }
+    }
     val previousChapter = state.chapters.getOrNull(selectedChapterPosition - 1)
     val nextChapter = state.chapters.getOrNull(selectedChapterPosition + 1)
     val previousChapterText = scrollFeed.getOrNull(selectedChapterPosition - 1)?.text.orEmpty()
@@ -476,46 +479,27 @@ private fun ReaderReadyContent(
             scrollFeed = scrollFeed,
             bodyMetricsByChapter = scrollBodyMetricsByChapter,
         )
-        val currentScrollChapterIndex = ReaderActiveChapterResolver.resolve(
+        val currentAnchor = ReaderSettingsAnchorResolver.resolve(
+            readingMode = readerSettings.readingMode,
+            selectedChapterIndex = selectedChapterIndex,
+            pendingRestoreCharOffset = pendingRestoreCharOffset,
+            currentPageIndex = currentPageIndex,
+            currentPages = currentPages,
             visibleItems = currentScrollVisibleItems,
             chapters = state.chapters,
+            chapterTextLengthByIndex = chapterTextLengthByIndex,
             viewportTopPx = scrollReadableViewportTopPx,
-        ) ?: selectedChapterIndex
-        val currentAnchorOffset = when (readerSettings.readingMode) {
-            ReadingMode.SCROLL -> {
-                val currentScrollItem = currentScrollVisibleItems.firstOrNull {
-                    it.chapterIndex == currentScrollChapterIndex
-                }
-                val currentScrollContent = scrollFeed.firstOrNull {
-                    it.chapter.chapterIndex == currentScrollChapterIndex
-                }
-                if (currentScrollItem != null && currentScrollContent != null) {
-                    ReaderScrollFeedAnchorMapper.toCharOffset(
-                        contentLength = currentScrollContent.text.length,
-                        bodyOffsetPx = currentScrollItem.bodyOffsetPx,
-                        bodyHeightPx = currentScrollItem.bodyHeightPx,
-                        viewportTopPx = scrollReadableViewportTopPx,
-                    )
-                } else {
-                    pendingRestoreCharOffset
-                }
-            }
-
-            ReadingMode.PAGE -> ReaderPageAnchorMapper.anchorForPageIndex(
-                pages = currentPages,
-                pageIndex = currentPageIndex,
-            )
-        }
+        )
 
         scope.launch {
             saveAnchor(
-                chapterIndex = currentScrollChapterIndex,
-                charOffset = currentAnchorOffset,
+                chapterIndex = currentAnchor.chapterIndex,
+                charOffset = currentAnchor.charOffset,
                 readingMode = next.readingMode,
             )
         }
-        selectedChapterIndex = currentScrollChapterIndex
-        pendingRestoreCharOffset = currentAnchorOffset
+        selectedChapterIndex = currentAnchor.chapterIndex
+        pendingRestoreCharOffset = currentAnchor.charOffset
         currentPageIndex = 0
         restoredPosition = false
         restoreToLastPageOnOpen = false
