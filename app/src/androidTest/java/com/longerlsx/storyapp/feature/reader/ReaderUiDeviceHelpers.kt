@@ -9,6 +9,7 @@ import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.UiObject2
 import androidx.test.uiautomator.Until
 import java.io.File
+import kotlinx.coroutines.runBlocking
 
 internal enum class ReaderPrimaryActionSlot {
     DIRECTORY,
@@ -22,7 +23,12 @@ internal fun resetStoryAppState(context: Context) {
     File(context.filesDir, "books").deleteRecursively()
     File(context.filesDir, "reader-anchors.properties").delete()
     File(context.filesDir, "reader-settings.properties").delete()
-    (context.applicationContext as? StoryApplication)?.resetReaderTtsRuntimeForTests()
+    (context.applicationContext as? StoryApplication)?.let { application ->
+        runBlocking {
+            application.bookRepository.clearForTests()
+        }
+        application.resetReaderTtsRuntimeForTests()
+    }
     instrumentation.waitForIdleSync()
 }
 

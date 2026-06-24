@@ -106,6 +106,16 @@ class InMemoryBookRepository(
         }
     }
 
+    suspend fun clearForTests() {
+        mutex.withLock {
+            books.clear()
+            chapters.clear()
+            chapterContents.clear()
+            progressByBook.clear()
+            publishBookshelf()
+        }
+    }
+
     private fun publishBookshelf() {
         bookshelf.value = books.values
             .sortedWith(

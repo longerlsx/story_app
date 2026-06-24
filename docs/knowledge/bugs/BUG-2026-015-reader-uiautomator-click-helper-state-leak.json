@@ -8,12 +8,14 @@
     "Update tapPrimaryAction and tapChapterAction to reveal chrome with a center tap before coordinate fallback when the target action label is not currently visible.",
     "Make ensureScrollMode and ensurePageMode single-purpose helpers: open settings, select the requested mode, close settings, then hide chrome if visible.",
     "Add setUp and tearDown resetStoryAppState calls to ReaderAppearanceToggleTest and ReaderChromeTest so mixed reader interaction groups do not inherit reader settings or anchors.",
-    "Replace direct UiObject2.click() calls in reader interaction tests with clickObjectCenter for settings, TTS, chapter, theme, and book-card selections."
+    "Replace direct UiObject2.click() calls in reader interaction tests with clickObjectCenter for settings, TTS, chapter, theme, and book-card selections.",
+    "Clear InMemoryBookRepository from resetStoryAppState so tests do not keep books, chapters, contents, or progress in the already-created StoryApplication singleton after deleting files."
   ],
   "failed_attempts": [
     "Do not classify a mixed UIAutomator failure as a product bug until the failing test is rerun alone and the logcat/action path is inspected.",
     "A visible single label such as Settings is not sufficient proof that the complete reader chrome is in the expected state; helpers that change modes should leave a known state for the caller.",
-    "Direct UiObject2.click() is unsafe for Compose semantics-only nodes; logcat may show a non-clickable node while the test helper still reports success."
+    "Direct UiObject2.click() is unsafe for Compose semantics-only nodes; logcat may show a non-clickable node while the test helper still reports success.",
+    "Deleting files in resetStoryAppState is insufficient evidence of a clean test state when StoryApplication and InMemoryBookRepository have already been initialized in the same instrumentation process."
   ],
   "impact": "Reduces false-positive reader visual and interaction regressions and makes mixed emulator test groups a stronger signal for real UI bugs.",
   "tags": [
@@ -27,5 +29,5 @@
   ],
   "confidence": 0.9,
   "created_at": "2026-06-22",
-  "updated_at": "2026-06-22"
+  "updated_at": "2026-06-24"
 }
