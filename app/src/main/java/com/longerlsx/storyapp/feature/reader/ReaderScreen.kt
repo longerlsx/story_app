@@ -76,6 +76,7 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -1354,6 +1355,9 @@ private fun ReaderTransientTtsMessage(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
             style = MaterialTheme.typography.bodySmall,
             color = themePalette.content,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            softWrap = false,
         )
     }
 }

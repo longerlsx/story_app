@@ -1,5 +1,9 @@
 package com.longerlsx.storyapp.feature.reader
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
@@ -7,6 +11,7 @@ import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -16,6 +21,7 @@ import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.unit.dp
 import com.longerlsx.storyapp.core.model.Book
 import com.longerlsx.storyapp.core.model.Chapter
 import com.longerlsx.storyapp.core.model.ImportSourceType
@@ -858,6 +864,81 @@ class ReaderTtsFollowTest {
         org.junit.Assert.assertFalse(rootPixels.containsTrapColor(materialOnSurfaceTrap, channelTolerance = 0.08f))
     }
 
+    @Test
+    fun transientTtsMessageWithLongCopyStaysSingleLine() {
+        val longBookId = "book-transient-message-long"
+        val shortBookId = "book-transient-message-short"
+        val longMessage = "已停止朗读，重新开始将从当前位置开始；这条提示用于说明章节切换后会从当前可见正文重新起读"
+        val shortMessage = "已停止朗读"
+        val longRepository = createRepository(
+            bookId = longBookId,
+            chapterTexts = mapOf(0 to "第一段正文。"),
+        )
+        val shortRepository = createRepository(
+            bookId = shortBookId,
+            chapterTexts = mapOf(0 to "第一段正文。"),
+        )
+        val longSettingsStore = createSettingsStore(
+            name = "reader-tts-transient-message-long",
+            initial = ReaderSettings(readingMode = ReadingMode.SCROLL),
+        )
+        val shortSettingsStore = createSettingsStore(
+            name = "reader-tts-transient-message-short",
+            initial = ReaderSettings(readingMode = ReadingMode.SCROLL),
+        )
+        val longController = createStoppedNavigationController(
+            bookId = longBookId,
+            bookTitle = "长提示测试",
+            settings = longSettingsStore.load().ttsSettings,
+            message = longMessage,
+        )
+        val shortController = createStoppedNavigationController(
+            bookId = shortBookId,
+            bookTitle = "短提示测试",
+            settings = shortSettingsStore.load().ttsSettings,
+            message = shortMessage,
+        )
+
+        composeRule.setContent {
+            Column(modifier = androidx.compose.ui.Modifier.width(320.dp)) {
+                Box(modifier = androidx.compose.ui.Modifier.height(220.dp)) {
+                    ReaderScreen(
+                        bookId = longBookId,
+                        repository = longRepository,
+                        settingsStore = longSettingsStore,
+                        ttsController = longController,
+                        onBack = {},
+                    )
+                }
+                Box(modifier = androidx.compose.ui.Modifier.height(220.dp)) {
+                    ReaderScreen(
+                        bookId = shortBookId,
+                        repository = shortRepository,
+                        settingsStore = shortSettingsStore,
+                        ttsController = shortController,
+                        onBack = {},
+                    )
+                }
+            }
+        }
+
+        val longMessageBounds = composeRule
+            .onNodeWithText(longMessage)
+            .assertIsDisplayed()
+            .getUnclippedBoundsInRoot()
+        val longMessageHeight = longMessageBounds.bottom - longMessageBounds.top
+        val shortMessageBounds = composeRule
+            .onNodeWithText(shortMessage)
+            .assertIsDisplayed()
+            .getUnclippedBoundsInRoot()
+        val shortMessageHeight = shortMessageBounds.bottom - shortMessageBounds.top
+
+        assertTrue(
+            "Transient TTS messages should stay single-line; actual height=$longMessageHeight, reference single-line height=$shortMessageHeight",
+            longMessageHeight <= shortMessageHeight + 0.5.dp,
+        )
+    }
+
     private fun createRepository(
         bookId: String,
         chapterTexts: Map<Int, String>,
@@ -893,6 +974,32 @@ class ReaderTtsFollowTest {
             )
         }
         return repository
+    }
+
+    private fun createStoppedNavigationController(
+        bookId: String,
+        bookTitle: String,
+        settings: com.longerlsx.storyapp.core.model.ReaderTtsSettings,
+        message: String,
+    ): ReaderTtsController {
+        return ReaderTtsController(
+            launchForegroundService = { true },
+            sendStopCommand = {},
+        ).also { controller ->
+            controller.start(
+                request = ReaderTtsStartRequest(
+                    bookId = bookId,
+                    bookTitle = bookTitle,
+                    chapterIndex = 0,
+                    charOffset = 0,
+                    chapterTitleOrSummary = "第一章",
+                    activeStateLabel = "朗读中",
+                ),
+                settings = settings,
+            )
+            controller.onPlaybackStarted()
+            controller.stopByNavigation(message)
+        }
     }
 
     private fun createSettingsStore(
