@@ -1588,14 +1588,11 @@ private fun PageReaderContent(
                 return@LaunchedEffect
             }
 
-            val targetPage = if (restoreToLastPage) {
-                safePages.lastIndex
-            } else {
-                ReaderPageAnchorMapper.pageIndexForCharOffset(
-                    pages = safePages,
-                    charOffset = restoreCharOffset,
-                )
-            }
+            val targetPage = ReaderPageRestoreTargetResolver.resolve(
+                pages = safePages,
+                restoreCharOffset = restoreCharOffset,
+                restoreToLastPage = restoreToLastPage,
+            )
             pendingProgrammaticSettledPage = targetPage
             pagerState.scrollToPage(targetPage)
             onRestored(targetPage)
