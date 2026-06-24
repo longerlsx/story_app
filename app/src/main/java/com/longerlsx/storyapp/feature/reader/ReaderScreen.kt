@@ -1675,7 +1675,7 @@ private fun PageReaderContent(
                                 val previewPage = previousPages.lastOrNull()
                                 if (sourcePage != null && previewPage != null) {
                                     boundaryTransition = ReaderBoundaryPageTransition(
-                                        direction = ReaderPageBoundaryDirection.PREVIOUS,
+                                        direction = ReaderPageTurnDirection.PREVIOUS,
                                         sourcePage = sourcePage,
                                         previewPage = previewPage,
                                         targetChapterIndex = action.chapterIndex,
@@ -1720,7 +1720,7 @@ private fun PageReaderContent(
                                 val previewPage = nextPages.firstOrNull()
                                 if (sourcePage != null && previewPage != null) {
                                     boundaryTransition = ReaderBoundaryPageTransition(
-                                        direction = ReaderPageBoundaryDirection.NEXT,
+                                        direction = ReaderPageTurnDirection.NEXT,
                                         sourcePage = sourcePage,
                                         previewPage = previewPage,
                                         targetChapterIndex = action.chapterIndex,
@@ -1812,14 +1812,11 @@ private fun PageReaderContent(
 
             boundaryTransition?.let { transition ->
                 val containerWidthPx = with(density) { this@BoxWithConstraints.maxWidth.roundToPx() }
-                val currentOffsetPx = when (transition.direction) {
-                    ReaderPageBoundaryDirection.NEXT -> -containerWidthPx * boundaryTransitionProgress.value
-                    ReaderPageBoundaryDirection.PREVIOUS -> containerWidthPx * boundaryTransitionProgress.value
-                }
-                val previewOffsetPx = when (transition.direction) {
-                    ReaderPageBoundaryDirection.NEXT -> containerWidthPx * (1f - boundaryTransitionProgress.value)
-                    ReaderPageBoundaryDirection.PREVIOUS -> -containerWidthPx * (1f - boundaryTransitionProgress.value)
-                }
+                val offsets = ReaderPageBoundaryTransitionOffsetResolver.resolve(
+                    direction = transition.direction,
+                    containerWidthPx = containerWidthPx,
+                    progress = boundaryTransitionProgress.value,
+                )
                 ReaderBoundaryPageLayer(
                     page = transition.sourcePage,
                     themePalette = themePalette,
@@ -1828,7 +1825,7 @@ private fun PageReaderContent(
                     paragraphSpacing = paragraphSpacing,
                     pageTopPadding = pageTopPadding,
                     pageBottomPadding = pageBottomPadding,
-                    offsetPx = currentOffsetPx.roundToInt(),
+                    offsetPx = offsets.currentPageOffsetPx,
                 )
                 ReaderBoundaryPageLayer(
                     page = transition.previewPage,
@@ -1838,7 +1835,7 @@ private fun PageReaderContent(
                     paragraphSpacing = paragraphSpacing,
                     pageTopPadding = pageTopPadding,
                     pageBottomPadding = pageBottomPadding,
-                    offsetPx = previewOffsetPx.roundToInt(),
+                    offsetPx = offsets.previewPageOffsetPx,
                 )
             }
         }
@@ -2073,16 +2070,11 @@ private data class ReaderLoadedChapterContent(
 )
 
 private data class ReaderBoundaryPageTransition(
-    val direction: ReaderPageBoundaryDirection,
+    val direction: ReaderPageTurnDirection,
     val sourcePage: ReaderPageSlice,
     val previewPage: ReaderPageSlice,
     val targetChapterIndex: Int,
 )
-
-private enum class ReaderPageBoundaryDirection {
-    PREVIOUS,
-    NEXT,
-}
 
 private sealed interface ReaderScreenState {
     data object Loading : ReaderScreenState
