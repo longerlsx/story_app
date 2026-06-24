@@ -812,15 +812,17 @@ private fun ReaderReadyContent(
         if (!isCurrentBookTtsPlaying) {
             return@LaunchedEffect
         }
-        val remainingDelay = (10_000L - (SystemClock.elapsedRealtime() - interruptionAt))
-            .coerceAtLeast(0L)
+        val remainingDelay = ReaderTtsFollowSuppressionPolicy.remainingSuppressionMillis(
+            lastInterruptionAtMs = interruptionAt,
+            nowMs = SystemClock.elapsedRealtime(),
+        ) ?: return@LaunchedEffect
         if (remainingDelay > 0L) {
             delay(remainingDelay)
         }
         if (
-            lastManualFollowInterruptionAtMs == interruptionAt &&
-            !ReaderTtsFollowSuppressionPolicy.shouldSuppressFollow(
-                lastInterruptionAtMs = interruptionAt,
+            ReaderTtsFollowSuppressionPolicy.shouldClearExpiredSuppression(
+                scheduledInterruptionAtMs = interruptionAt,
+                currentInterruptionAtMs = lastManualFollowInterruptionAtMs,
                 nowMs = SystemClock.elapsedRealtime(),
             )
         ) {
@@ -1022,8 +1024,9 @@ private fun ReaderReadyContent(
                     val interruptionAt = lastManualFollowInterruptionAtMs
                     if (
                         interruptionAt != null &&
-                        !ReaderTtsFollowSuppressionPolicy.shouldSuppressFollow(
-                            lastInterruptionAtMs = interruptionAt,
+                        ReaderTtsFollowSuppressionPolicy.shouldClearExpiredSuppression(
+                            scheduledInterruptionAtMs = interruptionAt,
+                            currentInterruptionAtMs = lastManualFollowInterruptionAtMs,
                             nowMs = SystemClock.elapsedRealtime(),
                         )
                     ) {
