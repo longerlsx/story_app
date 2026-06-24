@@ -1605,19 +1605,16 @@ private fun PageReaderContent(
             snapshotFlow { pagerState.settledPage }
                 .distinctUntilChanged()
                 .collect { settledPage ->
-                    val previousSettledPage = lastSettledPage
-                    val programmaticSettledPage = pendingProgrammaticSettledPage
-                    if (
-                        previousSettledPage != null &&
-                        settledPage != previousSettledPage &&
-                        programmaticSettledPage != settledPage
-                    ) {
+                    val decision = ReaderPageSettledPolicy.resolve(
+                        previousSettledPage = lastSettledPage,
+                        pendingProgrammaticSettledPage = pendingProgrammaticSettledPage,
+                        settledPage = settledPage,
+                    )
+                    if (decision.shouldInterruptFollow) {
                         onManualFollowInterruption()
                     }
-                    if (programmaticSettledPage == settledPage) {
-                        pendingProgrammaticSettledPage = null
-                    }
-                    lastSettledPage = settledPage
+                    pendingProgrammaticSettledPage = decision.nextPendingProgrammaticSettledPage
+                    lastSettledPage = decision.nextLastSettledPage
                     onPageSettled(settledPage)
                 }
         }
