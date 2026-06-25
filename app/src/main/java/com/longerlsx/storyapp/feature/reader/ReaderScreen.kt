@@ -1739,6 +1739,12 @@ private fun PageReaderContent(
                         }
                     },
             ) { pageIndex ->
+                val interactions = ReaderPageSurfaceInteractionPolicy.resolve(
+                    pageIndex = pageIndex,
+                    currentPage = pagerState.currentPage,
+                    enableTapToDismissExpandedChrome = enableTapToDismissExpandedChrome,
+                    enableTtsRestartGesture = enableTtsRestartGesture,
+                )
                 ReaderPageSurface(
                     page = safePages[pageIndex],
                     themePalette = themePalette,
@@ -1748,12 +1754,12 @@ private fun PageReaderContent(
                     pageTopPadding = pageTopPadding,
                     pageBottomPadding = pageBottomPadding,
                     highlightRange = highlightRange,
-                    onTapText = if (enableTapToDismissExpandedChrome) {
+                    onTapText = if (interactions.enableTextTap) {
                         onToggleChrome
                     } else {
                         null
                     },
-                    onLongPressCharOffset = if (pageIndex == pagerState.currentPage && enableTtsRestartGesture) {
+                    onLongPressCharOffset = if (interactions.enableLongPressRestart) {
                         onRestartFromCharOffset
                     } else {
                         null
