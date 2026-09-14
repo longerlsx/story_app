@@ -7,10 +7,78 @@ import com.longerlsx.storyapp.core.model.ReaderTtsTimerPreset
 import com.longerlsx.storyapp.core.model.ReadingMode
 import com.longerlsx.storyapp.feature.reader.ReaderThemePreset
 import java.nio.file.Files
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class ReaderSettingsStoreTest {
+
+    @Test
+    fun queuedSettingsAreImmediatelyReadableAndOnlyTheLatestSnapshotIsPersisted() = runTest {
+        val tempDir = Files.createTempDirectory("story-app-reader-settings-queued-test").toFile()
+        try {
+            val store = ReaderSettingsStore(tempDir, writeScope = this)
+            store.save(ReaderSettings(fontSizeSp = 20))
+            val latest = ReaderSettings(fontSizeSp = 24, nightBrightness = 0.45f)
+            store.save(latest)
+
+            assertEquals(latest, store.load())
+            assertFalse(tempDir.resolve("reader-settings.properties").exists())
+            advanceUntilIdle()
+            assertEquals(latest, ReaderSettingsStore(tempDir).load())
+            assertEquals(listOf("reader-settings.properties"), tempDir.list()?.toList())
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun invalidStoredFieldsFallBackWithoutDiscardingValidSettings() {
+        val tempDir = Files.createTempDirectory("story-app-reader-settings-invalid-test").toFile()
+        try {
+            tempDir.resolve("reader-settings.properties").writeText(
+                """
+                appearanceMode=UNKNOWN
+                readingMode=SCROLL
+                fontSizeSp=-4
+                lineHeightMultiplier=NaN
+                paragraphSpacingEm=Infinity
+                dayBrightness=4
+                nightBrightness=0.28
+                dayThemePreset=AMOLED
+                nightThemePreset=PAPER
+                ttsSpeechRate=-1
+                ttsPitch=NaN
+                """.trimIndent(),
+            )
+
+            assertEquals(
+                ReaderSettings(readingMode = ReadingMode.SCROLL, nightBrightness = 0.28f),
+                ReaderSettingsStore(tempDir).load(),
+            )
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun malformedPropertiesReturnDefaultsWithoutOverwritingTheOriginalFile() {
+        val tempDir = Files.createTempDirectory("story-app-reader-settings-corrupt-test").toFile()
+        try {
+            val file = tempDir.resolve("reader-settings.properties")
+            val corruptText = "fontSizeSp=\\uZZZZ"
+            file.writeText(corruptText)
+
+            assertEquals(ReaderSettings(), ReaderSettingsStore(tempDir).load())
+            assertEquals(corruptText, file.readText())
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
 
     @Test
     fun defaultReaderSettingsUsePageMode() {
@@ -18,7 +86,7 @@ class ReaderSettingsStoreTest {
     }
 
     @Test
-    fun savesAndLoadsReaderSettingsAcrossStoreRecreation() {
+    fun savesAndLoadsReaderSettingsAcrossStoreRecreation() = runTest {
         val tempDir = Files.createTempDirectory("story-app-reader-settings-test").toFile()
         try {
             val settings = ReaderSettings(
@@ -39,7 +107,8 @@ class ReaderSettingsStoreTest {
                 ),
             )
 
-            ReaderSettingsStore(tempDir).save(settings)
+            ReaderSettingsStore(tempDir, writeScope = this).save(settings)
+            advanceUntilIdle()
 
             assertEquals(settings, ReaderSettingsStore(tempDir).load())
         } finally {

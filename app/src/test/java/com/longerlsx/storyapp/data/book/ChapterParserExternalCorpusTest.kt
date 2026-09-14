@@ -1,6 +1,12 @@
 package com.longerlsx.storyapp.data.book
 
+import com.longerlsx.storyapp.core.model.ImportSourceType
+import com.longerlsx.storyapp.core.model.ReadingAnchor
+import com.longerlsx.storyapp.core.model.ReadingMode
+import com.longerlsx.storyapp.core.model.ReadingProgress
 import java.io.File
+import java.nio.file.Files
+import kotlinx.coroutines.test.runTest
 import org.junit.Assume.assumeTrue
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -10,14 +16,19 @@ import org.junit.Test
 class ChapterParserExternalCorpusTest {
 
     @Test
-    fun parsesExternalNovelCorpusWithExactOffsets() {
-        val corpusRoot = File("/Users/longshengxi/Downloads/小说测试集")
-        assumeTrue("External novel corpus is not available on this machine", corpusRoot.isDirectory)
-        val files = corpusRoot
-            .walkTopDown()
-            .filter { it.isFile && it.extension.equals("txt", ignoreCase = true) }
-            .toList()
-        assumeTrue("External novel corpus has no txt files", files.isNotEmpty())
+    fun calibratesProductionImportAndRestoreWithOneExternalNovel() = runTest {
+        val file = externalCorpusFiles().firstOrNull { it.name.contains("小猫咪在星际监狱") }
+        assumeTrue("Calibration novel is not available on this machine", file != null)
+
+        verifyImportAndRestore(listOf(requireNotNull(file))) { _, result ->
+            assertTrue(result.chapters.any { it.title == "第1章" })
+            assertTrue(result.chapters.any { it.title == "第66章" })
+        }
+    }
+
+    @Test
+    fun parsesExternalNovelCorpusWithExactOffsets() = runTest {
+        val files = externalCorpusFiles()
 
         var checkedPlayersGuide = false
         var checkedXianyuSystem = false
@@ -28,35 +39,7 @@ class ChapterParserExternalCorpusTest {
         var checkedXiuluochang = false
         var checkedHospitalPalace = false
         var checkedBraisedPork = false
-        files.forEach { file ->
-            val content = file.readText()
-            val normalized = TxtNormalizer.normalize(content)
-            val result = ChapterParser.parseDetailed(content)
-            assertTrue("${file.name} should parse at least one chapter", result.chapters.isNotEmpty())
-            assertTrue(
-                "${file.name} should preserve most chapter-like headings; diagnostics=${result.diagnostics}",
-                result.chapters.size >= (simpleChapterHeadingCount(normalized) * 0.8f).toInt().coerceAtLeast(1),
-            )
-
-            var previousEnd = 0
-            result.chapters.forEach { chapter ->
-                assertTrue("${file.name}: ${chapter.title} start is out of range", chapter.startOffset in 0..normalized.length)
-                assertTrue(
-                    "${file.name}: ${chapter.title} end is before start or out of range",
-                    chapter.endOffset in chapter.startOffset..normalized.length,
-                )
-                assertTrue(
-                    "${file.name}: ${chapter.title} overlaps previous chapter",
-                    chapter.startOffset >= previousEnd,
-                )
-                assertEquals(
-                    "${file.name}: ${chapter.title} offsets must point exactly at returned content",
-                    chapter.content,
-                    normalized.substring(chapter.startOffset, chapter.endOffset),
-                )
-                previousEnd = chapter.endOffset
-            }
-
+        verifyImportAndRestore(files) { file, result ->
             if (file.name.contains("玩家救世指南")) {
                 checkedPlayersGuide = true
                 val titles = result.chapters.map { it.title }
@@ -156,6 +139,131 @@ class ChapterParserExternalCorpusTest {
         assertTrue("External corpus should include 这座仙宫叫医院 target file", checkedHospitalPalace)
         assertTrue("External corpus should include 半夜想吃前任做的红烧肉怎么办 target file", checkedBraisedPork)
     }
+
+    private fun externalCorpusFiles(): List<File> {
+        val corpusRoot = File("/Users/longshengxi/Downloads/小说测试集")
+        assumeTrue("External novel corpus is not available on this machine", corpusRoot.isDirectory)
+        val files = corpusRoot.walkTopDown()
+            .filter { it.isFile && it.extension.equals("txt", ignoreCase = true) }
+            .sortedBy(File::getName)
+            .toList()
+        assumeTrue("External novel corpus has no txt files", files.isNotEmpty())
+        return files
+    }
+
+    private suspend fun verifyImportAndRestore(
+        files: List<File>,
+        verifyKnownHeadings: (File, ChapterParseResult) -> Unit,
+    ) {
+        val root = Files.createTempDirectory("story-app-external-corpus").toFile()
+        try {
+            val loader = TextContentLoader()
+            val storage = ImportedBookStorage(root)
+            val repository = InMemoryBookRepository(FileAnchorStore(root))
+            val coordinator = ImportCoordinator(repository, storage, loader)
+            val expected = files.mapIndexed { fileIndex, file ->
+                // Use the same decoder as import, including BOM and GB18030 handling.
+                val loaded = loader.loadNormalizedText(file)
+                val normalized = loaded.normalizedText
+                val parsed = ChapterParser.parseDetailed(normalized)
+                assertTrue("${file.name} should parse at least one chapter", parsed.chapters.isNotEmpty())
+                assertTrue(
+                    "${file.name} should preserve chapter-like headings; diagnostics=${parsed.diagnostics}",
+                    parsed.chapters.size >= (simpleChapterHeadingCount(normalized) * 0.8f)
+                        .toInt().coerceAtLeast(1),
+                )
+                var previousEnd = 0
+                parsed.chapters.forEach { chapter ->
+                    assertTrue("${file.name}: ${chapter.title} invalid start", chapter.startOffset in 0..normalized.length)
+                    assertTrue(
+                        "${file.name}: ${chapter.title} invalid end",
+                        chapter.endOffset in chapter.startOffset..normalized.length,
+                    )
+                    assertTrue("${file.name}: ${chapter.title} overlaps", chapter.startOffset >= previousEnd)
+                    assertEquals(
+                        "${file.name}: ${chapter.title} exact source slice",
+                        normalized.substring(chapter.startOffset, chapter.endOffset),
+                        chapter.content,
+                    )
+                    previousEnd = chapter.endOffset
+                }
+                verifyKnownHeadings(file, parsed)
+
+                val imported = coordinator.importTxt(
+                    fileName = file.name,
+                    bytes = file.readBytes(),
+                    sourceType = ImportSourceType.LOCAL_FILE,
+                    importedAt = 1_000L + fileIndex,
+                )
+                assertFalse("${file.name} should be a fresh import", imported.duplicate)
+                assertEquals(loaded.charsetName, imported.book.charset)
+                assertEquals(parsed.chapters.map { it.title }, imported.chapters.map { it.title })
+                assertEquals(parsed.chapters.indices.toList(), imported.chapters.map { it.chapterIndex })
+                imported.chapters.forEachIndexed { index, chapter ->
+                    assertEquals(parsed.chapters[index].startOffset, chapter.startOffset)
+                    assertEquals(parsed.chapters[index].endOffset, chapter.endOffset)
+                    assertEquals(
+                        "${file.name}: imported chapter $index body",
+                        parsed.chapters[index].content,
+                        repository.getChapterText(imported.book.id, index),
+                    )
+                }
+
+                val middleChapter = parsed.chapters.size / 2
+                val middleBody = parsed.chapters[middleChapter].content
+                assertTrue("${file.name}: need a nonzero intra-chapter anchor", middleBody.length > 1)
+                val progress = ReadingProgress(
+                    bookId = imported.book.id,
+                    anchor = ReadingAnchor(middleChapter, middleBody.length / 2),
+                    readingMode = if (fileIndex % 2 == 0) ReadingMode.PAGE else ReadingMode.SCROLL,
+                    updatedAt = 2_000L + fileIndex,
+                )
+                repository.saveReadingProgress(progress)
+                ExpectedImport(file.name, imported, parsed.chapters, progress)
+            }
+
+            // Recreate both stores and the repository; never read the original repository's cache.
+            val restoredStore = FileAnchorStore(root)
+            val restoredStorage = ImportedBookStorage(root)
+            val snapshots = restoredStorage.restoreCatalog()
+            assertEquals(expected.map { it.imported.book.id }.toSet(), snapshots.map { it.book.id }.toSet())
+            val restored = InMemoryBookRepository(restoredStore)
+            restored.hydrateFromStorage(snapshots, TextContentLoader())
+            restored.hydrateProgress(restoredStore.loadAll())
+            expected.forEach { book ->
+                val bookId = book.imported.book.id
+                val restoredBook = requireNotNull(restored.getBook(bookId))
+                assertEquals(book.imported.book.title, restoredBook.title)
+                assertEquals(book.imported.book.charset, restoredBook.charset)
+                assertEquals(book.imported.book.fileHash, restoredBook.fileHash)
+                assertEquals("${book.fileName}: full ordered chapter catalog", book.imported.chapters, restored.getChapters(bookId))
+                book.chapters.forEachIndexed { index, chapter ->
+                    assertEquals(
+                        "${book.fileName}: restored chapter $index body",
+                        chapter.content,
+                        restored.getChapterText(bookId, index),
+                    )
+                }
+                assertEquals("${book.fileName}: intra-chapter progress", book.progress, restored.getReadingProgress(bookId))
+                val anchor = book.progress.anchor
+                val restoredBody = requireNotNull(restored.getChapterText(bookId, anchor.chapterIndex))
+                assertEquals(
+                    "${book.fileName}: text at restored anchor",
+                    book.chapters[anchor.chapterIndex].content.substring(anchor.charOffset).take(48),
+                    restoredBody.substring(anchor.charOffset).take(48),
+                )
+            }
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    private data class ExpectedImport(
+        val fileName: String,
+        val imported: ImportResult,
+        val chapters: List<ParsedChapter>,
+        val progress: ReadingProgress,
+    )
 
     private fun simpleChapterHeadingCount(content: String): Int {
         return content

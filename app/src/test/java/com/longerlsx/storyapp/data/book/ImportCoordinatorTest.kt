@@ -1,8 +1,13 @@
 package com.longerlsx.storyapp.data.book
 
 import com.longerlsx.storyapp.core.model.ImportSourceType
+import com.longerlsx.storyapp.core.model.Book
+import com.longerlsx.storyapp.core.model.Chapter
+import java.io.IOException
 import java.nio.charset.Charset
 import java.nio.file.Files
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -11,6 +16,103 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ImportCoordinatorTest {
+
+    @Test
+    fun doubleBomImportPreservesBodyAcrossDiskRestore() = runTest {
+        val root = Files.createTempDirectory("story-app-import-double-bom").toFile()
+        try {
+            val storage = ImportedBookStorage(root)
+            val repository = InMemoryBookRepository()
+            val imported = ImportCoordinator(repository, storage, TextContentLoader()).importTxt(
+                "双BOM.txt", "\uFEFF\uFEFF第1章 开始\n甲乙".encodeToByteArray(), ImportSourceType.LOCAL_FILE,
+            )
+            val importedBodies = imported.chapters.map {
+                repository.getChapterText(imported.book.id, it.chapterIndex)
+            }
+            val restored = InMemoryBookRepository()
+            restored.hydrateFromStorage(storage.restoreCatalog(), TextContentLoader())
+            val restoredBodies = restored.getChapters(imported.book.id).map {
+                restored.getChapterText(imported.book.id, it.chapterIndex)
+            }
+
+            assertEquals(importedBodies, restoredBodies)
+            assertTrue(restoredBodies.joinToString("\n").contains("甲乙"))
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun whitespaceOnlyImportFailsWithoutPublishingAnUnreadableBook() = runTest {
+        val root = Files.createTempDirectory("story-app-import-whitespace").toFile()
+        try {
+            val storage = ImportedBookStorage(root)
+            val repository = InMemoryBookRepository()
+            val result = runCatching {
+                ImportCoordinator(repository, storage, TextContentLoader()).importTxt(
+                    "空白.txt", " \n\t\r\n　".encodeToByteArray(), ImportSourceType.LOCAL_FILE,
+                )
+            }
+
+            assertTrue(result.isFailure)
+            assertTrue(repository.observeBookshelf().first().isEmpty())
+            assertTrue(storage.restoreCatalog().isEmpty())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun failedRepositoryPublicationDoesNotLeaveRestorablePartialImport() = runTest {
+        val root = Files.createTempDirectory("story-app-import-rollback").toFile()
+        try {
+            val delegate = InMemoryBookRepository()
+            val repository = object : BookRepository by delegate {
+                override suspend fun saveImportedBook(book: Book, chapters: List<Chapter>, chapterContents: Map<Int, String>) {
+                    throw IOException("publication failed")
+                }
+            }
+            val storage = ImportedBookStorage(root)
+            val coordinator = ImportCoordinator(repository, storage, TextContentLoader())
+
+            val result = runCatching {
+                coordinator.importTxt("失败.txt", "第1章 开始\n正文。".encodeToByteArray(), ImportSourceType.LOCAL_FILE)
+            }
+
+            assertTrue(result.isFailure)
+            assertTrue(delegate.observeBookshelf().first().isEmpty())
+            assertTrue(storage.restoreCatalog().isEmpty())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun concurrentImportsOfSameTextPublishOnlyOneNewBook() = runTest {
+        val root = Files.createTempDirectory("story-app-import-concurrent").toFile()
+        try {
+            val delegate = InMemoryBookRepository()
+            val repository = object : BookRepository by delegate {
+                override suspend fun findBookByHash(fileHash: String): Book? {
+                    val result = delegate.findBookByHash(fileHash)
+                    delay(1)
+                    return result
+                }
+            }
+            val storage = ImportedBookStorage(root)
+            val coordinator = ImportCoordinator(repository, storage, TextContentLoader())
+            val bytes = "第1章 开始\n同一份正文。".encodeToByteArray()
+            val first = async { coordinator.importTxt("一.txt", bytes, ImportSourceType.LOCAL_FILE) }
+            val second = async { coordinator.importTxt("二.txt", bytes, ImportSourceType.EXTERNAL_INTENT) }
+            val results = listOf(first.await(), second.await())
+
+            assertEquals(1, results.count { !it.duplicate })
+            assertEquals(1, results.count { it.duplicate })
+            assertEquals(1, storage.restoreCatalog().size)
+        } finally {
+            root.deleteRecursively()
+        }
+    }
 
     @Test
     fun importTxtParsesAndStoresBook() = runTest {

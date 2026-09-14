@@ -13,7 +13,13 @@ object ChapterParser {
     }
 
     fun parseDetailed(content: String): ChapterParseResult {
-        val normalized = TxtNormalizer.normalize(content)
+        return parseNormalizedDetailed(TxtNormalizer.normalize(content))
+    }
+
+    /** Import offsets must refer to exactly the same normalized text used by disk readers. */
+    internal fun parseNormalized(normalized: String): List<ParsedChapter> = parseNormalizedDetailed(normalized).chapters
+
+    private fun parseNormalizedDetailed(normalized: String): ChapterParseResult {
         if (normalized.isBlank()) {
             return ChapterParseResult(
                 chapters = emptyList(),

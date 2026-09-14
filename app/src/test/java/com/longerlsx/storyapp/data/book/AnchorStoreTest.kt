@@ -11,6 +11,34 @@ import org.junit.Test
 class AnchorStoreTest {
 
     @Test
+    fun malformedProgressDoesNotPreventLoadingOtherBooks() {
+        val root = Files.createTempDirectory("story-app-malformed-anchor").toFile()
+        try {
+            root.resolve("reader-anchors.properties").writeText(
+                """
+                    progress.good.chapterIndex=2
+                    progress.good.charOffset=88
+                    progress.good.readingMode=PAGE
+                    progress.good.updatedAt=300
+                    progress.bad.chapterIndex=0
+                    progress.bad.charOffset=10
+                    progress.bad.readingMode=UNKNOWN
+                    progress.bad.updatedAt=400
+                    lastOpenedBookId=good
+                """.trimIndent(),
+            )
+
+            assertEquals(
+                listOf(ReadingProgress("good", ReadingAnchor(2, 88), ReadingMode.PAGE, 300L)),
+                FileAnchorStore(root).loadAll(),
+            )
+            assertEquals("good", FileAnchorStore(root).getLastOpenedBookId())
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
     fun savesAndLoadsProgressAcrossStoreRecreation() {
         val tempDir = Files.createTempDirectory("story-app-anchor-store-test").toFile()
         try {

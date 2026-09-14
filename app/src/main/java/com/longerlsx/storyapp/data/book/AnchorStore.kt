@@ -9,6 +9,11 @@ import java.util.Properties
 interface AnchorStore {
     fun save(progress: ReadingProgress)
 
+    fun saveProgressAndLastOpened(progress: ReadingProgress) {
+        save(progress)
+        setLastOpenedBookId(progress.bookId)
+    }
+
     fun load(bookId: String): ReadingProgress?
 
     fun loadAll(): List<ReadingProgress>
@@ -23,21 +28,36 @@ class FileAnchorStore(
 ) : AnchorStore {
     private val anchorFile = File(rootDir, "reader-anchors.properties")
 
+    @Synchronized
     override fun save(progress: ReadingProgress) {
         val properties = loadProperties()
-        val prefix = "progress.${progress.bookId}"
-        properties.setProperty("$prefix.chapterIndex", progress.anchor.chapterIndex.toString())
-        properties.setProperty("$prefix.charOffset", progress.anchor.charOffset.toString())
-        properties.setProperty("$prefix.readingMode", progress.readingMode.name)
-        properties.setProperty("$prefix.updatedAt", progress.updatedAt.toString())
+        properties.putProgress(progress)
         storeProperties(properties)
     }
 
+    @Synchronized
+    override fun saveProgressAndLastOpened(progress: ReadingProgress) {
+        val properties = loadProperties()
+        properties.putProgress(progress)
+        properties.setProperty(KEY_LAST_OPENED_BOOK_ID, progress.bookId)
+        storeProperties(properties)
+    }
+
+    private fun Properties.putProgress(progress: ReadingProgress) {
+        val prefix = "progress.${progress.bookId}"
+        setProperty("$prefix.chapterIndex", progress.anchor.chapterIndex.toString())
+        setProperty("$prefix.charOffset", progress.anchor.charOffset.toString())
+        setProperty("$prefix.readingMode", progress.readingMode.name)
+        setProperty("$prefix.updatedAt", progress.updatedAt.toString())
+    }
+
+    @Synchronized
     override fun load(bookId: String): ReadingProgress? {
         val properties = loadProperties()
         return properties.readProgress(bookId)
     }
 
+    @Synchronized
     override fun loadAll(): List<ReadingProgress> {
         val properties = loadProperties()
         return properties.stringPropertyNames()
@@ -54,12 +74,14 @@ class FileAnchorStore(
             }
     }
 
+    @Synchronized
     override fun setLastOpenedBookId(bookId: String) {
         val properties = loadProperties()
         properties.setProperty(KEY_LAST_OPENED_BOOK_ID, bookId)
         storeProperties(properties)
     }
 
+    @Synchronized
     override fun getLastOpenedBookId(): String? {
         return loadProperties().getProperty(KEY_LAST_OPENED_BOOK_ID)
     }
@@ -73,10 +95,7 @@ class FileAnchorStore(
     }
 
     private fun storeProperties(properties: Properties) {
-        if (!rootDir.exists()) {
-            rootDir.mkdirs()
-        }
-        anchorFile.outputStream().use { output ->
+        writeFileAtomically(anchorFile) { output ->
             properties.store(output, null)
         }
     }
@@ -85,10 +104,10 @@ class FileAnchorStore(
         val prefix = "progress.$bookId"
         val chapterIndex = getProperty("$prefix.chapterIndex")?.toIntOrNull() ?: return null
         val charOffset = getProperty("$prefix.charOffset")?.toIntOrNull() ?: return null
-        val readingMode = getProperty("$prefix.readingMode")
-            ?.let(ReadingMode::valueOf)
+        val readingMode = ReadingMode.entries.firstOrNull { it.name == getProperty("$prefix.readingMode") }
             ?: return null
         val updatedAt = getProperty("$prefix.updatedAt")?.toLongOrNull() ?: return null
+        if (chapterIndex < 0 || charOffset < 0 || updatedAt < 0) return null
 
         return ReadingProgress(
             bookId = bookId,
