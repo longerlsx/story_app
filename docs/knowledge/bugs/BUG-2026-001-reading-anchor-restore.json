@@ -6,7 +6,9 @@
   "fix": [
     "Deferred position restore until the target chapter content had finished loading.",
     "Blocked initial progress bootstrap when a valid non-zero saved anchor already existed.",
-    "Added regression coverage for long-chapter restore so restart recovery is verified automatically."
+    "Added regression coverage for long-chapter restore so restart recovery is verified automatically.",
+    "2026-09-11 phase one: ReaderPositionState now distinguishes confirmed anchors, numbered pending requests and failures. Only confirmed positions reach the application-scoped serialized progress/last-book commit; failed or cancelled viewport changes cannot replace them.",
+    "ReaderNavigationFailureTest covers a rendered target read failure, unchanged memory/disk progress, leaving and retrying. ReadingPositionRestoreTest passes real scrolling, Activity relaunch, font changes and rotation with exact rendered-line assertions; host-process restart evidence remains separately recorded in the phase-one plan."
   ],
   "failed_attempts": [],
   "impact": "Resume-reading continuity broke on long books. Users could reopen the same chapter but still lose the exact place they stopped at, which is a high-friction failure for a reading app.",
@@ -20,5 +22,5 @@
   ],
   "confidence": 0.94,
   "created_at": "2026-04-16",
-  "updated_at": "2026-04-20"
+  "updated_at": "2026-09-11"
 }

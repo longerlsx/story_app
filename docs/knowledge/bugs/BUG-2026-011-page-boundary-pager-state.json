@@ -8,7 +8,9 @@
     "Resolve left/right page turns through a pure helper that requires contentLoaded, restoredPosition, non-empty pages, and no active pager scroll.",
     "Gate left/right page-turn decisions while a chapter-boundary transition animation is already active.",
     "Use PagerState.settledPage for page-boundary decisions.",
-    "Pass the explicit target chapter index through boundary callbacks and open that chapter directly."
+    "Pass the explicit target chapter index through boundary callbacks and open that chapter directly.",
+    "2026-09-11: the preceding per-chapter pager and separate boundary-transition solution is historical. StablePageReaderContent replaces it with one finite previous-last/current/next-first window, stable page identities and numbered navigation requests; no separate boundary animation or old turn-decision helper remains.",
+    "Queued turns resolve in input order from their pending target and original layout, while directory selection replaces old navigation. Confirmation requires the target settled page and actual placement. Existing cross-chapter regressions, ReaderPageForwardInteractionTest, ReaderNavigationInteractionTest and pending-turn/reflow/directory replacement tests passed on the API34 emulator."
   ],
   "failed_attempts": [
     "Including boundaryTransition in a Compose pointerInput key only restarts the gesture detector; it does not by itself prevent a new tap from entering page-turn decision logic while the boundary animation is active."
@@ -25,5 +27,5 @@
   ],
   "confidence": 0.9,
   "created_at": "2026-05-21",
-  "updated_at": "2026-06-22"
+  "updated_at": "2026-09-11"
 }

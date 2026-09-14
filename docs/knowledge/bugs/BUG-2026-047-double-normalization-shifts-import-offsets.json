@@ -1,0 +1,18 @@
+{
+  "id": "BUG-2026-047",
+  "title": "Repeated TXT normalization shifts imported chapter offsets for a double BOM",
+  "symptom": "A TXT beginning with two BOM characters can show different chapter text after saving and restoring a new repository, despite using the same source file.",
+  "root_cause": "TextContentLoader already normalizes decoded text, but import passed that result through ChapterParser.parse, which normalized it again. TxtNormalizer removes one leading BOM per call, so import calculated offsets after removing two BOMs while disk restoration sliced text after removing only one. The stored offsets and restored source no longer shared one coordinate system.",
+  "fix": [
+    "ImportCoordinator now calls ChapterParser.parseNormalized with exactly the normalized text returned by TextContentLoader. The raw-text parser entry still normalizes once; chapter recognition rules are unchanged.",
+    "As a separate import-integrity safeguard, reject parsed content with no nonblank body before publishing a book or committing its catalog.",
+    "On 2026-09-11, ImportCoordinatorTest.doubleBomImportPreservesBodyAcrossDiskRestore and whitespaceOnlyImportFailsWithoutPublishingAnUnreadableBook changed from RED to GREEN. The former compares imported and restored bodies; the latter verifies both the bookshelf and restored catalog stay empty.",
+    "The existing nine-book corpus also passed production decoding, import, persistence and fresh-repository restoration, comparing chapter titles, order, offsets, bodies and a middle reading position."
+  ],
+  "failed_attempts": [],
+  "impact": "New imports and restored chapter slices use the same normalized-text coordinates. This fix does not repair catalogs previously written with shifted offsets, and the focused fixture plus existing corpus do not establish coverage of every TXT format.",
+  "tags": ["android", "txt", "import", "normalization", "offset", "persistence", "resolved"],
+  "confidence": 0.99,
+  "created_at": "2026-09-11",
+  "updated_at": "2026-09-11"
+}

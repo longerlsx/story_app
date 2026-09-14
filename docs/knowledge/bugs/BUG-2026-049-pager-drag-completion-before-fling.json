@@ -1,0 +1,23 @@
+{
+  "id": "BUG-2026-049",
+  "title": "Pager drag completion can run before native fling finishes",
+  "status": "resolved",
+  "symptom": "In a normal release run with three short chapters, swiping from chapter A showed chapter B's body while the header and chapter progress remained on A. The mismatch persisted for two minutes, and changing font size returned the body to A. The strengthened existing ReaderNavigationInteractionTest.swipeCrossesShortChapterAndReturnsToTheSameText first failed at B's chapter-confirmation assertion after 14.166 seconds.",
+  "root_cause": "The reader treated DragInteraction.Stop followed by one frame and an idle PagerState as completion of the page turn. Native fling begins separately, so drag release can expose an idle gap before the final settling animation. Diagnostic runs observed isScrollInProgress change false-to-true-to-false around this boundary, proving that the old completion condition could run too early. The original failing run had no probe, so its exact early-return or waiting branch was not captured; the timing evidence must not be described as a log of that failure.",
+  "fix": [
+    "Wrap PagerDefaults.flingBehavior with TargetedFlingBehavior and preserve the native animation, remaining-distance callback and returned velocity. The wrapper only emits a completion signal associated with the same gesture identifier after native fling completes.",
+    "An independent effect waits for that gesture's Stop event, fling-completion signal and actual idle state, then submits its movement through the common position.turn request path. Actual page placement, confirmation and the existing ten-second failure protection remain owned by that path.",
+    "New and cancelled gestures invalidate older identifiers, preventing an old completion from confirming or clearing a newer gesture.",
+    "The four temporary diagnostic log lines were removed before the successful device run. The enhanced swipe test passed A-to-B-to-C-to-B-to-A with fast and slower swipes, checking body, title and persisted chapter at each step. The final signed release also passed normal A-to-B-to-C-to-B swipes with matching body and titles; the recorded forward transition showed no empty page or return to chapter start."
+  ],
+  "failed_attempts": [
+    "A single withFrameNanos after DragInteraction.Stop does not establish that native fling has started or finished; an idle observation at that boundary is insufficient.",
+    "The strengthened test passed twice with diagnostic logging. Those results reveal the timing mechanism but do not prove a production fix, because the logging itself changes scheduling.",
+    "Checking only that a chapter's body appears misses a stale confirmed position. The existing swipe test now also checks the chapter confirmation across A-to-B-to-C-to-B navigation."
+  ],
+  "impact": "The recorded defect separates visible text from the position used by chapter controls, saved progress and font reflow. Scope is the pager's drag-completion handoff; pagination and native fling animation are retained. The corrected handoff is verified in the covered emulator test and normal release paths; it does not establish Xiaomi performance.",
+  "tags": ["android", "compose", "reader", "page-mode", "chapter-boundary", "gesture", "reading-progress", "resolved"],
+  "confidence": 0.9,
+  "created_at": "2026-09-11",
+  "updated_at": "2026-09-11"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "BUG-2026-046",
+  "title": "TTS range offsets refer to transformed speech text but are applied directly to source text",
+  "symptom": "Highlight and recoverable positions can point at the wrong source character when speech text inserts or collapses whitespace or removes symbols.",
+  "root_cause": "ReaderTtsSegmenter joins sentence spans with a space and sanitizes whitespace/symbols, but retains only source segment start/end offsets. ReaderTtsService.onUtteranceRangeStart adds the speech callback offsets directly to the source start without an offset mapping.",
+  "fix": [],
+  "failed_attempts": [],
+  "impact": "A current-source Kotlin probe transforms 你好。世界。 into 你好。 世界。: 世界 starts at speech offset 4 but source offset 3. The service calculation therefore maps it to 4. This proves the coordinate mismatch; actual highlight and resume effects remain to be verified with engine callbacks. This does not explain the user's lack of a male voice.",
+  "tags": ["android", "reader", "tts", "offset", "highlight", "investigating"],
+  "confidence": 0.99,
+  "created_at": "2026-09-11",
+  "updated_at": "2026-09-11"
+}

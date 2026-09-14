@@ -1,191 +1,67 @@
-# Agent Operating Agreements
+# Story App 协作约定
 
-This document records the thread-level operating agreements that must survive
-context compaction and future sessions. It is part of the required read path for
-reader work.
+本文件只保留跨任务成立的工作规则。项目阅读路由和文档职责见 [文档入口](../README.md)，功能与开放需求见 [当前状态](../current-state.md)。旧任务中的“默认优先分页”“系统性找 bug”等方向属于历史，不是今天所有工作的自动目标。
 
-## Required Read Position
+## 范围与沟通
 
-Before working on reader/parser/TTS/settings behavior, read these in order.
-This applies to every new work slice and every continuation after context
-compaction, not only to a fresh thread:
+1. 先理解用户这一轮要达成什么。项目了解和需求讨论以功能、交互、实现关系为主；故障诊断追证据；明确修改请求则实现并验证。不要把一种任务擅自改成另一种。
+2. 中文对话先用自然、简洁的中文说明结果和实际影响。保留用户术语，区分已确认需求、代码事实、推断、建议和待选择事项。
+3. 窄改动不扩展为平台或全面重构。优先复用现有入口，结构调整必须服务于明确的问题或能力。
+4. 新消息默认用于补充或纠正当前任务，继承原目标与已确认约束。重要背景及时记录到对应事实源，避免只依赖聊天上下文。
+5. 不因代码由某个模型完成就预设质量；以当前代码、真实操作和相应证据判断。
 
-1. [README.md](/Users/longshengxi/proj/story_app/README.md)
-2. [docs/knowledge/README.md](/Users/longshengxi/proj/story_app/docs/knowledge/README.md)
-3. This file
-4. [docs/knowledge/bugs/INDEX.md](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/INDEX.md)
-5. Bug JSON records matching the current tags or symptom
-6. Relevant specs/plans under [docs/superpowers/specs](/Users/longshengxi/proj/story_app/docs/superpowers/specs) and [docs/superpowers/plans](/Users/longshengxi/proj/story_app/docs/superpowers/plans)
+## 实现与证据
 
-Do not treat this read order as proof of correctness. It only establishes
-context and hypotheses.
+### 计划与验证准入
 
-For long-running goals, the minimum per-slice refresh inside this file is:
+- 实施前固定一个主类型、一个主结论、必要不变量、排除项、每项结论的最小直接证据和通过后的停止线。混合任务最多增加一个次类型，不叠加功能、修复、重构、性能的全部验收门。
+- 新增命令、测试或探针前，说明它回答什么未决问题、什么结果会改变实现或通过判断，以及现有入口为什么不够。所有结果都不改变决策时不执行；旧计划的验收脚本不自动成为本轮必跑项。
+- 优先扩展已有权威入口。禁止验证器验证验证器、证明文件证明证明文件，以及代理审查上一层审查的递归流程。
 
-1. `Initial Agreement Index`
-2. `Current Priority`
-3. `Emulator And UI Evidence`
-4. `Subagent Use`
-5. `Git Cadence`
+1. 当前代码和实际调用路径、可重复运行/测试证据优先。历史 bug、计划和测试名称只是定位线索，不能单独证明今天的行为。
+2. 已确认且未受影响的结论可以继承。相关实现、输入、环境或需求变化时，重新核对受影响部分；不因换阶段或压缩上下文重复证明整个项目。
+3. 修 bug 时先明确可复现条件或可证实的原因，再作最小修复；新增/改变产品行为需要相应回归证据。纯文档和低影响机械变更不为流程新建产品测试。
+4. 测试通过不等于用户体验已验收。按问题选择直接证据：设备交互、动态录屏/日志、真实 TXT、存储重载或针对性测试。静态截图不证明动画；替代引擎不证明发声或音色；Activity 重建不证明进程重建。
+5. 性能或兼容性结论需要真实测量，不能把静态风险写成已发生的卡顿或厂商故障。无法执行的验证明确记录原因与未覆盖范围。
+6. 目标、必要不变量和直接接缝已有足够证据后停止。不要建立重复审计、验证验证器或新的发布证明系统。
 
-## Initial Agreement Index
+7. 能由已确认代码路径和不变量直接推出的结论，写清理由后停止，不把每一步推理改写为脚本。显示、并发、性能、平台和生命周期必须取得直接运行证据；替身或状态注入不能代替真实用户路径，跳过启动支线不能声称完整启动通过。
+8. 验证结果必须对应相关的新构建；共享输出目录的构建和测试串行。源码、配置、输入或工具链变化后只重验受影响部分；同一最终代码已有有效证据时，不因进入交付、文档整理或清理阶段再次运行。
 
-The active project objective is to systematically improve the Story App Android
-TXT reader's code structure, module boundaries, reuse, and test coverage while
-finding and fixing real usage, visual, and interaction bugs.
+## 设备、语料与临时工具
 
-Standing agreements:
+可重复的环境和操作方法统一维护在 [环境与验证操作说明](gradle-android-environment-troubleshooting.md)。遇到设备相关问题时，先检查本机设备/模拟器能力再判断能否验证；不把某个历史模拟器结果推广成所有设备兼容。
 
-1. Evidence outranks memory. Current code paths, current command output,
-   reproducible behavior, logs, emulator observation, screenshots, recordings,
-   and test output are evidence.
-2. Historical docs, bug records, plans, test names, and previous conclusions are
-   search clues and hypotheses, not final judgment sources.
-3. Passing tests are not sufficient proof of user-facing correctness. Final
-   claims must cross-check code, current test output, runtime behavior, or
-   reproducible steps.
-4. Avoid broad, purposeless rewrites. Prefer small, verifiable improvements at
-   bug clusters, duplicate logic, inconsistent state flows, and hard-to-test
-   boundaries.
-5. Prefer reusable pure logic for reader/parser/TTS/settings decisions, covered
-   by unit tests. Keep Compose/UI code focused on state connection and rendering.
-6. Do not break current behavior. Structural changes need regression tests or
-   explicit manual verification evidence.
-7. Do not revert user changes. In a dirty worktree, identify unrelated changes
-   before editing.
-8. Confirmed bug fixes must update [docs/knowledge/bugs](/Users/longshengxi/proj/story_app/docs/knowledge/bugs) and [bugs/INDEX.md](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/INDEX.md).
-9. Reusable failed paths belong in `failed_attempts`, not only in chat history.
-10. If project-level understanding changes, update
-    [2026-04-android-reader-development-cycle.md](/Users/longshengxi/proj/story_app/docs/knowledge/2026-04-android-reader-development-cycle.md).
+优先使用现有测试、正常构建和直接检查。确有必要的一次性探针放 `/private/tmp` 等临时目录，结论记录最小输入、结果和限制，结束后删除临时源码、数据和编译产物。只有重复使用且有明确维护责任的工具才进入仓库。
 
-## Current Priority
+批量工作先用代表性小样本校准真实入口及判断方法，再扩大便宜的自动检查。区分自动全量处理与昂贵的模型逐条阅读，只审核会改变结论的未决问题；集中提取缺失信息，不因发现一个问题反复重扫全部小说。
 
-As of 2026-06-24, bias new investigation and optimization work toward page mode
-unless a higher-priority regression is discovered.
+### 一次性验收代码预算
 
-Page-mode work means discovering and reducing visual and interaction defects in
-the actual reading experience first. Code structure improvements are useful
-when they make page-mode behavior easier to prove, reuse, and maintain; they
-are not an end in themselves.
+本规则自 2026-09-11 本轮第一阶段实施起正式引入，不追溯为此前已适用的约束。
 
-Primary page-mode risk areas:
+- 每份实施计划明确写出：`一次性验收代码预算：预计 N 行，硬上限 800 行；默认不进入仓库。` 默认预计接近 0 行；800 行是停止线，不是配额。
+- 按整个任务、主代理及全部子代理合计新增或实质改写的手写物理行数，包含临时脚本、专用验证器及配套配置，不得拆文件、拆任务或改名规避。
+- 产品实现和直接验证产品行为、长期进入日常套件的回归测试不计入；不得把一次性框架改称回归测试。一次性代码默认在 `/private/tmp`，结束删除，不自行转正入仓。
+- 接近上限时立即停止扩写，说明当前简单行数统计、证据缺口、更小方案和删除安排；超过上限须取得用户明确授权。只用简单 diff 或行数统计，不为管理预算再开发工具。
 
-- page anchor save/restore and visible page starts
-- page-mode and scroll-mode consistency where they share state
-- cross-chapter forward/backward turns
-- page layout, paragraph spacing, line height, font size, safe areas, and bottom clipping
-- top bar, bottom chrome, settings sheet, directory, and night-mode overlays while in page mode
-- tap zones, center-tap chrome reveal, left/right page turns, long press, and auto-hide timing
-- TTS start/follow/highlight/pause behavior across pages and chapter boundaries
-- settings changes that should invalidate pagination or layout cache
+## 子代理与独立检查
 
-Start page-mode retrieval from these records when symptoms overlap:
+- 只派发能独立推进的有边界任务，说明目标、只读/可写文件、允许命令、排除项、证据要求和停止条件。共享构建目录的构建/测试顺序执行。
+- 依据复杂度和风险安排检查，不要求所有讨论、文档修改或小步骤都经历固定的“计划审批 + 两轮专职审查”。复杂产品变更应在实施前独立检查方案，并在完成后覆盖代码正确性和测试缺口；检查角色可合并，避免重复审查。
+- 主代理核实发现，明确接受、排除或记录剩余风险；子代理输出不是最终权威，不得自行扩大验收或继续派生审查链。
+- 派发时同时说明失败应回报的直接事实。新增验证由主代理判断是否必要；子代理只能先报告未决问题、现有入口不足及最小取证成本，不先运行再扩大范围。
+- 使用结果前等待任务结束；未再需要的运行任务及时停止。工具提供 close/release 时使用；没有该能力时确认任务已结束即可，不要求不存在的调用。
 
-- [BUG-2026-003](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-003-page-boundary-previous-chapter.json)
-- [BUG-2026-007](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-007-cross-chapter-hard-cut.json)
-- [BUG-2026-008](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-008-page-mode-bottom-clipping.json)
-- [BUG-2026-011](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-011-page-boundary-pager-state.json)
-- [BUG-2026-012](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-012-boundary-transition-layout-mismatch.json)
-- [BUG-2026-018](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-018-page-mode-progress-uses-raw-page-offset.json)
-- [BUG-2026-029](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-029-page-mode-body-center-tap-missed.json)
-- [BUG-2026-040](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-040-page-mode-immersive-header-overlaps-body.json)
+## 文档维护
 
-Relevant page-mode plans/specs:
+- 同一规则或事实只保留一个权威位置，其他地方链接；具体分工见 [文档入口](../README.md)。
+- 已确认 bug 修复及高价值调查维护匹配的 JSON 和索引，标准见 [bug 索引](bugs/INDEX.md)。普通背景梳理不强制新建问题记录，未经验证的猜测不标为已确认或已解决。
+- 功能、交互、边界改变时更新当前状态相应部分。历史设计保留当时身份，不不断追加成第二份当前状态。
+- 只将跨任务有效、会改变行为且有清楚适用范围的经验提升为规则；不把一次性任务优先级、SHA、日志或临时工具写入本文件。
 
-- [2026-04-17-reader-mode-behavior-refine-design.md](/Users/longshengxi/proj/story_app/docs/superpowers/specs/2026-04-17-reader-mode-behavior-refine-design.md)
-- [2026-04-17-reader-mode-behavior-refine.md](/Users/longshengxi/proj/story_app/docs/superpowers/plans/2026-04-17-reader-mode-behavior-refine.md)
-- [2026-04-20-reader-topbar-and-page-transition-design.md](/Users/longshengxi/proj/story_app/docs/superpowers/specs/2026-04-20-reader-topbar-and-page-transition-design.md)
-- [2026-04-20-reader-topbar-and-page-transition.md](/Users/longshengxi/proj/story_app/docs/superpowers/plans/2026-04-20-reader-topbar-and-page-transition.md)
+## Git 与交付
 
-## Emulator And UI Evidence
-
-Use the Android emulator and Computer Use as available verification tools, not
-as optional user-only checks.
-
-Baseline:
-
-- Device: Pixel 8
-- Runtime: Android 14 / API 34
-
-Operational notes:
-
-- If the emulator appears unavailable, inspect/wake it before assuming the user
-  must intervene.
-- Use `adb shell svc power stayon true` or equivalent when long test sessions
-  are likely to be interrupted by sleep.
-- Use Computer Use for Android Studio/emulator UI actions when automated tests
-  cannot prove the interaction.
-- Dynamic issues need dynamic evidence when feasible: emulator recording,
-  repeated screenshots, logcat, and explicit reproduction steps.
-- Static screenshots are only enough for stable final-state visual checks.
-
-Recordings should be considered for:
-
-- animations and transitions
-- page jumps, relayout, flashing, or flicker
-- auto-hide timing
-- gestures, tap zones, long press, and swipe feedback
-- TTS follow and highlight motion
-- cross-page or cross-chapter turns
-- display corruption that appears only after repeated interaction
-
-Available local video tools:
-
-- `/opt/homebrew/bin/ffmpeg`
-- `/opt/homebrew/bin/ffprobe`
-
-## Operating Memory Maintenance
-
-Keep this file current when a new standing agreement or reusable capability
-appears during the work.
-
-Record here:
-
-- user corrections to agent behavior that should apply beyond the current turn
-- tool and plugin capabilities that should be considered by default, such as
-  Computer Use for Android Studio/emulator interaction
-- video, screenshot, logcat, and emulator setup methods that improve evidence
-  quality
-- external test data paths and when they should be used
-- changes to subagent limits, lifecycle rules, or git cadence
-
-Do not record one-off debugging diaries here. Bug-specific root causes,
-failed attempts, and fixes belong in the matching bug JSON and bug index.
-
-## Test Inputs And Real Corpus
-
-Use automated tests first when they can prove the behavior. Use real data when
-parser/import/page layout risks depend on realistic TXT structure.
-
-Real novel corpus path provided by the user:
-
-- `/Users/longshengxi/Downloads/小说测试集`
-
-Treat corpus observations as evidence only after preserving the relevant file,
-input fragment, command, and observed behavior.
-
-## Subagent Use
-
-Subagents are for independent blind-spot coverage and review. They are not final
-authority.
-
-Limits and lifecycle:
-
-1. Small tasks do not use subagents.
-2. Normal implementation tasks use at most three subagents: plan review, code
-   review, and test-completeness review.
-3. Complex tasks use at most four subagents, adding only one focused specialist
-   such as page-mode, anchor, Compose display, TTS, or TXT parser/offset.
-4. More than four requires an explicit reason and independent high-risk domains.
-5. Do not launch duplicate generic reviewers.
-6. Give each subagent concrete files, diffs, commands, assumptions, and questions.
-7. Require findings with severity, file/line references, and verifiable facts.
-8. The main agent must resolve every finding as fixed, factually rejected, or
-   recorded residual risk.
-9. Close/release finished subagents with the available harness mechanism before
-   claiming the task is complete.
-
-## Git Cadence
-
-Prefer small Chinese commits after each solved issue or coherent structural
-improvement. Keep unrelated dirty worktree files out of the commit.
+1. 修改前检查仓库状态，保护已有 staged、unstaged、untracked 内容，不回滚无关用户改动。
+2. 获授权进行 Git 交付时，按一个问题或一致改动形成小的中文提交，不混入无关文件。创建提交、合并、推送和清理分别说明状态，用户授权到哪一步就做到哪一步。
+3. 交付前通读完整结果，修正矛盾、过期身份、歧义、断链、意外文件和未清理产物。最终说明实际完成内容、验证结果及重要限制，不让用户逐次发现遗漏。

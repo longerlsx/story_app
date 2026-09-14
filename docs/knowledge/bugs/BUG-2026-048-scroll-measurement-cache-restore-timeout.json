@@ -1,0 +1,27 @@
+{
+  "id": "BUG-2026-048",
+  "title": "Scroll restoration times out because measured lines are never published from SideEffect",
+  "status": "resolved",
+  "symptom": "During the 2026-09-11 phase-one implementation, ReadingPositionRestoreTest.activityRelaunchFontChangeAndRotationKeepExactSavedScrollLine reached paragraph 120 of a 220-paragraph sample through real scrolling, but the subsequent disk progress remained at chapter 1, character 0. A normal MainActivity launch also displayed the positioning timeout, and tapping Retry timed out again.",
+  "root_cause": "The chapter composable read bodyMetrics and renderedLines only inside its SideEffect callback, rather than during composition. Updates from onGloballyPositioned and the child paragraph renderer therefore did not subscribe and invalidate that chapter's composition; the effect that should publish completed metrics could remain at its initial empty execution. The child renderer completed all measurements, but the root restoration map never received them. Device probes confirmed 220 of 220 paragraphs measured and 220 aggregated lines, a stable root map identity, and no root write or disposal callback. After fixing publication, the exact-line assertion exposed a separate coordinate error: body.positionInParent omitted the chapter Column's top padding. The target line appeared at y=221 instead of y=158, a 63 px difference matching that chapter's 24 dp padding.",
+  "fix": [
+    "Read bodyMetrics and renderedLines during composition into an immutable readyMetrics snapshot, then publish that snapshot in SideEffect. The chapter now subscribes to both measurement states and reruns the effect when either becomes ready.",
+    "Use the same chapterTopPadding value for the Column and the measured body offset, adding the padding when converting body.positionInParent into the complete lazy-item coordinate system.",
+    "Related defensive correction: ReaderScrollLayoutKey identifies width, density, font scale and text parameters; the metrics map and effects share this identity, and measurement state changes together with the actual Text subtree. Height-only changes do not invalidate scroll lines.",
+    "Related defensive correction: expanding the feed from the selected chapter to all chapters no longer replaces the same-book, same-layout metrics map. Write and disposal callbacks are explicitly remembered by book and layout. These changes alone did not fix the observed timeout.",
+    "ON_STOP calls the latest progress-saving closure through rememberUpdatedState. This is a lifecycle safeguard, not the demonstrated cause of the missing root metrics.",
+    "The final build without temporary probes passed ReadingPositionRestoreTest.activityRelaunchFontChangeAndRotationKeepExactSavedScrollLine: 1 test, 65.679 seconds. It verifies initial positioning completes, real scrolling through the 220-paragraph sample, persisted progress, Activity relaunch, an 18-to-20 sp font change and rotation, with the saved text line exactly aligned and fully visible.",
+    "Temporary ReaderScrollProbe instrumentation was removed from production source before that final build. The task's cumulative temporary verification-code accounting reached 27 handwritten lines; no probe-backed intermediate build is used for the final GREEN claim."
+  ],
+  "failed_attempts": [
+    "Retrying the same request did not recover the normal-launch timeout; it did not cause the chapter to publish its already measured lines.",
+    "Coordinating Text subtree recreation with layout-cache invalidation did not resolve this failure. Subsequent probes showed the child measurement was complete, so missing Text callbacks were not the cause of the recorded timeout.",
+    "Retaining the metrics map across feed expansion and explicitly remembering its callbacks also left the same RED result. The root map identity stayed unchanged, and neither write nor disposal ran; do not keep changing map generations before checking where state is read during composition.",
+    "Checking only that a middle paragraph is visible does not prove restoration completed: the scroll view can still move under an error overlay while the last confirmed progress is correctly protected from overwriting."
+  ],
+  "impact": "The covered emulator path now completes scroll restoration and preserves the exact saved line through Activity relaunch, font changes and rotation. The cited test does not terminate the host process and does not establish Xiaomi device performance. PAGE rendering previously passed a constant default layoutSize and does not use the new scroll subtree key; its pagination, text styling and source-offset calculations are unchanged by this correction.",
+  "tags": ["android", "compose", "reader", "scroll-mode", "anchor-restore", "text-layout", "resolved"],
+  "confidence": 0.99,
+  "created_at": "2026-09-11",
+  "updated_at": "2026-09-11"
+}

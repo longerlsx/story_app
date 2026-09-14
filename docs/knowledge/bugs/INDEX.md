@@ -33,13 +33,16 @@ Canonical template:
 
 ## Required Workflow
 
-Every debugging or bug-fix thread must follow this update path before the task is considered complete:
+Confirmed bug fixes and high-value ongoing investigations follow this update
+path. General background reading, requirements discussion, and documentation work
+do not require creating a bug record. Keep unverified suspicions distinct from
+confirmed causes, and never mark an unimplemented fix as resolved.
 
 1. Create a new bug JSON if the issue is new.
 2. Update an existing bug JSON if the issue is a continuation, refinement, or newly understood root cause.
 3. Record failed-but-reusable attempts in `failed_attempts` instead of burying them in chat history.
 4. Add or update the row in the `Records` table below.
-5. If the bug affects broader project understanding, update the cycle summary in [../2026-04-android-reader-development-cycle.md](/Users/longshengxi/proj/story_app/docs/knowledge/2026-04-android-reader-development-cycle.md).
+5. If the bug changes current capability or risk understanding, update the relevant part of [current-state.md](../../current-state.md). Keep the historical cycle summary historical.
 
 This is mandatory for both:
 
@@ -83,7 +86,7 @@ This is mandatory for both:
 | BUG-2026-024 | TXT parser rejects numbered subtitle chapter titles that end with punctuation | resolved | `txt`, `toc`, `chapter-parser`, `offset` | [BUG-2026-024-txt-parser-numbered-subtitle-punctuation-headings.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-024-txt-parser-numbered-subtitle-punctuation-headings.json) |
 | BUG-2026-025 | TXT parser drops numbered chapter titles when a repeated special subtitle follows | resolved | `txt`, `toc`, `chapter-parser`, `offset` | [BUG-2026-025-txt-parser-special-double-title-merge.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-025-txt-parser-special-double-title-merge.json) |
 | BUG-2026-026 | TXT parser treats in-body round attempt lines ending with ellipsis as chapters | resolved | `txt`, `toc`, `chapter-parser`, `chapter-boundary` | [BUG-2026-026-txt-parser-round-punctuation-body-line.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-026-txt-parser-round-punctuation-body-line.json) |
-| BUG-2026-027 | External TXT import crashes when a file URI cannot be opened | resolved | `txt`, `external-intent`, `crash` | [BUG-2026-027-external-import-unreadable-file-uri-crash.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-027-external-import-unreadable-file-uri-crash.json) |
+| BUG-2026-027 | External TXT import crashes when a file URI cannot be opened; shared local/external error feedback added | resolved | `txt`, `external-intent`, `error-feedback` | [BUG-2026-027-external-import-unreadable-file-uri-crash.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-027-external-import-unreadable-file-uri-crash.json) |
 | BUG-2026-028 | TXT parser treats chapter-like dialogue lines as real chapter headings | resolved | `txt`, `chapter-parser`, `offset` | [BUG-2026-028-txt-parser-chapter-like-dialogue-false-positive.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-028-txt-parser-chapter-like-dialogue-false-positive.json) |
 | BUG-2026-029 | Page-mode body text center taps can miss reader chrome toggle | resolved | `reader`, `page-mode`, `chrome`, `interaction` | [BUG-2026-029-page-mode-body-center-tap-missed.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-029-page-mode-body-center-tap-missed.json) |
 | BUG-2026-030 | Bookshelf and source entry expose implementation-progress copy | resolved | `bookshelf`, `source-entry`, `visual`, `copy` | [BUG-2026-030-bookshelf-source-developer-copy.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-030-bookshelf-source-developer-copy.json) |
@@ -101,14 +104,21 @@ This is mandatory for both:
 | BUG-2026-042 | Reader inline pill labels wrap and crowd settings choices | resolved | `reader`, `settings`, `tts`, `visual` | [BUG-2026-042-reader-inline-pill-long-label-wrap.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-042-reader-inline-pill-long-label-wrap.json) |
 | BUG-2026-043 | Reader TOC long book titles wrap and crowd the directory header | resolved | `reader`, `toc`, `text-layout`, `visual` | [BUG-2026-043-reader-toc-long-book-title-wrap.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-043-reader-toc-long-book-title-wrap.json) |
 | BUG-2026-044 | Reader TTS transient message long copy wraps and enlarges the overlay | resolved | `reader`, `tts`, `text-layout`, `visual` | [BUG-2026-044-reader-tts-transient-message-long-copy-wrap.json](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/BUG-2026-044-reader-tts-transient-message-long-copy-wrap.json) |
+| BUG-2026-045 | Tab-containing chapter titles disappear after catalog restore | resolved | `txt`, `toc`, `persistence` | [BUG-2026-045-tab-heading-lost-on-catalog-restore.json](BUG-2026-045-tab-heading-lost-on-catalog-restore.json) |
+| BUG-2026-046 | TTS transformed-text offsets are applied directly to source text | investigating | `tts`, `offset`, `highlight` | [BUG-2026-046-tts-spoken-source-offset-mismatch.json](BUG-2026-046-tts-spoken-source-offset-mismatch.json) |
+| BUG-2026-047 | Repeated TXT normalization shifts imported chapter offsets for a double BOM | resolved | `txt`, `import`, `normalization`, `offset` | [BUG-2026-047-double-normalization-shifts-import-offsets.json](BUG-2026-047-double-normalization-shifts-import-offsets.json) |
+| BUG-2026-048 | Scroll restoration times out because measured lines are never published from SideEffect | resolved | `scroll-mode`, `anchor-restore`, `text-layout` | [BUG-2026-048-scroll-measurement-cache-restore-timeout.json](BUG-2026-048-scroll-measurement-cache-restore-timeout.json) |
+| BUG-2026-049 | Pager drag completion can run before native fling finishes | resolved | `page-mode`, `chapter-boundary`, `gesture`, `reading-progress` | [BUG-2026-049-pager-drag-completion-before-fling.json](BUG-2026-049-pager-drag-completion-before-fling.json) |
+| BUG-2026-050 | Obsolete synchronous pagination delays the latest font reflow | resolved | `page-mode`, `performance`, `cancellation` | [BUG-2026-050-obsolete-pagination-delays-reflow.json](BUG-2026-050-obsolete-pagination-delays-reflow.json) |
 
 ## Retrieval Hints For Future Threads
 
 - If a new issue mentions “same chapter but wrong place”, start with `BUG-2026-001`.
+- If scroll positioning times out despite complete child measurements, compare `BUG-2026-048`; read measurement state during composition before publishing its snapshot in SideEffect. For a constant vertical restore error, also include the chapter's outer top padding in body-to-item coordinates.
 - If page turns feel wrong only at chapter edges, compare `BUG-2026-003` and `BUG-2026-007`.
-- If right-edge taps at a chapter end sometimes do nothing, start with `BUG-2026-011`; the confirmed fix is to isolate pager state by chapter and use `settledPage`.
-- If text jumps when a cross-chapter page animation finishes, start with `BUG-2026-012`; the confirmed fix is to render animation previews through the same page surface as the pager.
-- If page mode restores or re-anchors to a position just before the visible top of a page, especially near leading blank lines, start with `BUG-2026-018`; the confirmed fix is to persist `visibleStartCharOffset` from `ReaderPageSlice`.
+- If right-edge taps at a chapter end sometimes do nothing, start with `BUG-2026-011`; the current finite window and queued-navigation design supersedes the historical per-chapter pager fix; use the phase-one entry in that record.
+- If text jumps when a cross-chapter page animation finishes, start with `BUG-2026-012`; the current implementation uses one Pager and stable page identities; the separate animation described in the original fix is historical.
+- If page mode restores or re-anchors to a position just before the visible top of a page, especially near leading blank lines, start with `BUG-2026-018`; normal page turns use visible starts, while reflow preserves the requested character within its new page; do not replace that character with the new page start.
 - If TXT import misses `第 1 章` or leaks adjacent duplicate title lines like `第一章` into body text, start with `BUG-2026-013`; the confirmed fix is the clean-room rule-selection parser and body-offset persistence.
 - If a real TXT has chapter titles like `第2章 系列名:一句疑问句？` and parser merges many chapters together, start with `BUG-2026-017`; the confirmed fix is punctuation allowance only after explicit subtitle separators plus an external corpus smoke test.
 - If a real TXT has chapter titles like `第1章 001 系统都能绑错？` or `第51章 050 丹道比试，第一！`, start with `BUG-2026-024`; the confirmed fix is a narrow numbered-subtitle punctuation allowance on Chinese numbered chapter rules, not a broad sentence-punctuation exception.
@@ -124,7 +134,8 @@ This is mandatory for both:
 - If UIAutomator reader tests pass alone but fail in mixed groups, logcat says a non-clickable Compose semantics node was clicked, reset helpers delete files but leave app-process state alive, or a page-mode mixed class cannot navigate to its target page, start with `BUG-2026-015`; the confirmed fix is center/shell-coordinate clicks plus helpers that leave chrome and in-memory repositories in a known state.
 - If the bottom reader chrome grows, jumps, or crowds after enabling a TTS countdown, start with `BUG-2026-016`; the confirmed fix is single-line shared action-label rendering for long timed TTS labels, and visual regressions should derive timed labels from the current reader TTS UI resolver instead of stale literals.
 - If a real TXT opens at `第1章` but the bottom chapter progress shows `2/N章`, start with `BUG-2026-023`; the confirmed fix is to format reader progress through a display helper that excludes a leading synthetic `前言` from numbered chapter counts without changing parser offsets or navigation.
-- If an external TXT open/share intent returns to the launcher or force-closes the app, start with `BUG-2026-027`; the confirmed fix is to treat URI query/open failures as a non-importable payload instead of letting `ContentResolver.openInputStream` exceptions escape.
+- If an external TXT open/share intent crashes or an unreadable local/external URI gives no useful feedback, start with `BUG-2026-027`; the shared preparation path reports readable failures while the legacy payload helper still returns null safely.
+- If chapter bodies differ between import and disk restoration for a TXT with repeated leading BOMs, start with `BUG-2026-047`; import offsets must use exactly the same once-normalized source as restored slices.
 - If a body line that starts like a chapter heading, such as `第1章 她想：开始了吗？` or `第十三回合：还要继续吗？`, appears as a TOC entry, start with `BUG-2026-028`; the confirmed fix is to keep colon-subtitle punctuation support narrow and reject dialogue-like tails.
 - If page mode turns pages from right-edge taps but center taps on dense body text do not reveal the reader chrome, start with `BUG-2026-029`; the confirmed fix is to observe tap zones on the `HorizontalPager` gesture path and cover shell-level `input tap`, not only `UiDevice.click`. When refactoring this path, keep tap dispatch as an explicit call inside `pointerInput`; a local function reference such as `?.let(::handlePageTap)` missed Pixel 8 / Android 14 cross-chapter right taps during verification.
 - If first-run bookshelf or unavailable source screens show implementation-progress wording such as “已经打通” or “能力已预留”, start with `BUG-2026-030`; the confirmed fix is to keep entry-surface copy user-facing and cover old phrases with Compose text regressions.

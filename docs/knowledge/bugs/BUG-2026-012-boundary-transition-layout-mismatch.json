@@ -6,7 +6,8 @@
   "fix": [
     "Store ReaderPageSlice values in ReaderBoundaryPageTransition instead of raw strings.",
     "Extract ReaderPageSurface for the real pager page layout.",
-    "Render boundary animation layers through the same ReaderPageSurface, using the same padding, font size, line height, paragraph spacing, theme, and paragraph renderer as the real pager."
+    "Render boundary animation layers through the same ReaderPageSurface, using the same padding, font size, line height, paragraph spacing, theme, and paragraph renderer as the real pager.",
+    "2026-09-11: the separate ReaderBoundaryPageTransition layers have been removed. Neighbor previews and current pages now belong to one native Pager and use ReaderPageSurface; centering a new chapter retains the same page identity without an overlay swap. Dynamic process evidence is recorded in the phase-one plan rather than inferred from source."
   ],
   "failed_attempts": [],
   "impact": "Removes the visible cross-chapter text jump and keeps page transition preview layout aligned with the final rendered page.",
@@ -21,5 +22,5 @@
   ],
   "confidence": 0.9,
   "created_at": "2026-05-21",
-  "updated_at": "2026-05-21"
+  "updated_at": "2026-09-11"
 }

@@ -13,20 +13,24 @@ export ANDROID_SDK_ROOT="$ANDROID_HOME"
 export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
 ```
 
-The current emulator baseline is:
+The existing local AVD is:
 
 - `Pixel 8`
 - `Android 14 / API 34`
 
+Record the device actually used for each run; current evidence and temporary
+emulator configurations are linked from [docs/current-state.md](docs/current-state.md).
+
 ## Agent Context
 
-Before reader/parser/TTS/settings work, start from the knowledge-base entry
-point:
+For project context, requirements, code, or documentation work, select the relevant
+route from the documentation entry point:
 
-- [docs/knowledge/README.md](/Users/longshengxi/proj/story_app/docs/knowledge/README.md)
+- [docs/README.md](docs/README.md)
+- [Current features, interactions, and requirements](docs/current-state.md)
 
-That read path includes the agent operating agreements, bug index, matching bug
-records, and relevant specs/plans.
+Current state and operating guidance come first. Historical plans and matching
+bug records are read when relevant, not as a mandatory sequence for every task.
 
 ## Build Notes
 

@@ -1,0 +1,17 @@
+{
+  "id": "BUG-2026-045",
+  "title": "Chapter titles containing tabs disappear after catalog restoration",
+  "symptom": "A TXT heading such as 第1章<TAB>开始 is recognized on import, but its chapter is absent after persisting and restoring the catalog.",
+  "root_cause": "ImportedBookStorage writes the chapter title into TSV after replacing only newlines. restoreBookSnapshot splits on tabs and silently drops records with other than five columns. The parser preserves internal heading tabs.",
+  "fix": [
+    "Read the first TSV field as index, the last three as offsets/count, and join middle fields as the legacy title.",
+    "Validate count, indices and ordered ranges; isolate a broken book instead of silently dropping rows. Keep valid old files unchanged.",
+    "ImportedBookCatalogRestoreTest covers a directly written legacy TAB fixture, nonzero progress, unchanged bytes and a broken neighboring catalog. Targeted JVM regressions and the nine-book production import/restore corpus passed on 2026-09-11."
+  ],
+  "failed_attempts": [],
+  "impact": "Legacy TAB titles and chapter bodies survive disk catalog reload without rewriting old catalogs or reparsing their TXT. Android host process-restart evidence is tracked separately in the phase-one plan.",
+  "tags": ["android", "txt", "toc", "persistence", "resolved"],
+  "confidence": 0.99,
+  "created_at": "2026-09-11",
+  "updated_at": "2026-09-11"
+}

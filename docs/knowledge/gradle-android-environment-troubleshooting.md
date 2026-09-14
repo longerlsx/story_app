@@ -11,6 +11,10 @@ It is meant for future threads that need to answer questions such as:
 
 ## Stable Baseline
 
+These are configured tool versions and the historical emulator test baseline,
+not evidence that a device is connected or a fresh build has passed. Check the
+current wrapper/build files and device list when those facts matter.
+
 Current project baseline:
 
 - Gradle wrapper: `9.3.1`
@@ -151,6 +155,23 @@ Reason:
 - keeps build configuration clean
 - avoids turning a network problem into a repository-resolution problem
 
+Gradle runs downloads in a JVM and may not follow the shell proxy variables.
+If curl through the verified local HTTP proxy succeeds while Java TLS fails,
+pass the proxy to the Gradle JVM, including its daemon. For example (replace
+the port with the currently verified listener):
+
+```bash
+./gradlew --no-daemon \
+  '-Dorg.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8 -Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=7897 -Dhttp.proxyHost=127.0.0.1 -Dhttp.proxyPort=7897 -Dhttp.nonProxyHosts= -Dhttps.nonProxyHosts=' \
+  --max-workers=2 testDebugUnitTest assembleDebug
+```
+
+This is a command-local network setting, not a repository or dependency change.
+Verify the official Google and Maven Central URLs through the proxy separately;
+one working host does not establish the other. Keep baseline and changed builds
+on the same toolchain. Use fewer workers when the emulator and build compete for
+memory; record software-rendering and host-pressure limits with performance data.
+
 ## Sandbox vs Local Machine
 
 Some failures seen during agent execution are sandbox-specific, not workstation failures.
@@ -190,3 +211,33 @@ When Android sync or Gradle setup fails, use this order:
 - changing repository configuration before identifying whether the failure is wrapper or Maven related
 - letting local fallback repos participate in plugin resolution
 - assuming every agent-side build failure means the developer machine is broken
+
+## Device, UI, And Real-Text Verification
+
+Use device/UI evidence when the question depends on real interaction or Android
+service behavior. Start with `adb devices -l`; inspect available AVDs before
+assuming no emulator can be used. Wake/start the relevant device when necessary
+for the task, and use `adb shell svc power stayon true` during long sessions if
+sleep would interrupt verification.
+
+Use Computer Use when existing automation cannot adequately check an interaction.
+Page animations, chapter transitions, gesture conflicts, auto-hide, flashing, and
+TTS follow need dynamic observation when feasible. Screenshots are sufficient for
+stable layout/color checks. Record the device and input; an emulator result does
+not prove compatibility with Xiaomi or another vendor.
+
+Local video tools previously available:
+
+- `/opt/homebrew/bin/ffmpeg`
+- `/opt/homebrew/bin/ffprobe`
+
+User-provided real novel corpus:
+
+- `/Users/longshengxi/Downloads/小说测试集`
+
+Read relevant samples and retain the file identity and minimal input needed to
+explain a finding. Keep temporary recordings, probes, and compiled artifacts out
+of the product tree; remove one-off diagnostics after recording the useful result.
+
+Current validation status belongs in [current-state.md](../current-state.md),
+not in this stable operations document.

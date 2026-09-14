@@ -1,5 +1,8 @@
 # Android Reader Development Cycle
 
+Historical development record. Current requirements, interactions, and
+implementation boundaries are maintained in [current-state.md](../current-state.md).
+
 This document is the human-readable companion to the machine-readable bug records in [docs/knowledge/bugs/INDEX.md](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/INDEX.md).
 
 It summarizes the main implementation phases from the current Android reader build-out so a new thread can understand what happened without replaying the whole conversation.
@@ -104,9 +107,7 @@ Related documents:
 
 ## How Future Threads Should Use This
 
-1. Read [docs/knowledge/README.md](/Users/longshengxi/proj/story_app/docs/knowledge/README.md) first.
-2. Read [agent-operating-agreements.md](/Users/longshengxi/proj/story_app/docs/knowledge/agent-operating-agreements.md).
-3. Read [docs/knowledge/bugs/INDEX.md](/Users/longshengxi/proj/story_app/docs/knowledge/bugs/INDEX.md).
-4. If the issue smells similar, open the matching JSON record and compare `symptom`, `root_cause`, and `failed_attempts`.
-5. Only after that, jump into implementation files or test code.
-6. If a new issue is resolved, add a new JSON record instead of burying the knowledge in conversation history.
+Use [the documentation entry](../README.md) to select the current task's route.
+Open this history when earlier decisions or regressions need explanation; its
+dated priorities and proposed designs do not override current code or the user's
+present request. Problem-record maintenance is defined in [the bug index](bugs/INDEX.md).
