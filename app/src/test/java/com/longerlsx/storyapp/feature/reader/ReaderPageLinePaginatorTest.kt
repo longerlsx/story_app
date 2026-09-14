@@ -1,9 +1,37 @@
 package com.longerlsx.storyapp.feature.reader
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Test
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 
 class ReaderPageLinePaginatorTest {
+
+    @Test
+    fun cancellationDuringPageFitStopsBeforeComputingTheRemainingPages() {
+        val job = Job()
+        val content = "甲乙丙丁戊己庚辛"
+        val lines = content.indices.map { index ->
+            ReaderPageLine(index, index + 1, index * 24f, (index + 1) * 24f)
+        }
+        var checkedPages = 0
+
+        assertThrows(CancellationException::class.java) {
+            ReaderPageLinePaginator.paginate(
+                content = content,
+                lines = lines,
+                availableHeightPx = 48f,
+                pageFitsViewport = {
+                    checkedPages += 1
+                    job.cancel()
+                    true
+                },
+                cancellationContext = job,
+            )
+        }
+        assertEquals("取消后不应继续计算后面的页，也不能返回部分正文", 1, checkedPages)
+    }
 
     @Test
     fun paginatesByVisibleLinesWithinPageHeight() {

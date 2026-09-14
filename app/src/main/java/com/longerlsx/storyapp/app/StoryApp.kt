@@ -1,26 +1,52 @@
 package com.longerlsx.storyapp.app
 
-import android.content.Context
 import android.content.Intent
-import android.net.Uri
-import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import com.longerlsx.storyapp.LibraryInitializationState
 import com.longerlsx.storyapp.StoryApplication
 import com.longerlsx.storyapp.core.model.ImportSourceType
 import com.longerlsx.storyapp.feature.bookshelf.BookshelfScreen
 import com.longerlsx.storyapp.feature.importer.ExternalImportHandler
+import com.longerlsx.storyapp.feature.importer.ExternalImportPayload
 import com.longerlsx.storyapp.feature.reader.ReaderScreen
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsIntentFactory
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsNavigationPolicy
 import com.longerlsx.storyapp.feature.source.SourceEntryScreen
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+
+private data class InitialReaderRoute(val bookId: String?)
 
 @Composable
 fun StoryApp(
@@ -29,12 +55,75 @@ fun StoryApp(
 ) {
     val context = LocalContext.current
     val application = context.applicationContext as StoryApplication
+    val initialization by application.libraryInitialization.collectAsState()
+
+    when (val state = initialization) {
+        LibraryInitializationState.Loading -> Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            CircularProgressIndicator()
+            Text("正在载入书架…")
+        }
+
+        is LibraryInitializationState.Failed -> Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(state.message)
+            Button(onClick = application::retryLibraryInitialization) { Text("重试") }
+        }
+
+        is LibraryInitializationState.Ready -> ReadyStoryApp(
+            application = application,
+            initialization = state,
+            externalIntent = externalIntent,
+            onExternalIntentConsumed = onExternalIntentConsumed,
+        )
+    }
+}
+
+@Composable
+private fun ReadyStoryApp(
+    application: StoryApplication,
+    initialization: LibraryInitializationState.Ready,
+    externalIntent: Intent?,
+    onExternalIntentConsumed: () -> Unit,
+) {
+    val initialRoute by produceState<InitialReaderRoute?>(initialValue = null, key1 = application) {
+        val bookId = withContext(Dispatchers.IO) {
+            try {
+                application.anchorStore.getLastOpenedBookId()
+                    ?.takeIf { application.bookRepository.getBook(it) != null }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                null
+            }
+        }
+        value = InitialReaderRoute(bookId)
+    }
+    val route = initialRoute
+    if (route == null) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+        return
+    }
+    val context = LocalContext.current
     val ttsController = application.readerTtsController
     val appState = rememberStoryAppState(
-        initialBookId = application.anchorStore.getLastOpenedBookId(),
+        initialBookId = route.bookId,
     )
     val books by application.bookRepository.observeBookshelf().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
+    val snackbarHost = remember { SnackbarHostState() }
+    val importMutex = remember { Mutex() }
+    var importing by remember { mutableStateOf(false) }
+    val settingsWriteError by application.readerSettingsStore.writeError.collectAsState()
+    val progressWriteError by application.progressWriteError.collectAsState()
     fun openReaderWithTtsGuard(bookId: String) {
         if (
             ReaderTtsNavigationPolicy.shouldStopForOpenReader(
@@ -48,6 +137,37 @@ fun StoryApp(
         appState.openReader(bookId)
     }
 
+    suspend fun importPreparedPayload(
+        sourceType: ImportSourceType,
+        prepare: suspend () -> Result<ExternalImportPayload>?,
+    ) {
+        importMutex.withLock {
+            importing = true
+            try {
+                application.awaitLibraryReady()
+                val payload = prepare()?.getOrThrow() ?: return@withLock
+                val result = application.importCoordinator.importTxt(
+                    fileName = payload.fileName,
+                    bytes = payload.bytes,
+                    sourceType = sourceType,
+                )
+                openReaderWithTtsGuard(result.book.id)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                scope.launch {
+                    snackbarHost.showSnackbar(
+                        message = failure.message ?: "导入失败，请重新选择 TXT 文件。",
+                        withDismissAction = true,
+                        duration = SnackbarDuration.Long,
+                    )
+                }
+            } finally {
+                importing = false
+            }
+        }
+    }
+
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri ->
@@ -55,14 +175,9 @@ fun StoryApp(
             return@rememberLauncherForActivityResult
         }
         scope.launch {
-            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return@launch
-            val fileName = context.resolveDisplayName(uri)
-            val result = application.importCoordinator.importTxt(
-                fileName = fileName,
-                bytes = bytes,
-                sourceType = ImportSourceType.LOCAL_FILE,
-            )
-            openReaderWithTtsGuard(result.book.id)
+            importPreparedPayload(ImportSourceType.LOCAL_FILE) {
+                ExternalImportHandler.prepareImport(context, uri)
+            }
         }
     }
     LaunchedEffect(externalIntent) {
@@ -73,58 +188,64 @@ fun StoryApp(
             return@LaunchedEffect
         }
 
-        val payload = ExternalImportHandler.extractPayload(
-            context = context,
-            intent = externalIntent,
-        ) ?: run {
-            if (externalIntent != null) {
-                onExternalIntentConsumed()
+        if (externalIntent != null) {
+            importPreparedPayload(ImportSourceType.EXTERNAL_INTENT) {
+                ExternalImportHandler.prepareImport(context, externalIntent)
             }
-            return@LaunchedEffect
-        }
-
-        val result = application.importCoordinator.importTxt(
-            fileName = payload.fileName,
-            bytes = payload.bytes,
-            sourceType = ImportSourceType.EXTERNAL_INTENT,
-        )
-        openReaderWithTtsGuard(result.book.id)
-        onExternalIntentConsumed()
-    }
-
-    when (appState.currentScreen) {
-        AppScreen.BOOKSHELF -> BookshelfScreen(
-            books = books,
-            onImportTxt = {
-                importLauncher.launch(arrayOf("text/plain", "text/*", "*/*"))
-            },
-            onOpenSourceEntry = appState::openSourceEntry,
-            onOpenBook = ::openReaderWithTtsGuard,
-        )
-
-        AppScreen.READER -> ReaderScreen(
-            bookId = requireNotNull(appState.selectedBookId),
-            repository = application.bookRepository,
-            settingsStore = application.readerSettingsStore,
-            ttsController = ttsController,
-            onBack = appState::openBookshelf,
-        )
-
-        AppScreen.SOURCE_ENTRY -> SourceEntryScreen(
-            onBack = appState::openBookshelf,
-        )
-    }
-}
-
-private fun Context.resolveDisplayName(uri: Uri): String {
-    contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
-        if (cursor.moveToFirst()) {
-            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-            if (nameIndex >= 0) {
-                return cursor.getString(nameIndex)
-            }
+            onExternalIntentConsumed()
         }
     }
 
-    return uri.lastPathSegment ?: "imported.txt"
+    LaunchedEffect(initialization.issues) {
+        if (initialization.issues.isNotEmpty()) {
+            snackbarHost.showSnackbar(
+                message = "${initialization.issues.size} 本书未能载入：" +
+                    initialization.issues.joinToString("；") { "${it.bookId}：${it.message}" },
+                withDismissAction = true,
+                duration = SnackbarDuration.Long,
+            )
+        }
+    }
+    LaunchedEffect(settingsWriteError) {
+        settingsWriteError?.let {
+            snackbarHost.showSnackbar(it, withDismissAction = true, duration = SnackbarDuration.Long)
+        }
+    }
+    LaunchedEffect(progressWriteError) {
+        progressWriteError?.let {
+            snackbarHost.showSnackbar(it, withDismissAction = true, duration = SnackbarDuration.Long)
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        when (appState.currentScreen) {
+            AppScreen.BOOKSHELF -> BookshelfScreen(
+                books = books,
+                onImportTxt = {
+                    if (!importing) importLauncher.launch(arrayOf("text/plain", "text/*", "*/*"))
+                },
+                onOpenSourceEntry = appState::openSourceEntry,
+                onOpenBook = ::openReaderWithTtsGuard,
+            )
+
+            AppScreen.READER -> ReaderScreen(
+                bookId = requireNotNull(appState.selectedBookId),
+                repository = application.bookRepository,
+                settingsStore = application.readerSettingsStore,
+                ttsController = ttsController,
+                onBack = appState::openBookshelf,
+            )
+
+            AppScreen.SOURCE_ENTRY -> SourceEntryScreen(
+                onBack = appState::openBookshelf,
+            )
+        }
+        if (importing) {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth().align(Alignment.TopCenter))
+        }
+        SnackbarHost(
+            hostState = snackbarHost,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
+        )
+    }
 }

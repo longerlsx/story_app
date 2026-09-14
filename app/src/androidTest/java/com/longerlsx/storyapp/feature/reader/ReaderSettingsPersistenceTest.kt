@@ -22,6 +22,7 @@ class ReaderSettingsPersistenceTest {
     @Test
     fun changedReaderSettingsPersistAcrossRelaunch() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        resetStoryAppState(context)
         val importFile = File(context.cacheDir, "reader-settings-persist.txt").apply {
             writeText(
                 """

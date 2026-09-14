@@ -14,10 +14,13 @@ import java.io.File
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.Before
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class ReaderSettingsExpansionTest {
+    @Before
+    fun resetSettings() = resetStoryAppState(ApplicationProvider.getApplicationContext())
 
     @Test
     fun settingsExpansionReplacesChapterRowInPlace() {

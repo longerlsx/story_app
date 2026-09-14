@@ -45,14 +45,11 @@ object ReaderPageAnchorMapper {
             return 0
         }
 
-        val index = pages.indexOfFirst { page ->
-            charOffset in page.startCharOffset until page.endCharOffset
-        }
-        return when {
-            index >= 0 -> index
-            charOffset < pages.first().startCharOffset -> 0
-            else -> pages.lastIndex
-        }
+        // A page gap contains formatting whitespace. Restore the following
+        // visible text, rather than falling through to the chapter's last page.
+        return pages.indexOfFirst { charOffset < it.endCharOffset }
+            .takeIf { it >= 0 }
+            ?: pages.lastIndex
     }
 
     fun anchorForPageIndex(

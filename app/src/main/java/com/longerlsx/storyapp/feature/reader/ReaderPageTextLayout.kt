@@ -5,6 +5,9 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
+import kotlinx.coroutines.ensureActive
 
 object ReaderPageTextLayout {
     fun measureLines(
@@ -13,7 +16,9 @@ object ReaderPageTextLayout {
         textMeasurer: TextMeasurer,
         textStyle: TextStyle,
         paragraphSpacingPx: Float,
+        cancellationContext: CoroutineContext = EmptyCoroutineContext,
     ): List<ReaderPageLine> {
+        cancellationContext.ensureActive()
         if (content.isBlank() || availableWidthPx <= 0) {
             return emptyList()
         }
@@ -26,6 +31,7 @@ object ReaderPageTextLayout {
         val lines = mutableListOf<ReaderPageLine>()
         var paragraphTopPx = 0f
         paragraphs.forEachIndexed { paragraphIndex, paragraph ->
+            cancellationContext.ensureActive()
             val layoutResult = textMeasurer.measure(
                 text = AnnotatedString(paragraph.text),
                 style = textStyle,
@@ -35,6 +41,7 @@ object ReaderPageTextLayout {
                     maxWidth = availableWidthPx.coerceAtLeast(1),
                 ),
             )
+            cancellationContext.ensureActive()
             repeat(layoutResult.lineCount) { lineIndex ->
                 lines += ReaderPageLine(
                     startCharOffset = paragraph.startCharOffset + layoutResult.getLineStart(lineIndex),
@@ -48,6 +55,7 @@ object ReaderPageTextLayout {
                 paragraphTopPx += paragraphSpacingPx
             }
         }
+        cancellationContext.ensureActive()
         return lines
     }
 }

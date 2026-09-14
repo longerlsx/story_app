@@ -1,5 +1,9 @@
 package com.longerlsx.storyapp.feature.reader
 
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
+import kotlinx.coroutines.ensureActive
+
 data class ReaderPageLine(
     val startCharOffset: Int,
     val endCharOffset: Int,
@@ -13,7 +17,9 @@ object ReaderPageLinePaginator {
         lines: List<ReaderPageLine>,
         availableHeightPx: Float,
         pageFitsViewport: (ReaderPageSlice) -> Boolean = { true },
+        cancellationContext: CoroutineContext = EmptyCoroutineContext,
     ): List<ReaderPageSlice> {
+        cancellationContext.ensureActive()
         if (content.isBlank() || lines.isEmpty()) {
             return listOf(
                 ReaderPageSlice(
@@ -27,6 +33,7 @@ object ReaderPageLinePaginator {
         val pages = mutableListOf<ReaderPageSlice>()
         var lineIndex = 0
         while (lineIndex < lines.size) {
+            cancellationContext.ensureActive()
             val pageStartLine = lines[lineIndex]
             val pageTop = pageStartLine.topPx
             val pageBottomLimit = pageTop + availableHeightPx.coerceAtLeast(1f)
@@ -49,6 +56,7 @@ object ReaderPageLinePaginator {
                 candidateLineIndex > lineIndex &&
                 !pageFitsViewport(candidatePage)
             ) {
+                cancellationContext.ensureActive()
                 candidateLineIndex -= 1
                 candidatePage = buildPageSlice(
                     content = content,
@@ -58,6 +66,7 @@ object ReaderPageLinePaginator {
                 )
             }
 
+            cancellationContext.ensureActive()
             pages += candidatePage
             lineIndex = candidateLineIndex + 1
         }

@@ -1,6 +1,12 @@
 package com.longerlsx.storyapp.feature.reader
 
 import android.content.Intent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performTouchInput
 import androidx.core.content.FileProvider
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
@@ -10,75 +16,19 @@ import androidx.test.uiautomator.By
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
 import com.longerlsx.storyapp.MainActivity
+import com.longerlsx.storyapp.core.model.ReadingAnchor
+import com.longerlsx.storyapp.core.model.ReadingProgress
+import com.longerlsx.storyapp.data.book.FileAnchorStore
 import java.io.File
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.Rule
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class ReaderPageModeTest {
-
-    @Test
-    fun pagingForwardAcrossBoundaryByRightTapOpensNextChapter() {
-        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
-        resetStoryAppState(context)
-        val importFile = File(context.cacheDir, "reader-page-forward-boundary.txt").apply {
-            writeText(
-                buildString {
-                    appendLine("《翻页前进边界测试》")
-                    appendLine("第1章 开始")
-                    repeat(60) { index ->
-                        appendLine("第一章铺垫${index + 1}，这是一段明显偏长、用来撑开翻页内容的正文描述。")
-                    }
-                    appendLine("第一章结尾标记。")
-                    appendLine()
-                    appendLine("第2章 继续")
-                    appendLine("第二章边界开头标记。")
-                    appendLine("第二章第二段内容。")
-                },
-            )
-        }
-        val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            importFile,
-        )
-        val externalIntent = Intent(Intent.ACTION_VIEW).apply {
-            setClass(context, MainActivity::class.java)
-            setDataAndType(uri, "text/plain")
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
-
-        ActivityScenario.launch<MainActivity>(externalIntent).use {
-            assertTrue(device.wait(Until.hasObject(By.textContains("第一章铺垫1")), 8_000))
-            assertTrue(device.ensurePageMode())
-
-            val rightX = (device.displayWidth * 0.88f).toInt()
-            val centerY = device.displayHeight / 2
-            var reachedFirstChapterEnd = device.hasObject(By.textContains("第一章结尾标记"))
-            repeat(20) {
-                if (!reachedFirstChapterEnd) {
-                    device.click(rightX, centerY)
-                    device.waitForIdle()
-                    reachedFirstChapterEnd = device.wait(
-                        Until.hasObject(By.textContains("第一章结尾标记")),
-                        400,
-                    )
-                }
-            }
-            assertTrue(reachedFirstChapterEnd)
-
-            Thread.sleep(600)
-            device.click(rightX, centerY)
-            device.waitForIdle()
-
-            assertTrue(device.wait(Until.hasObject(By.textContains("第二章边界开头标记")), 8_000))
-        }
-    }
 
     @Test
     fun pagingForwardAfterChapterSwitchWithDifferentPageCountOpensNextChapter() {
@@ -285,5 +235,92 @@ class ReaderPageModeTest {
             assertTrue(device.openReaderSettings())
             assertTrue(device.wait(Until.hasObject(By.desc("阅读模式：翻页，已选中")), 8_000))
         }
+    }
+}
+
+/** Uses rendered Compose nodes: accessibility snapshots can retain the first page during paging. */
+@RunWith(AndroidJUnit4::class)
+class ReaderPageForwardInteractionTest {
+    @get:Rule
+    val composeRule = createEmptyComposeRule()
+
+    @Test
+    fun pagingForwardAcrossBoundaryByRightTapOpensNextChapter() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        resetStoryAppState(context)
+        val importFile = File(context.cacheDir, "reader-page-forward-boundary.txt").apply {
+            writeText(
+                buildString {
+                    appendLine("《翻页前进边界测试》")
+                    appendLine("第1章 开始")
+                    repeat(60) { index ->
+                        appendLine("第一章铺垫${index + 1}，这是一段明显偏长、用来撑开翻页内容的正文描述。")
+                    }
+                    appendLine("第一章结尾标记。")
+                    appendLine()
+                    appendLine("第2章 继续")
+                    appendLine("第二章边界开头标记。")
+                    appendLine("第二章第二段内容。")
+                },
+            )
+        }
+        val uri = FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            importFile,
+        )
+        val externalIntent = Intent(Intent.ACTION_VIEW).apply {
+            setClass(context, MainActivity::class.java)
+            setDataAndType(uri, "text/plain")
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val diskAnchors = FileAnchorStore(context.filesDir)
+        fun awaitConfirmedPosition(previous: ReadingAnchor? = null): ReadingProgress {
+            var confirmed: ReadingProgress? = null
+            composeRule.waitUntil(timeoutMillis = 8_000) {
+                confirmed = diskAnchors.loadAll().singleOrNull()?.takeIf { it.anchor != previous }
+                confirmed != null
+            }
+            return checkNotNull(confirmed)
+        }
+
+        ActivityScenario.launch<MainActivity>(externalIntent).use {
+            composeRule.waitUntil(timeoutMillis = 8_000) { hasVisibleText("第一章铺垫1") }
+            org.junit.Assert.assertEquals(
+                com.longerlsx.storyapp.core.model.ReadingMode.PAGE,
+                com.longerlsx.storyapp.data.reader.ReaderSettingsStore(context.filesDir).load().readingMode,
+            )
+            awaitConfirmedPosition()
+
+            var reachedFirstChapterEnd = hasVisibleText("第一章结尾标记")
+            repeat(20) {
+                if (!reachedFirstChapterEnd) {
+                    val previous = checkNotNull(diskAnchors.loadAll().singleOrNull()).anchor
+                    composeRule.onRoot().performTouchInput { click(Offset(width * 0.88f, center.y)) }
+                    awaitConfirmedPosition(previous)
+                    composeRule.waitForIdle()
+                    reachedFirstChapterEnd = hasVisibleText("第一章结尾标记")
+                }
+            }
+            assertTrue(reachedFirstChapterEnd)
+
+            val previous = checkNotNull(diskAnchors.loadAll().singleOrNull()).anchor
+            composeRule.onRoot().performTouchInput { click(Offset(width * 0.88f, center.y)) }
+            awaitConfirmedPosition(previous)
+            composeRule.waitForIdle()
+
+            composeRule.waitUntil(timeoutMillis = 8_000) { hasVisibleText("第二章边界开头标记") }
+        }
+    }
+
+    private fun hasVisibleText(text: String): Boolean {
+        val viewport = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
+        return composeRule.onAllNodes(hasText(text, substring = true), useUnmergedTree = true)
+            .fetchSemanticsNodes(atLeastOneRootRequired = false).any { node ->
+                node.boundsInRoot.width > 0f && node.boundsInRoot.height > 0f &&
+                    node.positionInRoot.x >= viewport.left &&
+                    node.positionInRoot.x + node.size.width <= viewport.right
+            }
     }
 }

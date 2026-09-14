@@ -2,6 +2,7 @@ package com.longerlsx.storyapp.feature.reader
 
 import android.content.Context
 import com.longerlsx.storyapp.StoryApplication
+import com.longerlsx.storyapp.core.model.ReaderSettings
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.StaleObjectException
@@ -20,12 +21,19 @@ internal enum class ReaderPrimaryActionSlot {
 
 internal fun resetStoryAppState(context: Context) {
     val instrumentation = InstrumentationRegistry.getInstrumentation()
+    val application = context.applicationContext as? StoryApplication
+    runBlocking {
+        application?.awaitLibraryReady()
+        application?.readerSettingsStore?.awaitPendingWrites()
+    }
     File(context.filesDir, "books").deleteRecursively()
     File(context.filesDir, "reader-anchors.properties").delete()
     File(context.filesDir, "reader-settings.properties").delete()
-    (context.applicationContext as? StoryApplication)?.let { application ->
+    application?.let { application ->
         runBlocking {
             application.bookRepository.clearForTests()
+            application.readerSettingsStore.save(ReaderSettings())
+            application.readerSettingsStore.awaitPendingWrites()
         }
         application.resetReaderTtsRuntimeForTests()
     }

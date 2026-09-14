@@ -3,6 +3,7 @@ package com.longerlsx.storyapp.feature.reader
 data class ReaderScrollBodyMetrics(
     val topWithinItemPx: Int,
     val heightPx: Int,
+    val lines: List<ReaderPageLine> = emptyList(),
 )
 
 data class ReaderRawVisibleScrollItem(

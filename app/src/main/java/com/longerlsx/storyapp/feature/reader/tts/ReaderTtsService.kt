@@ -256,13 +256,20 @@ class ReaderTtsService : Service(), ReaderTtsEngine.Callback {
         activeQueue = emptyList()
         activeQueueIndex = 0
         pausedResumeLocation = null
+        // A service may be the first entry after process death. Promote before waiting for IO.
+        promoteToForeground()
+        val library = storyApplication.awaitLibraryReady()
+        if (!isPlaybackTokenCurrent(token)) return
+        if (library !is com.longerlsx.storyapp.LibraryInitializationState.Ready) {
+            controller.handleStartupFailure("书库尚未就绪，请打开应用重试。")
+            stopPlaybackService(clearSnapshot = true)
+            return
+        }
         activeChapters = repository.getChapters(request.bookId).sortedBy(Chapter::chapterIndex)
         activeSettings = settingsStore.load().ttsSettings
         remainingTimerMillis = activeSettings.timerPreset.toInitialTimerMillis()
         controller.updateRemainingTimerMillis(remainingTimerMillis)
         refreshNotification()
-        promoteToForeground()
-
         val voicesResult = ensureEngineReady()
         if (!isPlaybackTokenCurrent(token)) {
             return

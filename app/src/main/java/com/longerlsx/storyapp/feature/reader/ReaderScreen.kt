@@ -8,36 +8,25 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -55,6 +44,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -63,8 +53,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
@@ -74,9 +64,8 @@ import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -105,20 +94,23 @@ import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsFollowSuppressionPolic
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsStartRequest
 import com.longerlsx.storyapp.feature.reader.tts.restartVisualRangeOrNull
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.yield
+import kotlinx.coroutines.ensureActive
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.math.roundToInt
 
-private val ReaderHorizontalPadding = 24.dp
+internal val ReaderHorizontalPadding = 24.dp
 private val ReaderScrollViewportTopInset = 52.dp
 private val ReaderScrollReadableTopSpacing = 8.dp
 private val ReaderTopPadding = 12.dp
 private val ReaderBottomPadding = 96.dp
-private val ReaderPageTopPadding = 52.dp
-private val ReaderPageBottomPadding = 56.dp
+internal val ReaderPageTopPadding = 52.dp
+internal val ReaderPageBottomPadding = 56.dp
 
 @Composable
 fun ReaderScreen(
@@ -229,15 +221,10 @@ private fun ReaderReadyContent(
     }
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
-    var selectedChapterIndex by remember(state.book.id) {
-        mutableIntStateOf(state.initialChapterIndex)
+    val position = remember(state.book.id) {
+        ReaderPositionState(ReadingAnchor(state.initialChapterIndex, state.initialCharOffset))
     }
-    var pendingRestoreCharOffset by remember(state.book.id) {
-        mutableIntStateOf(state.initialCharOffset)
-    }
-    var currentPageIndex by remember(state.book.id) {
-        mutableIntStateOf(0)
-    }
+    val selectedChapterIndex = position.confirmedAnchor.chapterIndex
     var chromeMode by remember(state.book.id) {
         mutableStateOf(ReaderChromeMode.READING_ONLY)
     }
@@ -250,15 +237,14 @@ private fun ReaderReadyContent(
     var readerSettings by remember {
         mutableStateOf(settingsStore.load())
     }
-    var restoreToLastPageOnOpen by remember(state.book.id) {
-        mutableStateOf(false)
-    }
     var pendingChromeAutoHideRefreshAfterRestore by remember(state.book.id) {
         mutableStateOf(false)
     }
-    var restoredPosition by remember(state.book.id, readerSettings.readingMode) {
-        mutableStateOf(false)
-    }
+    val restoredPosition = position.hasConfirmedLayout && position.request == null && position.error == null
+    var deferredReadingMode by remember(state.book.id) { mutableStateOf<ReadingMode?>(null) }
+    val requestedSettings = readerSettings.copy(readingMode = deferredReadingMode ?: readerSettings.readingMode)
+    var contentRetry by remember(state.book.id) { mutableIntStateOf(0) }
+    var viewportSize by remember(state.book.id) { mutableStateOf(IntSize.Zero) }
     var pendingNotificationPermissionStartRequest by remember(state.book.id) {
         mutableStateOf<ReaderTtsStartRequest?>(null)
     }
@@ -274,9 +260,6 @@ private fun ReaderReadyContent(
     var isProgrammaticScrollFollowInFlight by remember(state.book.id) {
         mutableStateOf(false)
     }
-    var scrollChromeBottomPx by remember(state.book.id) {
-        mutableStateOf<Int?>(null)
-    }
     val ttsRuntime by ttsController.runtimeState.collectAsState()
 
     LaunchedEffect(chromeMode, activeSettingsTab, ttsRuntime.availableVoices) {
@@ -291,81 +274,67 @@ private fun ReaderReadyContent(
 
     val selectedChapterPosition = state.chapters.indexOfFirst { it.chapterIndex == selectedChapterIndex }
     val selectedChapter = state.chapters.firstOrNull { it.chapterIndex == selectedChapterIndex }
-    val currentContentState = produceState<ReaderLoadedChapterContent?>(
-        initialValue = null,
-        key1 = state.book.id,
-        key2 = selectedChapterIndex,
-    ) {
-        value = null
-        value = if (selectedChapter == null) {
-            ReaderLoadedChapterContent(
-                chapterIndex = selectedChapterIndex,
-                text = "",
-            )
-        } else {
-            ReaderLoadedChapterContent(
-                chapterIndex = selectedChapterIndex,
-                text = repository.getChapterText(state.book.id, selectedChapterIndex).orEmpty(),
-            )
-        }
-    }
-    val currentContent = currentContentState.value?.text.orEmpty()
     val scrollFeedState = produceState<List<ReaderFeedChapterContent>>(
         initialValue = emptyList(),
         key1 = state.book.id,
+        key2 = readerSettings.readingMode,
+        key3 = (if (readerSettings.readingMode == ReadingMode.PAGE) selectedChapterIndex else -1) to contentRetry,
     ) {
-        value = state.chapters.map { chapter ->
-            ReaderFeedChapterContent(
-                chapter = chapter,
-                text = repository.getChapterText(state.book.id, chapter.chapterIndex).orEmpty(),
-            )
+        try {
+            val needed = if (readerSettings.readingMode == ReadingMode.SCROLL) state.chapters
+                else state.chapters.filter { it.chapterIndex == selectedChapterIndex }
+            value = needed.map { chapter ->
+                ReaderFeedChapterContent(chapter, repository.getChapterText(state.book.id, chapter.chapterIndex)
+                    ?: error("无法读取第 ${chapter.chapterIndex + 1} 章正文。"))
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            if (readerSettings.readingMode == ReadingMode.SCROLL) {
+                position.request?.let { position.fail(it.id, failure.message ?: "正文读取失败") }
+            }
         }
     }
     val scrollFeed = scrollFeedState.value
     val chapterTextByIndex = remember(scrollFeed) {
         scrollFeed.associate { it.chapter.chapterIndex to it.text }
     }
-    val chapterTextLengthByIndex = remember(chapterTextByIndex) {
-        chapterTextByIndex.mapValues { it.value.length }
-    }
-    val previousChapter = state.chapters.getOrNull(selectedChapterPosition - 1)
-    val nextChapter = state.chapters.getOrNull(selectedChapterPosition + 1)
-    val previousChapterText = scrollFeed.getOrNull(selectedChapterPosition - 1)?.text.orEmpty()
-    val nextChapterText = scrollFeed.getOrNull(selectedChapterPosition + 1)?.text.orEmpty()
     val initialScrollItemIndex = remember(state.book.id, state.initialChapterIndex, state.chapters) {
         state.chapters.indexOfFirst { it.chapterIndex == state.initialChapterIndex }
             .takeIf { it >= 0 }
             ?: 0
     }
+    val scrollLayoutKey = ReaderScrollLayoutKey(
+        widthPx = viewportSize.width,
+        density = rootDensity.density,
+        fontScale = rootDensity.fontScale,
+        fontSizeSp = readerSettings.fontSizeSp,
+        lineHeightMultiplier = readerSettings.lineHeightMultiplier,
+        paragraphSpacingEm = readerSettings.paragraphSpacingEm,
+    )
     val scrollBodyMetricsByChapter = remember(
-        state.book.id,
-        scrollFeed,
-        readerSettings.fontSizeSp,
-        readerSettings.lineHeightMultiplier,
-        readerSettings.paragraphSpacingEm,
+        state.book.id, scrollLayoutKey,
     ) {
         mutableStateMapOf<Int, ReaderScrollBodyMetrics>()
     }
-    var currentPages by remember(
-        state.book.id,
-        selectedChapterIndex,
-        readerSettings.readingMode,
-    ) {
-        mutableStateOf(emptyList<ReaderPageSlice>())
+    val onScrollBodyMetricsChanged = remember(state.book.id, scrollLayoutKey) {
+        { chapterIndex: Int, metrics: ReaderScrollBodyMetrics ->
+            scrollBodyMetricsByChapter[chapterIndex] = metrics
+        }
+    }
+    val onScrollBodyMetricsDisposed: (Int) -> Unit = remember(state.book.id, scrollLayoutKey) {
+        { chapterIndex -> scrollBodyMetricsByChapter.remove(chapterIndex) }
     }
     val scrollListState = rememberLazyListState(
         initialFirstVisibleItemIndex = initialScrollItemIndex,
     )
+    var confirmedScrollViewport by remember(state.book.id) { mutableStateOf<Pair<Int, Int>?>(null) }
     val themePalette = ReaderThemeResolver.resolveActivePalette(readerSettings)
     val contentFontSize = readerSettings.fontSizeSp.sp
     val contentLineHeight = (readerSettings.fontSizeSp * readerSettings.lineHeightMultiplier).sp
     val paragraphSpacing = (readerSettings.fontSizeSp * readerSettings.paragraphSpacingEm).coerceIn(8f, 36f).dp
-    val scrollViewportTopInsetPx = with(rootDensity) { ReaderScrollViewportTopInset.roundToPx() }
-    val scrollReadableViewportTopPx = ReaderScrollViewportAnchorResolver.resolveReadableViewportTopPx(
-        scrollViewportTopInsetPx = scrollViewportTopInsetPx,
-        chromeBottomPx = scrollChromeBottomPx,
-        extraSpacingPx = with(rootDensity) { ReaderScrollReadableTopSpacing.roundToPx() },
-    )
+    // Controls overlay a fixed reading viewport; showing chrome is not navigation.
+    val scrollReadableViewportTopPx = with(rootDensity) { ReaderScrollReadableTopSpacing.roundToPx() }
     val progressSummary = ReaderChapterProgressFormatter.format(
         chapters = state.chapters,
         selectedChapterPosition = selectedChapterPosition,
@@ -375,25 +344,7 @@ private fun ReaderReadyContent(
 
     ReaderSystemBarsEffect(themePalette = themePalette)
 
-    suspend fun saveAnchor(
-        chapterIndex: Int,
-        charOffset: Int,
-        readingMode: ReadingMode,
-    ) {
-        repository.saveReadingProgress(
-            ReadingProgress(
-                bookId = state.book.id,
-                anchor = ReadingAnchor(
-                    chapterIndex = chapterIndex,
-                    charOffset = charOffset,
-                ),
-                readingMode = readingMode,
-                updatedAt = System.currentTimeMillis(),
-            ),
-        )
-    }
-
-    suspend fun saveScrollProgress() {
+    fun visibleScrollAnchor(): ReadingAnchor? {
         val visibleItems = buildScrollVisibleChapterItems(
             listState = scrollListState,
             scrollFeed = scrollFeed,
@@ -403,38 +354,30 @@ private fun ReaderReadyContent(
             visibleItems = visibleItems,
             chapters = state.chapters,
             viewportTopPx = scrollReadableViewportTopPx,
-        ) ?: return
-        val activeItem = visibleItems.firstOrNull { it.chapterIndex == activeChapterIndex } ?: return
-        val activeContent = scrollFeed.firstOrNull { it.chapter.chapterIndex == activeChapterIndex } ?: return
-        val charOffset = ReaderScrollFeedAnchorMapper.toCharOffset(
-            contentLength = activeContent.text.length,
-            bodyOffsetPx = activeItem.bodyOffsetPx,
-            bodyHeightPx = activeItem.bodyHeightPx,
-            viewportTopPx = scrollReadableViewportTopPx,
-        )
-        saveAnchor(
-            chapterIndex = activeChapterIndex,
-            charOffset = charOffset,
-            readingMode = ReadingMode.SCROLL,
-        )
+        ) ?: return null
+        val activeItem = visibleItems.firstOrNull { it.chapterIndex == activeChapterIndex } ?: return null
+        val lines = scrollBodyMetricsByChapter[activeChapterIndex]?.lines?.takeIf { it.isNotEmpty() } ?: return null
+        return ReadingAnchor(activeChapterIndex, ReaderLineAnchorMapper.charOffsetAtTop(
+            lines, (scrollReadableViewportTopPx - activeItem.bodyOffsetPx).toFloat(),
+        ))
     }
 
-    suspend fun savePageProgress(pageIndex: Int) {
-        val charOffset = ReaderPageAnchorMapper.anchorForPageIndex(
-            pages = currentPages,
-            pageIndex = pageIndex,
-        )
-        saveAnchor(
-            chapterIndex = selectedChapterIndex,
-            charOffset = charOffset,
-            readingMode = ReadingMode.PAGE,
-        )
+    fun captureProgress(): ReadingProgress? {
+        if (!position.hasConfirmedLayout) return null
+        if (readerSettings.readingMode == ReadingMode.SCROLL && position.request == null && position.error == null) {
+            visibleScrollAnchor()?.let(position::recordViewport)
+        }
+        return ReadingProgress(state.book.id, position.confirmedAnchor, readerSettings.readingMode, System.currentTimeMillis())
     }
 
-    suspend fun saveCurrentProgress() {
-        when (readerSettings.readingMode) {
-            ReadingMode.SCROLL -> saveScrollProgress()
-            ReadingMode.PAGE -> savePageProgress(currentPageIndex)
+    fun queueCurrentProgress() = captureProgress()?.let { storyApplication.persistReadingProgress(it, repository) }
+
+    fun leaveReader() {
+        val pendingSave = queueCurrentProgress()
+        scope.launch {
+            settingsStore.awaitPendingWrites()
+            pendingSave?.join()
+            onBack()
         }
     }
 
@@ -445,11 +388,7 @@ private fun ReaderReadyContent(
         restoreToLastPage: Boolean = false,
         refreshChromeAutoHide: Boolean = false,
     ) {
-        selectedChapterIndex = chapterIndex
-        pendingRestoreCharOffset = restoreCharOffset
-        currentPageIndex = 0
-        restoredPosition = false
-        restoreToLastPageOnOpen = restoreToLastPage
+        position.jump(ReadingAnchor(chapterIndex, restoreCharOffset), lastPage = restoreToLastPage)
         chromeMode = nextChromeMode
         pendingChromeAutoHideRefreshAfterRestore =
             refreshChromeAutoHide && nextChromeMode == ReaderChromeMode.CHROME_VISIBLE
@@ -465,7 +404,8 @@ private fun ReaderReadyContent(
         nextChromeMode: ReaderChromeMode,
         refreshChromeAutoHide: Boolean = false,
     ) {
-        val chapter = state.chapters.getOrNull(selectedChapterPosition + delta) ?: return
+        val baseChapter = position.request?.anchor?.chapterIndex ?: selectedChapterIndex
+        val chapter = state.chapters.getOrNull(state.chapters.indexOfFirst { it.chapterIndex == baseChapter } + delta) ?: return
         openChapter(
             chapterIndex = chapter.chapterIndex,
             nextChromeMode = nextChromeMode,
@@ -473,38 +413,51 @@ private fun ReaderReadyContent(
         )
     }
 
-    fun updateReaderSettings(next: ReaderSettings) {
-        val currentScrollVisibleItems = buildScrollVisibleChapterItems(
-            listState = scrollListState,
-            scrollFeed = scrollFeed,
-            bodyMetricsByChapter = scrollBodyMetricsByChapter,
-        )
-        val currentAnchor = ReaderSettingsAnchorResolver.resolve(
-            readingMode = readerSettings.readingMode,
-            selectedChapterIndex = selectedChapterIndex,
-            pendingRestoreCharOffset = pendingRestoreCharOffset,
-            currentPageIndex = currentPageIndex,
-            currentPages = currentPages,
-            visibleItems = currentScrollVisibleItems,
-            chapters = state.chapters,
-            chapterTextLengthByIndex = chapterTextLengthByIndex,
-            viewportTopPx = scrollReadableViewportTopPx,
-        )
-
-        scope.launch {
-            saveAnchor(
-                chapterIndex = currentAnchor.chapterIndex,
-                charOffset = currentAnchor.charOffset,
-                readingMode = next.readingMode,
-            )
+    fun updateReaderSettings(requested: ReaderSettings) {
+        val postponeMode = requested.readingMode != readerSettings.readingMode && position.request?.turns?.isNotEmpty() == true
+        deferredReadingMode = requested.readingMode.takeIf { postponeMode }
+        val next = if (postponeMode) requested.copy(readingMode = readerSettings.readingMode) else requested
+        if (next == readerSettings) return
+        val needsLayout = next.readingMode != readerSettings.readingMode ||
+            next.fontSizeSp != readerSettings.fontSizeSp ||
+            next.lineHeightMultiplier != readerSettings.lineHeightMultiplier ||
+            next.paragraphSpacingEm != readerSettings.paragraphSpacingEm
+        if (needsLayout) {
+            if (readerSettings.readingMode == ReadingMode.SCROLL && position.request == null) {
+                visibleScrollAnchor()?.let(position::recordViewport)
+            }
+            position.reflow()
         }
-        selectedChapterIndex = currentAnchor.chapterIndex
-        pendingRestoreCharOffset = currentAnchor.charOffset
-        currentPageIndex = 0
-        restoredPosition = false
-        restoreToLastPageOnOpen = false
         readerSettings = next
         settingsStore.save(next)
+    }
+
+    LaunchedEffect(position.request) {
+        if (position.request == null) {
+            deferredReadingMode?.let { mode ->
+                deferredReadingMode = null
+                updateReaderSettings(readerSettings.copy(readingMode = mode))
+            }
+        }
+    }
+
+    LaunchedEffect(position.request?.id) {
+        val request = position.request ?: return@LaunchedEffect
+        var elapsed = 0L
+        var previous = SystemClock.elapsedRealtime()
+        while (elapsed < 10_000) {
+            delay(100)
+            val now = SystemClock.elapsedRealtime()
+            if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) elapsed += now - previous
+            previous = now
+        }
+        position.fail(request.id, "定位等待超时，可以重试或返回书架。")
+    }
+
+    BackHandler {
+        if (chromeMode == ReaderChromeMode.DIRECTORY_OPEN || chromeMode == ReaderChromeMode.SETTINGS_EXPANDED) {
+            chromeMode = ReaderChromeMode.CHROME_VISIBLE
+        } else leaveReader()
     }
 
     fun updateTtsSettings(nextTtsSettings: ReaderTtsSettings) {
@@ -519,7 +472,7 @@ private fun ReaderReadyContent(
 
     fun toggleAppearanceMode() {
         updateReaderSettings(
-            readerSettings.copy(
+            requestedSettings.copy(
                 appearanceMode = if (readerSettings.appearanceMode == ReaderAppearanceMode.DAY) {
                     ReaderAppearanceMode.NIGHT
                 } else {
@@ -550,38 +503,10 @@ private fun ReaderReadyContent(
     fun buildTtsStartRequest(
         explicitLocation: ReaderTextStartLocation? = null,
     ): ReaderTtsStartRequest {
-        val startLocation = explicitLocation ?: when (readerSettings.readingMode) {
-            ReadingMode.SCROLL -> {
-                val visibleItems = buildScrollVisibleChapterItems(
-                    listState = scrollListState,
-                    scrollFeed = scrollFeed,
-                    bodyMetricsByChapter = scrollBodyMetricsByChapter,
-                )
-                ReaderTextStartLocator.resolveScrollTopLocation(
-                    visibleItems = visibleItems,
-                    chapterTextByIndex = chapterTextByIndex,
-                    viewportTopPx = scrollReadableViewportTopPx,
-                ) ?: ReaderTextStartLocation(
-                    chapterIndex = selectedChapterIndex,
-                    charOffset = pendingRestoreCharOffset,
-                )
-            }
-
-            ReadingMode.PAGE -> {
-                if (currentPages.isEmpty()) {
-                    ReaderTextStartLocation(
-                        chapterIndex = selectedChapterIndex,
-                        charOffset = pendingRestoreCharOffset,
-                    )
-                } else {
-                    ReaderTextStartLocator.resolvePageTopLocation(
-                        chapterIndex = selectedChapterIndex,
-                        pages = currentPages,
-                        currentPageIndex = currentPageIndex,
-                    )
-                }
-            }
-        }
+        val anchor = if (readerSettings.readingMode == ReadingMode.SCROLL && position.request == null) {
+            visibleScrollAnchor() ?: position.confirmedAnchor
+        } else position.confirmedAnchor
+        val startLocation = explicitLocation ?: ReaderTextStartLocation(anchor.chapterIndex, anchor.charOffset)
         return ReaderTtsStartRequestFactory.create(
             book = state.book,
             chapters = state.chapters,
@@ -819,163 +744,74 @@ private fun ReaderReadyContent(
         }
     }
 
-    LaunchedEffect(
-        state.book.id,
-        selectedChapterIndex,
-        pendingRestoreCharOffset,
-        scrollFeed,
-        readerSettings.readingMode,
-    ) {
-        if (readerSettings.readingMode != ReadingMode.SCROLL || restoredPosition) {
+    LaunchedEffect(state.book.id, position.request?.id, scrollFeed, readerSettings.readingMode, scrollLayoutKey) {
+        val request = position.request ?: return@LaunchedEffect
+        if (readerSettings.readingMode != ReadingMode.SCROLL || scrollFeed.isEmpty()) return@LaunchedEffect
+        val targetIndex = scrollFeed.indexOfFirst { it.chapter.chapterIndex == request.anchor.chapterIndex }
+        if (targetIndex < 0) {
+            position.fail(request.id, "目标章节不存在")
             return@LaunchedEffect
         }
-        if (scrollFeed.isEmpty()) {
-            return@LaunchedEffect
-        }
-        val targetItemIndex = scrollFeed.indexOfFirst { it.chapter.chapterIndex == selectedChapterIndex }
-            .takeIf { it >= 0 }
-            ?: 0
-        snapshotFlow { scrollListState.layoutInfo.totalItemsCount }
-            .first { it > targetItemIndex }
-        for (attempt in 0 until 4) {
-            scrollListState.scrollToItem(targetItemIndex, 0)
-            yield()
-            if (scrollListState.firstVisibleItemIndex == targetItemIndex) {
-                break
-            }
-        }
-        val targetItemInfo = snapshotFlow {
-            buildScrollVisibleChapterItems(
-                listState = scrollListState,
-                scrollFeed = scrollFeed,
-                bodyMetricsByChapter = scrollBodyMetricsByChapter,
-            )
-                .firstOrNull { it.itemIndex == targetItemIndex }
-                ?.takeIf { scrollBodyMetricsByChapter.containsKey(it.chapterIndex) }
-        }
-            .filterNotNull()
-            .first()
-        val restoreOffset = ReaderScrollFeedAnchorMapper.toItemScrollOffsetPx(
-            contentLength = scrollFeed[targetItemIndex].text.length,
-            charOffset = pendingRestoreCharOffset,
-            bodyOffsetWithinItemPx = targetItemInfo.bodyOffsetWithinItemPx(),
-            bodyHeightPx = targetItemInfo.bodyHeightPx,
-            viewportTopPx = scrollReadableViewportTopPx,
-        )
-        for (attempt in 0 until 4) {
-            scrollListState.scrollToItem(targetItemIndex, restoreOffset)
-            yield()
-            if (scrollListState.firstVisibleItemIndex == targetItemIndex) {
-                break
-            }
-        }
-        restoredPosition = true
-        if (pendingChromeAutoHideRefreshAfterRestore && chromeMode == ReaderChromeMode.CHROME_VISIBLE) {
-            lastChromeInteractionAtMs = SystemClock.elapsedRealtime()
-            pendingChromeAutoHideRefreshAfterRestore = false
-        }
-        if (ReaderRestorePolicy.shouldBootstrapProgress(pendingRestoreCharOffset)) {
-            saveScrollProgress()
-        }
-    }
-
-    LaunchedEffect(
-        state.book.id,
-        scrollFeed,
-        restoredPosition,
-        readerSettings.readingMode,
-        isCurrentBookTtsPlaying,
-    ) {
-        if (readerSettings.readingMode != ReadingMode.SCROLL || !restoredPosition) {
-            return@LaunchedEffect
-        }
-
-        snapshotFlow {
-            scrollListState.isScrollInProgress to buildScrollVisibleChapterItems(
-                listState = scrollListState,
-                scrollFeed = scrollFeed,
-                bodyMetricsByChapter = scrollBodyMetricsByChapter,
-            )
-        }
-            .distinctUntilChanged()
-            .collect { (isScrolling, visibleItems) ->
-                val activeChapterIndex = ReaderActiveChapterResolver.resolve(
-                    visibleItems = visibleItems,
-                    chapters = state.chapters,
-                    viewportTopPx = scrollReadableViewportTopPx,
-                )
-                if (activeChapterIndex != null && activeChapterIndex != selectedChapterIndex) {
-                    selectedChapterIndex = activeChapterIndex
-                }
-                if (isScrolling && isCurrentBookTtsPlaying && !isProgrammaticScrollFollowInFlight) {
-                    markManualFollowInterruption()
-                }
-                if (!isScrolling && isProgrammaticScrollFollowInFlight) {
-                    isProgrammaticScrollFollowInFlight = false
-                }
-                if (!isScrolling) {
-                    saveScrollProgress()
-                }
-            }
-    }
-
-    LaunchedEffect(
-        activePlaybackVisualRange,
-        isCurrentBookTtsPlaying,
-        isFollowSuppressed,
-        readerSettings.readingMode,
-        scrollFeed,
-    ) {
-        val activeRange = activePlaybackVisualRange ?: return@LaunchedEffect
-        if (!isCurrentBookTtsPlaying || isFollowSuppressed || readerSettings.readingMode != ReadingMode.SCROLL) {
-            return@LaunchedEffect
-        }
-        val targetItemIndex = scrollFeed.indexOfFirst { it.chapter.chapterIndex == activeRange.chapterIndex }
-            .takeIf { it >= 0 }
-            ?: return@LaunchedEffect
-        val currentTopLocation = ReaderTextStartLocator.resolveScrollTopLocation(
-            visibleItems = buildScrollVisibleChapterItems(
-                listState = scrollListState,
-                scrollFeed = scrollFeed,
-                bodyMetricsByChapter = scrollBodyMetricsByChapter,
-            ),
-            chapterTextByIndex = chapterTextByIndex,
-            viewportTopPx = scrollReadableViewportTopPx,
-        )
-        if (
-            currentTopLocation?.chapterIndex == activeRange.chapterIndex &&
-            kotlin.math.abs(currentTopLocation.charOffset - activeRange.startCharOffset) < 48
-        ) {
-            return@LaunchedEffect
-        }
-
-        isProgrammaticScrollFollowInFlight = true
         try {
-            snapshotFlow { scrollListState.layoutInfo.totalItemsCount }
-                .first { it > targetItemIndex }
-            scrollListState.scrollToItem(targetItemIndex, 0)
-            val targetItemInfo = snapshotFlow {
-                buildScrollVisibleChapterItems(
-                    listState = scrollListState,
-                    scrollFeed = scrollFeed,
-                    bodyMetricsByChapter = scrollBodyMetricsByChapter,
-                )
-                    .firstOrNull { it.itemIndex == targetItemIndex }
-                    ?.takeIf { scrollBodyMetricsByChapter.containsKey(it.chapterIndex) }
+            snapshotFlow { scrollListState.layoutInfo.totalItemsCount }.first { it > targetIndex }
+            if (scrollListState.layoutInfo.visibleItemsInfo.none { it.index == targetIndex }) {
+                scrollListState.scrollToItem(targetIndex)
             }
-                .filterNotNull()
-                .first()
-            val targetOffset = ReaderScrollFeedAnchorMapper.toItemScrollOffsetPx(
-                contentLength = scrollFeed[targetItemIndex].text.length,
-                charOffset = activeRange.startCharOffset,
-                bodyOffsetWithinItemPx = targetItemInfo.bodyOffsetWithinItemPx(),
-                bodyHeightPx = targetItemInfo.bodyHeightPx,
-                viewportTopPx = scrollReadableViewportTopPx,
-            )
-            scrollListState.scrollToItem(targetItemIndex, targetOffset)
-        } finally {
-            isProgrammaticScrollFollowInFlight = false
+            val item = snapshotFlow {
+                buildScrollVisibleChapterItems(scrollListState, scrollFeed, scrollBodyMetricsByChapter)
+                    .firstOrNull { it.itemIndex == targetIndex }
+                    ?.takeIf { scrollBodyMetricsByChapter[it.chapterIndex]?.lines?.isNotEmpty() == true }
+            }.filterNotNull().first()
+            val lines = scrollBodyMetricsByChapter.getValue(request.anchor.chapterIndex).lines
+            val offset = (item.bodyOffsetWithinItemPx() +
+                ReaderLineAnchorMapper.topForCharOffset(lines, request.anchor.charOffset).roundToInt() -
+                scrollReadableViewportTopPx).coerceAtLeast(0)
+            scrollListState.scrollToItem(targetIndex, offset)
+            androidx.compose.runtime.withFrameNanos { }
+            if (position.confirm(request.id, visibleScrollAnchor() ?: request.anchor)) {
+                confirmedScrollViewport = scrollListState.firstVisibleItemIndex to scrollListState.firstVisibleItemScrollOffset
+                if (pendingChromeAutoHideRefreshAfterRestore && chromeMode == ReaderChromeMode.CHROME_VISIBLE) {
+                    lastChromeInteractionAtMs = SystemClock.elapsedRealtime()
+                    pendingChromeAutoHideRefreshAfterRestore = false
+                }
+                queueCurrentProgress()
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            position.fail(request.id, failure.message ?: "定位失败，可以重试。")
         }
+    }
+
+    LaunchedEffect(position.error) {
+        if (position.error != null && readerSettings.readingMode == ReadingMode.SCROLL) {
+            confirmedScrollViewport?.let { (index, offset) -> scrollListState.scrollToItem(index, offset) }
+        }
+    }
+
+    LaunchedEffect(state.book.id, scrollFeed, restoredPosition, readerSettings.readingMode, isCurrentBookTtsPlaying, scrollLayoutKey) {
+        if (readerSettings.readingMode != ReadingMode.SCROLL || !restoredPosition) return@LaunchedEffect
+        snapshotFlow { scrollListState.isScrollInProgress to visibleScrollAnchor() }
+            .distinctUntilChanged()
+            .collect { (isScrolling, anchor) ->
+                if (anchor != null && position.recordViewport(anchor)) {
+                    confirmedScrollViewport = scrollListState.firstVisibleItemIndex to scrollListState.firstVisibleItemScrollOffset
+                }
+                if (isScrolling && isCurrentBookTtsPlaying && !isProgrammaticScrollFollowInFlight) markManualFollowInterruption()
+                if (!isScrolling) {
+                    isProgrammaticScrollFollowInFlight = false
+                    queueCurrentProgress()
+                }
+            }
+    }
+
+    LaunchedEffect(activePlaybackVisualRange, isCurrentBookTtsPlaying, isFollowSuppressed, readerSettings.readingMode) {
+        val range = activePlaybackVisualRange ?: return@LaunchedEffect
+        if (!isCurrentBookTtsPlaying || isFollowSuppressed || readerSettings.readingMode != ReadingMode.SCROLL) return@LaunchedEffect
+        val current = visibleScrollAnchor()
+        if (current?.chapterIndex == range.chapterIndex && kotlin.math.abs(current.charOffset - range.startCharOffset) < 48) return@LaunchedEffect
+        isProgrammaticScrollFollowInFlight = true
+        position.jump(ReadingAnchor(range.chapterIndex, range.startCharOffset))
     }
 
     LaunchedEffect(
@@ -998,6 +834,7 @@ private fun ReaderReadyContent(
         }
     }
 
+    val latestQueueCurrentProgress by rememberUpdatedState { queueCurrentProgress() }
     DisposableEffect(
         lifecycleOwner,
         state.book.id,
@@ -1005,7 +842,7 @@ private fun ReaderReadyContent(
         scrollFeed,
         restoredPosition,
         readerSettings.readingMode,
-        currentPageIndex,
+        position.confirmedAnchor,
     ) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
@@ -1024,11 +861,7 @@ private fun ReaderReadyContent(
                 }
 
                 Lifecycle.Event.ON_STOP -> {
-                    if (restoredPosition) {
-                        scope.launch {
-                            saveCurrentProgress()
-                        }
-                    }
+                    latestQueueCurrentProgress()
                 }
 
                 else -> Unit
@@ -1044,11 +877,16 @@ private fun ReaderReadyContent(
         modifier = Modifier
             .fillMaxSize()
             .padding(padding)
+            .onSizeChanged { size ->
+                if (viewportSize != IntSize.Zero && size != viewportSize) position.reflow()
+                viewportSize = size
+            }
             .background(themePalette.background),
     ) {
         when (readerSettings.readingMode) {
             ReadingMode.SCROLL -> ScrollReaderContent(
                 chapters = scrollFeed,
+                layoutKey = scrollLayoutKey,
                 author = state.book.author,
                 themePalette = themePalette,
                 fontSize = contentFontSize,
@@ -1072,96 +910,41 @@ private fun ReaderReadyContent(
                         pressedCharOffset = charOffset,
                     )
                 },
-                onTapBodyText = if (
-                    isCurrentBookTtsOngoing ||
-                    chromeMode == ReaderChromeMode.SETTINGS_EXPANDED
-                ) {
-                    { setChromeMode(ReaderChromeStateReducer.onCenterTap(chromeMode)) }
-                } else {
-                    null
-                },
-                onBodyMetricsChanged = { chapterIndex, bodyMetrics ->
-                    scrollBodyMetricsByChapter[chapterIndex] = bodyMetrics
-                },
-                onBodyMetricsDisposed = { chapterIndex ->
-                    scrollBodyMetricsByChapter.remove(chapterIndex)
-                },
+                onBodyMetricsChanged = onScrollBodyMetricsChanged,
+                onBodyMetricsDisposed = onScrollBodyMetricsDisposed,
                 onCenterTap = {
                     setChromeMode(ReaderChromeStateReducer.onCenterTap(chromeMode))
                 },
             )
 
-            ReadingMode.PAGE -> PageReaderContent(
+            ReadingMode.PAGE -> StablePageReaderContent(
                 bookId = state.book.id,
-                chapterIndex = selectedChapterIndex,
-                contentLoaded = currentContentState.value?.chapterIndex == selectedChapterIndex,
-                content = currentContent,
-                previousChapterIndex = previousChapter?.chapterIndex,
-                previousChapterContent = previousChapterText,
-                nextChapterIndex = nextChapter?.chapterIndex,
-                nextChapterContent = nextChapterText,
-                restoreCharOffset = pendingRestoreCharOffset,
-                restoreToLastPage = restoreToLastPageOnOpen,
-                restoredPosition = restoredPosition,
+                chapters = state.chapters,
+                repository = repository,
+                position = position,
                 themePalette = themePalette,
                 fontSize = contentFontSize,
                 lineHeight = contentLineHeight,
                 paragraphSpacing = paragraphSpacing,
-                highlightRange = activePlaybackVisualRange
-                    ?.takeIf { it.chapterIndex == selectedChapterIndex }
-                    ?.let {
-                        ReaderTtsCharacterRange(
-                            startCharOffset = it.startCharOffset,
-                            endCharOffset = it.endCharOffset,
-                        )
-                    },
+                activeHighlight = activePlaybackVisualRange,
                 followTargetCharOffset = resolvePageFollowTargetCharOffset(
                     playbackSnapshot = ttsRuntime.playbackSnapshot,
                     selectedChapterIndex = selectedChapterIndex,
                     isFollowSuppressed = isFollowSuppressed,
                 ),
-                enableTtsRestartGesture = isCurrentBookTtsOngoing,
-                enableTapToDismissExpandedChrome = (
-                    chromeMode == ReaderChromeMode.SETTINGS_EXPANDED ||
-                        isCurrentBookTtsOngoing
-                    ),
-                onRestartFromCharOffset = { charOffset ->
-                    restartTtsFromPressedOffset(
-                        chapterIndex = selectedChapterIndex,
-                        pressedCharOffset = charOffset,
-                    )
-                },
+                enableLongPress = isCurrentBookTtsOngoing,
+                dismissExpandedChrome = chromeMode == ReaderChromeMode.SETTINGS_EXPANDED,
+                onRestartFromLocation = { chapterIndex, charOffset -> restartTtsFromPressedOffset(chapterIndex, charOffset) },
                 onManualFollowInterruption = ::markManualFollowInterruption,
-                onPagesChanged = { currentPages = it },
-                onRestored = { restoredPage ->
-                    currentPageIndex = restoredPage
-                    restoredPosition = true
-                    restoreToLastPageOnOpen = false
+                onCrossChapter = ::stopTtsForNavigation,
+                onConfirmed = { _, _, _ ->
+                    queueCurrentProgress()
                     if (pendingChromeAutoHideRefreshAfterRestore && chromeMode == ReaderChromeMode.CHROME_VISIBLE) {
                         lastChromeInteractionAtMs = SystemClock.elapsedRealtime()
                         pendingChromeAutoHideRefreshAfterRestore = false
                     }
                 },
-                onPageSettled = { pageIndex ->
-                    currentPageIndex = pageIndex
-                    if (restoredPosition) {
-                        scope.launch {
-                            savePageProgress(pageIndex)
-                        }
-                    }
-                },
-                onOpenBoundaryChapter = { targetChapterIndex, restoreToLastPage ->
-                    stopTtsForNavigation()
-                    markManualFollowInterruption()
-                    openChapter(
-                        chapterIndex = targetChapterIndex,
-                        nextChromeMode = chromeMode,
-                        restoreToLastPage = restoreToLastPage,
-                    )
-                },
-                onToggleChrome = {
-                    setChromeMode(ReaderChromeStateReducer.onCenterTap(chromeMode))
-                },
+                onToggleChrome = { setChromeMode(ReaderChromeStateReducer.onCenterTap(chromeMode)) },
             )
         }
 
@@ -1171,6 +954,16 @@ private fun ReaderReadyContent(
                     .matchParentSize()
                     .background(Color.Black.copy(alpha = brightnessOverlayAlpha)),
             )
+        }
+
+        position.error?.let { message ->
+            Surface(modifier = Modifier.align(Alignment.Center).padding(24.dp), color = themePalette.background) {
+                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(message, color = themePalette.content)
+                    Button(onClick = { contentRetry += 1; position.retry() }) { Text("重试") }
+                    Button(onClick = ::leaveReader) { Text("返回书架") }
+                }
+            }
         }
 
         if (!transientTtsMessage.isNullOrBlank()) {
@@ -1187,26 +980,14 @@ private fun ReaderReadyContent(
             ReaderImmersiveHeader(
                 chapterTitle = selectedChapter?.title ?: "正文",
                 themePalette = themePalette,
-                onBack = {
-                    scope.launch {
-                        saveCurrentProgress()
-                        onBack()
-                    }
-                },
-                onBottomMeasured = { scrollChromeBottomPx = it },
+                onBack = ::leaveReader,
             )
         } else {
             ReaderTopBar(
                 bookTitle = state.book.title,
                 chapterTitle = selectedChapter?.title ?: "正文",
                 themePalette = themePalette,
-                onBack = {
-                    scope.launch {
-                        saveCurrentProgress()
-                        onBack()
-                    }
-                },
-                onBottomMeasured = { scrollChromeBottomPx = it },
+                onBack = ::leaveReader,
             )
         }
 
@@ -1286,7 +1067,7 @@ private fun ReaderReadyContent(
                         ReaderChromeMode.SETTINGS_EXPANDED -> {
                             {
                                 ReaderSettingsSheet(
-                                    settings = readerSettings,
+                                    settings = requestedSettings,
                                     themePalette = themePalette,
                                     activeTab = activeSettingsTab ?: ReaderSettingsTab.READING,
                                     availableVoices = ttsRuntime.availableVoices,
@@ -1353,6 +1134,7 @@ private fun ReaderTransientTtsMessage(
 @Composable
 private fun ScrollReaderContent(
     chapters: List<ReaderFeedChapterContent>,
+    layoutKey: ReaderScrollLayoutKey,
     author: String?,
     themePalette: ReaderThemePalette,
     fontSize: TextUnit,
@@ -1362,7 +1144,6 @@ private fun ScrollReaderContent(
     activeHighlightRangeByChapter: Map<Int, ReaderTtsCharacterRange>,
     enableLongPressRestart: Boolean,
     onRestartFromLocation: (chapterIndex: Int, charOffset: Int) -> Unit,
-    onTapBodyText: (() -> Unit)? = null,
     onBodyMetricsChanged: (chapterIndex: Int, bodyMetrics: ReaderScrollBodyMetrics) -> Unit,
     onBodyMetricsDisposed: (chapterIndex: Int) -> Unit,
     onCenterTap: () -> Unit,
@@ -1371,11 +1152,9 @@ private fun ScrollReaderContent(
         modifier = Modifier
             .fillMaxSize()
             .padding(top = ReaderScrollViewportTopInset)
-            .pointerInput(Unit) {
-                detectTapGestures { offset ->
-                    if (ReaderTapZone.resolve(offset.x, size.width.toFloat()) == ReaderTapZone.TOGGLE_CHROME) {
-                        onCenterTap()
-                    }
+            .readerBodyTapInput { offset, size ->
+                if (ReaderTapZone.resolve(offset.x, size.width.toFloat()) == ReaderTapZone.TOGGLE_CHROME) {
+                    onCenterTap()
                 }
             },
         state = listState,
@@ -1384,456 +1163,86 @@ private fun ScrollReaderContent(
             items = chapters,
             key = { _, item -> item.chapter.chapterIndex },
         ) { index, chapterContent ->
-            DisposableEffect(chapterContent.chapter.chapterIndex) {
-                onDispose {
-                    onBodyMetricsDisposed(chapterContent.chapter.chapterIndex)
+            // Invalidate measurements together with their real Text nodes. Clearing only the
+            // remembered callbacks can wait forever when unchanged Text reuses its layout.
+            key(layoutKey, chapterContent.text) {
+                val chapterTopPadding = if (index == 0) ReaderTopPadding else 24.dp
+                val chapterTopPaddingPx = with(LocalDensity.current) { chapterTopPadding.roundToPx() }
+                var bodyMetrics by remember {
+                    mutableStateOf(ReaderScrollBodyMetrics(0, 0))
                 }
-            }
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(
-                        start = ReaderHorizontalPadding,
-                        end = ReaderHorizontalPadding,
-                        top = if (index == 0) ReaderTopPadding else 24.dp,
-                        bottom = if (index == chapters.lastIndex) ReaderBottomPadding else 12.dp,
-                    ),
-            ) {
-                if (index == 0 && !author.isNullOrBlank()) {
+                var renderedLines by remember {
+                    mutableStateOf(emptyList<ReaderPageLine>())
+                }
+                val readyMetrics = bodyMetrics.copy(lines = renderedLines)
+                SideEffect {
+                    if (readyMetrics.heightPx > 0 && readyMetrics.lines.isNotEmpty()) {
+                        onBodyMetricsChanged(chapterContent.chapter.chapterIndex, readyMetrics)
+                    }
+                }
+                DisposableEffect(chapterContent.chapter.chapterIndex) {
+                    onDispose {
+                        onBodyMetricsDisposed(chapterContent.chapter.chapterIndex)
+                    }
+                }
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            start = ReaderHorizontalPadding,
+                            end = ReaderHorizontalPadding,
+                            top = chapterTopPadding,
+                            bottom = if (index == chapters.lastIndex) ReaderBottomPadding else 12.dp,
+                        ),
+                ) {
+                    if (index == 0 && !author.isNullOrBlank()) {
+                        Text(
+                            text = "作者：$author",
+                            color = themePalette.content.copy(alpha = 0.65f),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Spacer(modifier = Modifier.height(18.dp))
+                    }
                     Text(
-                        text = "作者：$author",
-                        color = themePalette.content.copy(alpha = 0.65f),
+                        text = chapterContent.chapter.title,
+                        color = themePalette.content.copy(alpha = 0.72f),
                         style = MaterialTheme.typography.bodyMedium,
                     )
-                    Spacer(modifier = Modifier.height(18.dp))
-                }
-                Text(
-                    text = chapterContent.chapter.title,
-                    color = themePalette.content.copy(alpha = 0.72f),
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Spacer(modifier = Modifier.height(14.dp))
-                Box(
-                    modifier = Modifier.onGloballyPositioned { coordinates ->
-                        onBodyMetricsChanged(
-                            chapterContent.chapter.chapterIndex,
-                            ReaderScrollBodyMetrics(
-                                topWithinItemPx = coordinates.positionInParent().y.roundToInt(),
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Box(
+                        modifier = Modifier.onGloballyPositioned { coordinates ->
+                            bodyMetrics = ReaderScrollBodyMetrics(
+                                // positionInParent is inside the padded Column; LazyColumn measures the outer item.
+                                topWithinItemPx = chapterTopPaddingPx + coordinates.positionInParent().y.roundToInt(),
                                 heightPx = coordinates.size.height,
-                            ),
-                        )
-                    },
-                ) {
-                    ReaderParagraphContent(
-                        text = chapterContent.text.ifBlank { "当前章节暂无正文。" },
-                        themePalette = themePalette,
-                        fontSize = fontSize,
-                        lineHeight = lineHeight,
-                        paragraphSpacing = paragraphSpacing,
-                        highlightRange = activeHighlightRangeByChapter[chapterContent.chapter.chapterIndex],
-                        onTapText = onTapBodyText,
-                        onLongPressCharOffset = if (enableLongPressRestart) {
-                            { charOffset ->
-                                onRestartFromLocation(chapterContent.chapter.chapterIndex, charOffset)
-                            }
-                        } else {
-                            null
-                        },
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PageReaderContent(
-    bookId: String,
-    chapterIndex: Int,
-    contentLoaded: Boolean,
-    content: String,
-    previousChapterIndex: Int?,
-    previousChapterContent: String,
-    nextChapterIndex: Int?,
-    nextChapterContent: String,
-    restoreCharOffset: Int,
-    restoreToLastPage: Boolean,
-    restoredPosition: Boolean,
-    themePalette: ReaderThemePalette,
-    fontSize: TextUnit,
-    lineHeight: TextUnit,
-    paragraphSpacing: androidx.compose.ui.unit.Dp,
-    highlightRange: ReaderTtsCharacterRange?,
-    followTargetCharOffset: Int?,
-    enableTtsRestartGesture: Boolean,
-    enableTapToDismissExpandedChrome: Boolean,
-    onRestartFromCharOffset: (Int) -> Unit,
-    onManualFollowInterruption: () -> Unit,
-    onPagesChanged: (List<ReaderPageSlice>) -> Unit,
-    onRestored: (Int) -> Unit,
-    onPageSettled: (Int) -> Unit,
-    onOpenBoundaryChapter: (targetChapterIndex: Int, restoreToLastPage: Boolean) -> Unit,
-    onToggleChrome: () -> Unit,
-) {
-    val scope = rememberCoroutineScope()
-    val boundaryTransitionProgress = remember { Animatable(0f) }
-    var boundaryTransition by remember { mutableStateOf<ReaderBoundaryPageTransition?>(null) }
-    var lastSettledPage by remember(bookId, chapterIndex) {
-        mutableStateOf<Int?>(null)
-    }
-    var pendingProgrammaticSettledPage by remember(bookId, chapterIndex) {
-        mutableStateOf<Int?>(null)
-    }
-    BoxWithConstraints(
-        modifier = Modifier.fillMaxSize(),
-    ) {
-        val density = LocalDensity.current
-        val systemBarPadding = WindowInsets.safeDrawing.asPaddingValues()
-        val systemTopInsetPx = with(density) { systemBarPadding.calculateTopPadding().roundToPx() }
-        val systemBottomInsetPx = with(density) { systemBarPadding.calculateBottomPadding().roundToPx() }
-        val textMeasurer = rememberTextMeasurer()
-        val pageTextStyle = remember(fontSize, lineHeight, themePalette.content) {
-            TextStyle(
-                color = themePalette.content,
-                fontSize = fontSize,
-                lineHeight = lineHeight,
-                textAlign = TextAlign.Start,
-                platformStyle = PlatformTextStyle(includeFontPadding = false),
-            )
-        }
-        val availableWidthPx = with(density) {
-            (maxWidth - (ReaderHorizontalPadding * 2)).roundToPx()
-        }
-        val viewportMetrics = remember(
-            maxHeight,
-            systemTopInsetPx,
-            systemBottomInsetPx,
-        ) {
-            ReaderPageViewportMetricsResolver.resolve(
-                containerHeightPx = with(density) { maxHeight.roundToPx() },
-                baseTopPaddingPx = with(density) { ReaderPageTopPadding.roundToPx() },
-                baseBottomPaddingPx = with(density) { ReaderPageBottomPadding.roundToPx() },
-                systemTopInsetPx = systemTopInsetPx,
-                systemBottomInsetPx = systemBottomInsetPx,
-            )
-        }
-        val pageTopPadding = with(density) { viewportMetrics.topPaddingPx.toDp() }
-        val pageBottomPadding = with(density) { viewportMetrics.bottomPaddingPx.toDp() }
-        val paragraphSpacingPx = with(density) { paragraphSpacing.toPx() }
-        val safePages = remember(
-            content,
-            availableWidthPx,
-            viewportMetrics.availableHeightPx,
-            paragraphSpacingPx,
-            pageTextStyle,
-            textMeasurer,
-        ) {
-            paginatePageSlices(
-                content = content,
-                availableWidthPx = availableWidthPx,
-                availableHeightPx = viewportMetrics.availableHeightPx,
-                paragraphSpacingPx = paragraphSpacingPx,
-                textMeasurer = textMeasurer,
-                textStyle = pageTextStyle,
-            )
-        }
-        val previousPages = remember(
-            previousChapterContent,
-            previousChapterIndex,
-            availableWidthPx,
-            viewportMetrics.availableHeightPx,
-            paragraphSpacingPx,
-            pageTextStyle,
-            textMeasurer,
-        ) {
-            paginatePageSlices(
-                content = previousChapterContent,
-                availableWidthPx = availableWidthPx,
-                availableHeightPx = viewportMetrics.availableHeightPx,
-                paragraphSpacingPx = paragraphSpacingPx,
-                textMeasurer = textMeasurer,
-                textStyle = pageTextStyle,
-            )
-        }
-        val nextPages = remember(
-            nextChapterContent,
-            nextChapterIndex,
-            availableWidthPx,
-            viewportMetrics.availableHeightPx,
-            paragraphSpacingPx,
-            pageTextStyle,
-            textMeasurer,
-        ) {
-            paginatePageSlices(
-                content = nextChapterContent,
-                availableWidthPx = availableWidthPx,
-                availableHeightPx = viewportMetrics.availableHeightPx,
-                paragraphSpacingPx = paragraphSpacingPx,
-                textMeasurer = textMeasurer,
-                textStyle = pageTextStyle,
-            )
-        }
-        val pagerState = key(bookId, chapterIndex) {
-            rememberPagerState(
-                pageCount = { safePages.size },
-            )
-        }
-
-        LaunchedEffect(bookId, chapterIndex, safePages) {
-            onPagesChanged(safePages)
-        }
-
-        LaunchedEffect(bookId, chapterIndex, restoreCharOffset, restoreToLastPage, contentLoaded, safePages, restoredPosition) {
-            if (!contentLoaded || restoredPosition) {
-                return@LaunchedEffect
-            }
-
-            val targetPage = ReaderPageRestoreTargetResolver.resolve(
-                pages = safePages,
-                restoreCharOffset = restoreCharOffset,
-                restoreToLastPage = restoreToLastPage,
-            )
-            pendingProgrammaticSettledPage = targetPage
-            pagerState.scrollToPage(targetPage)
-            onRestored(targetPage)
-        }
-
-        LaunchedEffect(bookId, chapterIndex, safePages, restoredPosition) {
-            if (!restoredPosition) {
-                return@LaunchedEffect
-            }
-            snapshotFlow { pagerState.settledPage }
-                .distinctUntilChanged()
-                .collect { settledPage ->
-                    val decision = ReaderPageSettledPolicy.resolve(
-                        previousSettledPage = lastSettledPage,
-                        pendingProgrammaticSettledPage = pendingProgrammaticSettledPage,
-                        settledPage = settledPage,
-                    )
-                    if (decision.shouldInterruptFollow) {
-                        onManualFollowInterruption()
-                    }
-                    pendingProgrammaticSettledPage = decision.nextPendingProgrammaticSettledPage
-                    lastSettledPage = decision.nextLastSettledPage
-                    onPageSettled(settledPage)
-                }
-        }
-
-        LaunchedEffect(followTargetCharOffset, restoredPosition, safePages) {
-            val targetPage = ReaderPageFollowScrollResolver.resolveTargetPage(
-                pages = safePages,
-                followTargetCharOffset = followTargetCharOffset,
-                currentPage = pagerState.currentPage,
-                restoredPosition = restoredPosition,
-            ) ?: return@LaunchedEffect
-            pendingProgrammaticSettledPage = targetPage
-            pagerState.scrollToPage(targetPage)
-        }
-
-        LaunchedEffect(chapterIndex, contentLoaded, restoredPosition, boundaryTransition?.targetChapterIndex) {
-            if (ReaderPageBoundaryTransitionClearancePolicy.shouldClear(
-                    transitionTargetChapterIndex = boundaryTransition?.targetChapterIndex,
-                    currentChapterIndex = chapterIndex,
-                    contentLoaded = contentLoaded,
-                    restoredPosition = restoredPosition,
-                )
-            ) {
-                boundaryTransition = null
-                boundaryTransitionProgress.snapTo(0f)
-            }
-        }
-
-        fun handlePageTurn(direction: ReaderPageTurnDirection) {
-            if (boundaryTransition != null) {
-                return
-            }
-            scope.launch {
-                val decision = ReaderPageTurnDecisionResolver.resolve(
-                    direction = direction,
-                    settledPage = pagerState.settledPage,
-                    currentPages = safePages,
-                    previousPages = previousPages,
-                    nextPages = nextPages,
-                    contentLoaded = contentLoaded,
-                    restoredPosition = restoredPosition,
-                    isScrollInProgress = pagerState.isScrollInProgress,
-                    hasActiveBoundaryTransition = boundaryTransition != null,
-                    previousChapterIndex = previousChapterIndex,
-                    nextChapterIndex = nextChapterIndex,
-                )
-                when (val action = decision.action) {
-                    ReaderPageTurnAction.Ignore -> Unit
-                    is ReaderPageTurnAction.Page -> {
-                        onManualFollowInterruption()
-                        pagerState.animateScrollToPage(action.pageIndex)
-                    }
-
-                    is ReaderPageTurnAction.Chapter -> {
-                        onManualFollowInterruption()
-                        decision.boundaryTransition?.let { transition ->
-                            boundaryTransition = transition
-                            boundaryTransitionProgress.snapTo(0f)
-                            boundaryTransitionProgress.animateTo(
-                                targetValue = 1f,
-                                animationSpec = tween(durationMillis = 180),
                             )
-                        }
-                        onOpenBoundaryChapter(action.chapterIndex, action.restoreToLastPage)
+                        },
+                    ) {
+                        ReaderParagraphContent(
+                            text = chapterContent.text,
+                            themePalette = themePalette,
+                            fontSize = fontSize,
+                            lineHeight = lineHeight,
+                            paragraphSpacing = paragraphSpacing,
+                            highlightRange = activeHighlightRangeByChapter[chapterContent.chapter.chapterIndex],
+                            onLinesChanged = { renderedLines = it },
+                            onLongPressCharOffset = if (enableLongPressRestart) {
+                                { charOffset ->
+                                    onRestartFromLocation(chapterContent.chapter.chapterIndex, charOffset)
+                                }
+                            } else {
+                                null
+                            },
+                        )
                     }
                 }
             }
         }
-
-        fun handlePageTap(tapZone: ReaderTapZone) {
-            when (tapZone) {
-                ReaderTapZone.PREVIOUS -> handlePageTurn(ReaderPageTurnDirection.PREVIOUS)
-                ReaderTapZone.NEXT -> handlePageTurn(ReaderPageTurnDirection.NEXT)
-                ReaderTapZone.TOGGLE_CHROME -> onToggleChrome()
-            }
-        }
-
-        Box(
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .pointerInput(
-                        bookId,
-                        chapterIndex,
-                        contentLoaded,
-                        restoredPosition,
-                        safePages.size,
-                        pagerState.settledPage,
-                        pagerState.isScrollInProgress,
-                        previousChapterIndex,
-                        nextChapterIndex,
-                        boundaryTransition,
-                    ) {
-                        awaitEachGesture {
-                            val down = awaitFirstDown(requireUnconsumed = false)
-                            var movedBeyondTapSlop = false
-                            while (true) {
-                                val event = awaitPointerEvent(PointerEventPass.Final)
-                                val change = event.changes.firstOrNull { it.id == down.id }
-                                    ?: return@awaitEachGesture
-                                val distance = (change.position - down.position).getDistance()
-                                movedBeyondTapSlop = ReaderPageTapGesturePolicy.hasMovedBeyondTapSlop(
-                                    wasMovedBeyondTapSlop = movedBeyondTapSlop,
-                                    distanceFromDownPx = distance,
-                                    touchSlopPx = viewConfiguration.touchSlop,
-                                )
-                                if (!change.pressed) {
-                                    val tapZone = ReaderPageTapGesturePolicy.resolveTapZoneOrNull(
-                                        movedBeyondTapSlop = movedBeyondTapSlop,
-                                        upX = change.position.x,
-                                        width = size.width.toFloat(),
-                                    )
-                                    if (tapZone != null) {
-                                        handlePageTap(tapZone)
-                                    }
-                                    return@awaitEachGesture
-                                }
-                            }
-                        }
-                    },
-            ) { pageIndex ->
-                val interactions = ReaderPageSurfaceInteractionPolicy.resolve(
-                    pageIndex = pageIndex,
-                    currentPage = pagerState.currentPage,
-                    enableTapToDismissExpandedChrome = enableTapToDismissExpandedChrome,
-                    enableTtsRestartGesture = enableTtsRestartGesture,
-                )
-                ReaderPageSurface(
-                    page = safePages[pageIndex],
-                    themePalette = themePalette,
-                    fontSize = fontSize,
-                    lineHeight = lineHeight,
-                    paragraphSpacing = paragraphSpacing,
-                    pageTopPadding = pageTopPadding,
-                    pageBottomPadding = pageBottomPadding,
-                    highlightRange = highlightRange,
-                    onTapText = if (interactions.enableTextTap) {
-                        onToggleChrome
-                    } else {
-                        null
-                    },
-                    onLongPressCharOffset = if (interactions.enableLongPressRestart) {
-                        onRestartFromCharOffset
-                    } else {
-                        null
-                    },
-                    modifier = Modifier
-                        .fillMaxSize(),
-                )
-            }
-
-            boundaryTransition?.let { transition ->
-                val containerWidthPx = with(density) { this@BoxWithConstraints.maxWidth.roundToPx() }
-                val offsets = ReaderPageBoundaryTransitionOffsetResolver.resolve(
-                    direction = transition.direction,
-                    containerWidthPx = containerWidthPx,
-                    progress = boundaryTransitionProgress.value,
-                )
-                ReaderBoundaryPageLayer(
-                    page = transition.sourcePage,
-                    themePalette = themePalette,
-                    fontSize = fontSize,
-                    lineHeight = lineHeight,
-                    paragraphSpacing = paragraphSpacing,
-                    pageTopPadding = pageTopPadding,
-                    pageBottomPadding = pageBottomPadding,
-                    offsetPx = offsets.currentPageOffsetPx,
-                )
-                ReaderBoundaryPageLayer(
-                    page = transition.previewPage,
-                    themePalette = themePalette,
-                    fontSize = fontSize,
-                    lineHeight = lineHeight,
-                    paragraphSpacing = paragraphSpacing,
-                    pageTopPadding = pageTopPadding,
-                    pageBottomPadding = pageBottomPadding,
-                    offsetPx = offsets.previewPageOffsetPx,
-                )
-            }
-        }
     }
 }
 
 @Composable
-private fun BoxScope.ReaderBoundaryPageLayer(
-    page: ReaderPageSlice,
-    themePalette: ReaderThemePalette,
-    fontSize: TextUnit,
-    lineHeight: TextUnit,
-    paragraphSpacing: androidx.compose.ui.unit.Dp,
-    pageTopPadding: androidx.compose.ui.unit.Dp,
-    pageBottomPadding: androidx.compose.ui.unit.Dp,
-    offsetPx: Int,
-) {
-    Box(
-        modifier = Modifier
-            .matchParentSize()
-            .offset { IntOffset(x = offsetPx, y = 0) }
-            .background(themePalette.background),
-    ) {
-        ReaderPageSurface(
-            page = page,
-            themePalette = themePalette,
-            fontSize = fontSize,
-            lineHeight = lineHeight,
-            paragraphSpacing = paragraphSpacing,
-            pageTopPadding = pageTopPadding,
-            pageBottomPadding = pageBottomPadding,
-            highlightRange = null,
-            modifier = Modifier.fillMaxSize(),
-        )
-    }
-}
-
-@Composable
-private fun ReaderPageSurface(
+internal fun ReaderPageSurface(
     page: ReaderPageSlice,
     themePalette: ReaderThemePalette,
     fontSize: TextUnit,
@@ -1905,6 +1314,7 @@ private fun ReaderParagraphContent(
     includeFontPadding: Boolean = true,
     onTapText: (() -> Unit)? = null,
     onLongPressCharOffset: ((Int) -> Unit)? = null,
+    onLinesChanged: ((List<ReaderPageLine>) -> Unit)? = null,
 ) {
     val paragraphs = remember(text) { ReaderParagraphModel.toDisplayParagraphs(text) }
     val paragraphTextStyle = remember(fontSize, lineHeight, includeFontPadding) {
@@ -1915,12 +1325,35 @@ private fun ReaderParagraphContent(
             platformStyle = PlatformTextStyle(includeFontPadding = includeFontPadding),
         )
     }
+    val measuredLines = remember(text, fontSize, lineHeight, paragraphSpacing, LocalDensity.current) {
+        mutableStateMapOf<Int, List<ReaderPageLine>>()
+    }
+    if (onLinesChanged != null && paragraphs.all { measuredLines.containsKey(it.startCharOffset) }) {
+        val allLines = paragraphs.flatMap { measuredLines.getValue(it.startCharOffset) }
+        SideEffect { onLinesChanged(allLines) }
+    }
     Column(
         verticalArrangement = Arrangement.spacedBy(paragraphSpacing),
     ) {
         paragraphs.forEach { paragraph ->
-            var textLayoutResult by remember(paragraph) {
+            var textLayoutResult by remember(paragraph, fontSize, lineHeight, paragraphSpacing, LocalDensity.current) {
                 mutableStateOf<TextLayoutResult?>(null)
+            }
+            var topPx by remember(paragraph, fontSize, lineHeight, paragraphSpacing, LocalDensity.current) { mutableStateOf<Float?>(null) }
+            if (onLinesChanged != null) {
+                val layout = textLayoutResult
+                val top = topPx
+                SideEffect {
+                    if (layout != null && top != null) {
+                        measuredLines[paragraph.startCharOffset] = List(layout.lineCount) { line ->
+                            ReaderPageLine(
+                                (baseCharOffset + paragraph.startCharOffset + layout.getLineStart(line)).coerceAtMost(baseCharOffset + paragraph.endCharOffset),
+                                (baseCharOffset + paragraph.startCharOffset + layout.getLineEnd(line, visibleEnd = true)).coerceAtMost(baseCharOffset + paragraph.endCharOffset),
+                                top + layout.getLineTop(line), top + layout.getLineBottom(line),
+                            )
+                        }
+                    }
+                }
             }
             Text(
                 text = ReaderHighlightAnnotator.annotate(
@@ -1930,7 +1363,7 @@ private fun ReaderParagraphContent(
                     highlightRange = highlightRange,
                     highlightColor = themePalette.content.copy(alpha = 0.18f),
                 ),
-                modifier = if (
+                modifier = (if (
                     (onLongPressCharOffset != null || onTapText != null) &&
                     paragraph.endCharOffset > paragraph.startCharOffset
                 ) {
@@ -1951,7 +1384,7 @@ private fun ReaderParagraphContent(
                     }
                 } else {
                     Modifier
-                },
+                }).then(if (onLinesChanged != null) Modifier.onGloballyPositioned { topPx = it.positionInParent().y } else Modifier),
                 color = themePalette.content,
                 style = paragraphTextStyle,
                 onTextLayout = { textLayoutResult = it },
@@ -2023,9 +1456,14 @@ private data class ReaderFeedChapterContent(
     val text: String,
 )
 
-private data class ReaderLoadedChapterContent(
-    val chapterIndex: Int,
-    val text: String,
+/** Scroll line geometry is independent of viewport height and overlay controls. */
+private data class ReaderScrollLayoutKey(
+    val widthPx: Int,
+    val density: Float,
+    val fontScale: Float,
+    val fontSizeSp: Int,
+    val lineHeightMultiplier: Float,
+    val paragraphSpacingEm: Float,
 )
 
 private sealed interface ReaderScreenState {
@@ -2041,14 +1479,16 @@ private sealed interface ReaderScreenState {
     ) : ReaderScreenState
 }
 
-private fun paginatePageSlices(
+internal fun paginatePageSlices(
     content: String,
     availableWidthPx: Int,
     availableHeightPx: Int,
     paragraphSpacingPx: Float,
     textMeasurer: TextMeasurer,
     textStyle: TextStyle,
+    cancellationContext: CoroutineContext = EmptyCoroutineContext,
 ): List<ReaderPageSlice> {
+    cancellationContext.ensureActive()
     if (content.isBlank() || availableWidthPx <= 0) {
         return listOf(
             ReaderPageSlice(
@@ -2065,6 +1505,7 @@ private fun paginatePageSlices(
         textMeasurer = textMeasurer,
         textStyle = textStyle,
         paragraphSpacingPx = paragraphSpacingPx,
+        cancellationContext = cancellationContext,
     )
     return ReaderPageLinePaginator.paginate(
         content = content,
@@ -2078,8 +1519,10 @@ private fun paginatePageSlices(
                 paragraphSpacingPx = paragraphSpacingPx,
                 textMeasurer = textMeasurer,
                 textStyle = textStyle,
+                cancellationContext = cancellationContext,
             )
         },
+        cancellationContext = cancellationContext,
     )
 }
 
@@ -2090,6 +1533,7 @@ private fun pageTextFitsViewport(
     paragraphSpacingPx: Float,
     textMeasurer: TextMeasurer,
     textStyle: TextStyle,
+    cancellationContext: CoroutineContext,
 ): Boolean {
     val lines = ReaderPageTextLayout.measureLines(
         content = page.rawText,
@@ -2097,6 +1541,7 @@ private fun pageTextFitsViewport(
         textMeasurer = textMeasurer,
         textStyle = textStyle,
         paragraphSpacingPx = paragraphSpacingPx,
+        cancellationContext = cancellationContext,
     )
     if (lines.isEmpty()) {
         return true
