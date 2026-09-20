@@ -1487,67 +1487,10 @@ internal fun paginatePageSlices(
     textMeasurer: TextMeasurer,
     textStyle: TextStyle,
     cancellationContext: CoroutineContext = EmptyCoroutineContext,
-): List<ReaderPageSlice> {
-    cancellationContext.ensureActive()
-    if (content.isBlank() || availableWidthPx <= 0) {
-        return listOf(
-            ReaderPageSlice(
-                startCharOffset = 0,
-                endCharOffset = 0,
-                text = "当前章节暂无正文。",
-            ),
-        )
-    }
-
-    val lines = ReaderPageTextLayout.measureLines(
-        content = content,
-        availableWidthPx = availableWidthPx,
-        textMeasurer = textMeasurer,
-        textStyle = textStyle,
-        paragraphSpacingPx = paragraphSpacingPx,
-        cancellationContext = cancellationContext,
-    )
-    return ReaderPageLinePaginator.paginate(
-        content = content,
-        lines = lines,
-        availableHeightPx = availableHeightPx.coerceAtLeast(1).toFloat(),
-        pageFitsViewport = { page ->
-            pageTextFitsViewport(
-                page = page,
-                availableWidthPx = availableWidthPx,
-                availableHeightPx = availableHeightPx,
-                paragraphSpacingPx = paragraphSpacingPx,
-                textMeasurer = textMeasurer,
-                textStyle = textStyle,
-                cancellationContext = cancellationContext,
-            )
-        },
-        cancellationContext = cancellationContext,
-    )
-}
-
-private fun pageTextFitsViewport(
-    page: ReaderPageSlice,
-    availableWidthPx: Int,
-    availableHeightPx: Int,
-    paragraphSpacingPx: Float,
-    textMeasurer: TextMeasurer,
-    textStyle: TextStyle,
-    cancellationContext: CoroutineContext,
-): Boolean {
-    val lines = ReaderPageTextLayout.measureLines(
-        content = page.rawText,
-        availableWidthPx = availableWidthPx,
-        textMeasurer = textMeasurer,
-        textStyle = textStyle,
-        paragraphSpacingPx = paragraphSpacingPx,
-        cancellationContext = cancellationContext,
-    )
-    if (lines.isEmpty()) {
-        return true
-    }
-    return lines.last().bottomPx <= availableHeightPx
-}
+): List<ReaderPageSlice> = paginateMeasuredPageSlices(
+    content, availableWidthPx, availableHeightPx, paragraphSpacingPx,
+    textMeasurer, textStyle, cancellationContext,
+)
 
 @Composable
 private fun ReaderSystemBarsEffect(

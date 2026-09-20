@@ -13,15 +13,20 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.longerlsx.storyapp.core.model.ReaderSettings
+import kotlin.math.ceil
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -81,6 +86,123 @@ class ReaderPageContentIntegrityTest {
         }
 
         assertEveryPagePreservesAndDisplaysContent(content, fontSizeSp = 18, paragraphSpacingEm = 1.8f)
+    }
+
+    @Test
+    fun pageBoundariesMatchStandaloneParagraphMeasurementAtFractionalSpacing() {
+        val content = buildString {
+            append("\n \t　开头正文。\n\n")
+            repeat(80) { index ->
+                append("　段落$index：")
+                repeat(if (index % 3 == 0) 17 else 1) {
+                    append("中文、Latin words 和数字 12345 交错，不能少字。")
+                }
+                append("\t \n\n")
+            }
+            append("章尾唯一终点。")
+        }
+        var textMeasurer: TextMeasurer? = null
+        composeRule.setContent {
+            val measurer = rememberTextMeasurer()
+            SideEffect { textMeasurer = measurer }
+        }
+        composeRule.runOnIdle {
+            val measurer = checkNotNull(textMeasurer)
+            for ((width, height, spacing) in listOf(
+                Triple(431, 711, 19.375f),
+                Triple(317, 593, 31.925f),
+            )) {
+                val style = TextStyle(
+                    fontSize = 18.sp,
+                    lineHeight = 26.46.sp,
+                    textAlign = TextAlign.Start,
+                    platformStyle = PlatformTextStyle(includeFontPadding = false),
+                )
+                val chapterLines = ReaderPageTextLayout.measureLines(content, width, measurer, style, spacing)
+                // The reference always lays out each actual page paragraph afresh. It must not use
+                // production paragraph summaries or derive expected fit from global line heights.
+                val expected = ReaderPageLinePaginator.paginate(
+                    content, chapterLines, height.toFloat(),
+                    pageFitsViewport = { page ->
+                        standalonePageBottom(page.rawText, width, spacing, measurer, style) <= height
+                    },
+                )
+                val actual = paginatePageSlices(content, width, height, spacing, measurer, style)
+                assertTrue("The fixture must cut paragraphs across pages", expected.size > 10)
+                assertEquals("Page boundaries changed at width=$width, spacing=$spacing", expected, actual)
+                assertPageRangesPreserveSource(content, actual)
+                actual.forEachIndexed { index, page ->
+                    assertTrue(
+                        "Standalone page $index no longer fits at width=$width",
+                        standalonePageBottom(page.rawText, width, spacing, measurer, style) <= height,
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun actualPageRemeasurementBacksOffRoundedGlobalLineCoordinates() {
+        var textMeasurer: TextMeasurer? = null
+        composeRule.setContent {
+            val measurer = rememberTextMeasurer()
+            SideEffect { textMeasurer = measurer }
+        }
+        composeRule.runOnIdle {
+            val measurer = checkNotNull(textMeasurer)
+            val paragraph = "页底精度检查。"
+            val content = List(300) { paragraph }.joinToString("\n")
+            val width = 431
+            val style = TextStyle(
+                fontSize = 18.sp, lineHeight = 27.sp,
+                platformStyle = PlatformTextStyle(includeFontPadding = false),
+            )
+            val single = measurer.measure(AnnotatedString(paragraph), style, constraints = Constraints(maxWidth = width))
+            assertEquals("The precision fixture requires one actual text line", 1, single.lineCount)
+            val bottom = single.getLineBottom(0)
+            val height = ceil(single.size.height + bottom + 24f).toInt()
+            // A page-local sum exceeds the integer viewport slightly. Farther down the chapter,
+            // float global coordinates round that amount away, so the real fit check must back off.
+            val spacing = height - single.size.height - bottom + 0.0001f
+            val lines = ReaderPageTextLayout.measureLines(content, width, measurer, style, spacing)
+            var rejectedCandidates = 0
+            val expected = ReaderPageLinePaginator.paginate(
+                content, lines, height.toFloat(),
+                pageFitsViewport = { page ->
+                    (standalonePageBottom(page.rawText, width, spacing, measurer, style) <= height)
+                        .also { if (!it) rejectedCandidates += 1 }
+                },
+            )
+            assertTrue("Real standalone layout must reject at least one candidate", rejectedCandidates > 0)
+            val actual = paginatePageSlices(content, width, height, spacing, measurer, style)
+            assertEquals("Page-fit backoff must survive measurement reuse", expected, actual)
+            assertPageRangesPreserveSource(content, actual)
+            actual.forEach { page ->
+                assertTrue(standalonePageBottom(page.rawText, width, spacing, measurer, style) <= height)
+            }
+        }
+    }
+
+    private fun standalonePageBottom(
+        text: String,
+        width: Int,
+        spacing: Float,
+        measurer: TextMeasurer,
+        style: TextStyle,
+    ): Float {
+        val paragraphs = text.lineSequence().map(String::trim).filter(String::isNotEmpty).toList()
+        var top = 0f
+        var bottom = 0f
+        paragraphs.forEachIndexed { index, paragraph ->
+            val layout = measurer.measure(
+                AnnotatedString(paragraph), style, overflow = TextOverflow.Clip, softWrap = true,
+                constraints = Constraints(maxWidth = width),
+            )
+            bottom = top + layout.getLineBottom(layout.lineCount - 1)
+            top += layout.size.height.toFloat()
+            if (index < paragraphs.lastIndex) top += spacing
+        }
+        return bottom
     }
 
     private fun assertEveryPagePreservesAndDisplaysContent(
