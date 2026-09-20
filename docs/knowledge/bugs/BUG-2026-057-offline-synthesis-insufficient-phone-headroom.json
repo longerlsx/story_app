@@ -1,0 +1,26 @@
+{
+  "id": "BUG-2026-057",
+  "title": "Offline speech generation has insufficient sustained headroom on Xiaomi 15 Ultra",
+  "status": "resolved",
+  "symptom": "On Xiaomi 15 Ultra with the bundled Kokoro v1.1 int8 model, some normal reading units take longer to generate than their audio duration; first playback takes about nine seconds. Bounded lookahead cannot compensate for persistently inadequate generation throughput.",
+  "root_cause": "The insufficient headroom is directly measured inside native generation, excluding mutex acquisition and AudioTrack playback. The same Android runtime/model on the emulator spends about 84.9 percent of one representative generation in CPU ConvInteger, mainly in the waveform decoder. A same-model FP32 comparison markedly reduces generation time. The replacement also has headroom in the covered Xiaomi playback windows, but the emulator operator share and improvement percentage must not be attributed to Xiaomi. A phone 2/4-thread comparison shows only about one percent difference.",
+  "fix": [
+    "Selected the official FP32 version of the same Kokoro model, retaining all four voice IDs and identical voice/token/lexicon/normalization resources. The preparation script pins the new archive and removes the managed previous int8 directory to avoid bundling both. All four voices pass actual AudioTrack playback and nonzero output capture on the final v3 emulator build; sustained playback and target-phone verification are recorded separately."
+  ],
+  "evidence": [
+    "Normal v2 debug APK 7b13f0638cd9ef6dcfe5a67043d562793b308abf0b8fc7c65dab869c966bc764 on 25019PNF3C, Android 16 / OS3.0.306.0.WOACNXM, USB charging, media volume zero: fifteen units require 5446–8954ms synthesis for 4651–8468ms audio. A nonzero internal output capture exists; physical output and subjective voice quality are not accepted by this evidence.",
+    "A synthesis-only probe uses the same shipped AAR/model/rules, speaker 59, speed 1, two fixed texts and a 2/4/4/2 sequence with warmup per session. Two-thread same-text means improve only about 0.6% and 1.1%. Full samples and conditions are recorded in docs/superpowers/plans/2026-09-20-offline-listening.md.",
+    "The temporary test package and source were removed after the check. Production APK, reading data and saved listening anchor were preserved; the phone was returned for normal use.",
+    "A single emulator profile records 7355.878ms complete generation, 7349.761ms model runs and 6244.602ms CPU ConvInteger. Without profiling, the same fixed sentence and CPU4/SID59/rate1 yield int8 6411/6278/6413ms versus FP32 2953/2942/3790ms after separate warmups. These are model-selection data, not phone acceptance.",
+    "Final v3 on the same API34 arm64 2GiB emulator completes a normal-entry, offline, non-instrumentation 30-minute timer run through two real-novel chapter boundaries with the screen asleep. Recorded internal intervals contain no silence of at least one second at -65dB; recording seams are excluded. PSS snapshots at minute 1/15/28 are about 664/837/874MiB with increasing swap, not proof of stable memory or a leak.",
+    "The same final v3 is installed without clearing data on the user's 15 Ultra. At USB power and media volume zero, all four normal UI previews yield actual internal audio through the calibrated playback capture. A normal continuation using the user's voice 58/rate 1.45/pitch 1 yields about 123.7 seconds of narration without internal silence of at least one second. All 31 completed units in that window generate faster than their audio, with median generation/audio ratio 0.643. The recorder's exit then triggers a documented audio-route change and ACTION_AUDIO_BECOMING_NOISY pause; that tool effect is not an autonomous playback failure."
+  ],
+  "failed_attempts": [
+    "Reducing generation threads from four to two does not provide meaningful sustained headroom on the measured inputs. No production parameter change was made."
+  ],
+  "impact": "The measured generation-throughput defect is resolved within the covered scope: FP32 completes all 31 units faster than their audio during about 123.7 seconds of actual Xiaomi 15 Ultra output, and the emulator completes the 30-minute screen-off run. This conclusion rests on generation and output evidence, not on waiving a failed check. The final v3 APK is 462395120 bytes (about 441 MiB), with a larger model and memory footprint; cold loading and first synthesis still take seconds. Xiaomi 15 Ultra unplugged long-listening and resource behavior, Xiaomi 17 Pro, physical speaker/headphone output and subjective voice quality remain unverified. The user's subsequent 30-minute screen-off listening experience is follow-up and does not block closing this throughput defect; those limits are not claimed as passed.",
+  "tags": ["android", "tts", "offline", "performance", "xiaomi", "resolved"],
+  "confidence": 0.99,
+  "created_at": "2026-09-20",
+  "updated_at": "2026-09-20"
+}

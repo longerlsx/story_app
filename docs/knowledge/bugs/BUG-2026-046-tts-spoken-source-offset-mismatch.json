@@ -3,11 +3,15 @@
   "title": "TTS range offsets refer to transformed speech text but are applied directly to source text",
   "symptom": "Highlight and recoverable positions can point at the wrong source character when speech text inserts or collapses whitespace or removes symbols.",
   "root_cause": "ReaderTtsSegmenter joins sentence spans with a space and sanitizes whitespace/symbols, but retains only source segment start/end offsets. ReaderTtsService.onUtteranceRangeStart adds the speech callback offsets directly to the source start without an offset mapping.",
-  "fix": [],
+  "status": "resolved",
+  "fix": [
+    "ReaderTtsSegmenter preserves a UTF-16 source range for each spoken character during whitespace/symbol normalization and segments directly from the original chapter's startCharOffset.",
+    "ReaderTtsService maps range callbacks through sourceRangeForSpokenRange. A range starting only updates highlighting; durable and recoverable progress advances only after actual utterance completion."
+  ],
   "failed_attempts": [],
-  "impact": "A current-source Kotlin probe transforms 你好。世界。 into 你好。 世界。: 世界 starts at speech offset 4 but source offset 3. The service calculation therefore maps it to 4. This proves the coordinate mismatch; actual highlight and resume effects remain to be verified with engine callbacks. This does not explain the user's lack of a male voice.",
-  "tags": ["android", "reader", "tts", "offset", "highlight", "investigating"],
+  "impact": "The original coordinate mismatch is covered by direct mapping/segmentation regressions; 16 segmenter tests passed on 2026-09-20. The real Service regression pauseAfterRangeStartsReplaysUnfinishedSentenceInsteadOfSkippingIt first failed with offset 4 instead of 0 and passes after the change. Its engine replacement controls callback timing and does not establish sound quality or Xiaomi background reliability. The bundled offline engine highlights its actually playing short unit rather than claiming word-level audio alignment.",
+  "tags": ["android", "reader", "tts", "offset", "highlight", "resolved"],
   "confidence": 0.99,
   "created_at": "2026-09-11",
-  "updated_at": "2026-09-11"
+  "updated_at": "2026-09-20"
 }

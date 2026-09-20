@@ -1,0 +1,24 @@
+{
+  "id": "BUG-2026-053",
+  "title": "Switching from PAGE to SCROLL briefly displays an old scroll viewport",
+  "status": "resolved",
+  "symptom": "During normal signed-release use in the 2026-09-14 implementation, switching from PAGE to SCROLL briefly exposes the remembered LazyList position before moving to the requested text. A same-chapter transition briefly shows the chapter heading; a cross-chapter sequence flashes chapter 2's old ending while the target is chapter 3's beginning. The final text and progress are correct, but the transition visibly jumps.",
+  "root_cause": "ReaderScreen releases its retained PAGE display as soon as the keyed SCROLL feed is ready. ScrollReaderContent is then visible with the remembered LazyList state, while scrollToAnchor runs afterward in a LaunchedEffect and still needs real item and line layout. Feed readiness establishes that text is available, not that the target line has been positioned for display. The intermediate scroll viewport is therefore drawn before the valid target is ready.",
+  "evidence": [
+    "The normal release recording device-mode-final.mp4 shows the same-chapter transition briefly exposing an in-body heading at approximately 1.70-1.73 seconds, across two frames.",
+    "A second normal release recording, device-mode-other-target.mp4, covers SCROLL near chapter 2's end, switch to PAGE, directory jump to chapter 3's beginning, then switch to SCROLL. At approximately 1.85 seconds, the old chapter 2 ending appears before chapter 3's beginning is restored.",
+    "ReaderModeHandoffTest.returningToScrollNeverShowsItsOldChapterOrAnUnpositionedTitle passes the frame-by-frame regression through the complete ReaderScreen. Final release f916fd9a5159fb29de2c3d6f84b997349601cedefb27466c19f0684323ef5f5c was then checked through both normal-operation paths on the same emulator and real book at 20 sp.",
+    "In mode-fixed-same.mp4, the same-chapter PAGE-to-SCROLL transition at approximately 1.4-1.9 seconds shows no inserted in-body heading or vertical jump. In mode-fixed-other.mp4, the chapter-2-ending to chapter-3-beginning sequence at approximately 1.7-2.3 seconds shows no old viewport or heading flash and reaches the correct target. Device review covered the 30 fps recordings; the main implementation agent also reviewed the second sequence's consecutive frames.",
+    "These observations establish the covered emulator transitions, not Xiaomi-device behavior or events finer than the recording cadence. Recordings and novel text are excluded from docs; task recordings were removed during cleanup. Broader execution evidence belongs to docs/superpowers/plans/2026-09-14-pagination-measurement-reuse.md."
+  ],
+  "fix": [
+    "Retain the confirmed PAGE as a read-only page snapshot until the SCROLL target line has completed actual positioning. Keep preparation and positioning separate from what becomes visible.",
+    "Do not mount a second executing Pager or confirm the intermediate scroll position. Only the current authorized request may release the retained display."
+  ],
+  "failed_attempts": [],
+  "impact": "The covered transitions now retain valid text until the new scroll target is positioned, eliminating the recorded old-viewport and heading flashes. The original failure did not demonstrate lost text or corrupted final progress; checking only the final anchor had missed the visible jump.",
+  "tags": ["android", "compose", "reader", "page-mode", "scroll-mode", "anchor-restore", "visual", "resolved"],
+  "confidence": 0.99,
+  "created_at": "2026-09-14",
+  "updated_at": "2026-09-14"
+}

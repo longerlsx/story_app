@@ -12,7 +12,7 @@
 | 诊断已知症状或修 bug | [bug 索引](knowledge/bugs/INDEX.md) 中匹配记录，再核对当前代码和直接证据 |
 | 导入/标题/章节切分 | 当前状态中的解析说明 → `ImportCoordinator` / `ChapterParser` 及其测试 |
 | 翻页/滚动/目录/设置 | 当前状态中的交互表 → `ReaderScreen` 及对应组件、定位和分页逻辑 |
-| 听书/音色 | 当前状态中的男声需求 → `ReaderTtsService` / `AndroidReaderTtsEngine` |
+| 听书/音色 | 当前状态中的离线听书 → `ReaderTtsService` / `OfflineReaderTtsEngine`；资源准备见[离线声音依赖](knowledge/offline-voice-dependencies.md) |
 | 构建、设备、语料与验证工具 | [项目 README](../README.md)、[环境与验证操作说明](knowledge/gradle-android-environment-troubleshooting.md) |
 | 查询历史决定 | [开发历史](knowledge/2026-04-android-reader-development-cycle.md)，需要时再读 `superpowers/specs` / `superpowers/plans` |
 

@@ -1,0 +1,23 @@
+{
+  "id": "BUG-2026-054",
+  "title": "Listening cannot resume after its playback service is destroyed",
+  "status": "resolved",
+  "symptom": "The controller can retain a playback session while the Service and engine no longer exist. Continue then produces no sound; a cold foreground-service continuation can also miss Android's foreground-promotion deadline.",
+  "root_cause": "The old recovery path depended on an in-memory queue and prepared engine, with no independent durable listening checkpoint or complete cold-resume initialization. Foreground promotion happened after potentially suspending preparation.",
+  "fix": [
+    "Persist listening checkpoints independently of reading positions and rebuild only the current and next chapter from the saved location.",
+    "Promote the Service before storage/model suspension, reflect destruction as paused, and give preparation a bounded failure state.",
+    "Only actual playback completion advances the checkpoint; stale operations and callbacks cannot publish into a later session."
+  ],
+  "evidence": [
+    "ReaderTtsBackgroundPlaybackTest.resumeAfterServiceDisappearsRebuildsAtLastCompletedBoundary failed before the change: no replacement engine/continuation, followed by ForegroundServiceDidNotStartInTimeException on cold resume. It passes after the change with a real Service stop and reconstruction.",
+    "ListeningProgressStoreTest passes six real-file cases. The Service test uses a controlled engine to isolate lifecycle order; host-process termination, actual long playback and Xiaomi background behavior are separately tracked in the 2026-09-20 offline-listening plan.",
+    "On the final v3 Xiaomi 15 Ultra, pause then host force-stop terminates PID29380. Normal reopening creates PID15510 without automatic playback or a media session; the listening checkpoint file remains byte-identical at chapter2/1282. Explicit continuation produces actual captured audio at offset1285, follows that position in the reader and advances the checkpoint. Direct source inspection confirms the three skipped UTF-16 characters are newline plus two ideographic spaces."
+  ],
+  "failed_attempts": [],
+  "impact": "This closes the identified recovery defect. It does not establish the sole cause of the user's several-minute Xiaomi screen-off interruption or mark that device scenario accepted.",
+  "tags": ["android", "tts", "service", "recovery", "resolved"],
+  "confidence": 0.99,
+  "created_at": "2026-09-20",
+  "updated_at": "2026-09-20"
+}

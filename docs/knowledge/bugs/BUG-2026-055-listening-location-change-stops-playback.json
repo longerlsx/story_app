@@ -1,0 +1,21 @@
+{
+  "id": "BUG-2026-055",
+  "title": "Automatic listening location changes are mistaken for manual chapter navigation",
+  "status": "resolved",
+  "symptom": "Following playback into another chapter or opening a paused notification's chapter can change the session to STOPPED_BY_NAVIGATION.",
+  "root_cause": "StablePageReaderContent emitted the same stop-on-cross-chapter callback for every confirmed chapter change, without distinguishing accepted user page turns from semantic anchor jumps initiated by listening.",
+  "fix": [
+    "Inspect the still-pending navigation request before confirmation clears it. Emit manual cross-chapter navigation only when that request contains accepted page-turn input.",
+    "Listening follow, notification opening and explicit continuation use anchor jumps without that manual input. Directory and explicit chapter buttons retain their existing stop behavior."
+  ],
+  "evidence": [
+    "pausedNotificationOpensListeningTextWhileOrdinaryOpeningKeepsReadingPosition reproduced PAUSED_BY_USER becoming STOPPED_BY_NAVIGATION after locating the correct chapter, and passes after correction.",
+    "pageModeFollowsPlaybackIntoSpokenChapter now checks that PLAYING survives automatic chapter follow and passes. pageBoundaryTurnStopsActiveTtsBeforeOpeningAdjacentChapter also passes, preserving actual user-navigation semantics."
+  ],
+  "failed_attempts": [],
+  "impact": "The covered complete-reader paths now preserve the intended distinction between following listening and deliberately navigating away. The regression uses controlled playback snapshots; actual audio and screen-off behavior have separate evidence.",
+  "tags": ["android", "tts", "navigation", "page-mode", "resolved"],
+  "confidence": 0.99,
+  "created_at": "2026-09-20",
+  "updated_at": "2026-09-20"
+}

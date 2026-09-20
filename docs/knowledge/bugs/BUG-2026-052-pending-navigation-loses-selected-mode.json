@@ -1,0 +1,23 @@
+{
+  "id": "BUG-2026-052",
+  "title": "Exiting during pending page navigation loses the selected reading mode",
+  "status": "resolved",
+  "symptom": "While a page turn is waiting for chapter B, choose SCROLL, increase font size from 18 to 20 sp and immediately return to the bookshelf. On the 8c0e210 baseline, ReaderModeHandoffTest.modeAndFontSelectedDuringPendingTurnSurviveImmediateExitAndReopen reloaded PAGE from disk instead of the selected SCROLL mode.",
+  "root_cause": "updateReaderSettings replaced the requested mode with the active PAGE mode while unresolved page turns remained. It stored the chosen mode only in deferredReadingMode and persisted the substituted settings; the choice was saved only after navigation completed. Leaving before completion discarded that transient choice. Display readiness was incorrectly controlling when an accepted setting became persistent.",
+  "fix": [
+    "Maintain selectedSettings as the source for settings controls and persistence, and save the full accepted choice immediately through the existing serial store. Active display settings may remain different while navigation resolves.",
+    "Derive subsequent font, theme, brightness and TTS setting updates from selectedSettings so unrelated changes do not replace a pending mode choice with the still-visible mode.",
+    "Keep exit progress based on the last confirmed text and display mode, wait for submitted writes, and map that anchor using the latest selected settings on reopening."
+  ],
+  "evidence": [
+    "The regression exercises the complete ReaderScreen with real file-backed settings and anchor stores and a controlled delayed chapter read. After correcting an ambiguous A+ test selector, the baseline failed with expected SCROLL but actual PAGE; the earlier selector failure is not product evidence.",
+    "The implementation build passed the same scenario: disk settings are SCROLL and 20 sp, saved progress remains confirmed anchor (0, 0), and reopening shows SCROLL and 20 sp selected. Reopening here remounts ReaderScreen; it is not host-process termination evidence.",
+    "This individual GREEN result establishes the covered mode-selection and exit scenario. Broader mode handoff and process-recovery evidence are tracked separately in docs/superpowers/plans/2026-09-14-pagination-measurement-reuse.md."
+  ],
+  "failed_attempts": [],
+  "impact": "The covered immediate-exit path preserves the user's accepted mode and font choice without saving an unconfirmed navigation target. This is separate from BUG-2026-048's scroll-measurement publication defect and does not establish every mode/failure handoff or target-device behavior.",
+  "tags": ["android", "compose", "reader", "settings", "page-mode", "scroll-mode", "persistence", "resolved"],
+  "confidence": 0.99,
+  "created_at": "2026-09-14",
+  "updated_at": "2026-09-14"
+}

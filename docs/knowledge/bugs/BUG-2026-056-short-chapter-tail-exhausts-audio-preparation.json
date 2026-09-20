@@ -1,0 +1,22 @@
+{
+  "id": "BUG-2026-056",
+  "title": "A short chapter tail leaves the next chapter audio unprepared",
+  "status": "resolved",
+  "symptom": "A normal offline screen-off run contains a 6.024-second silent interval when an eight-character final unit is followed by a longer first unit in the next chapter. Playback then continues without a process restart.",
+  "root_cause": "Only one future unit is prepared. Once the short tail is ready, synthesis sits idle while the preceding long unit plays. Preparation of the following chapter starts only when the short tail starts playing, whose 1.794-second audio cannot hide the following 7.553-second synthesis on this emulator.",
+  "fix": [
+    "Prepare at most two future units in input order. Once the short tail finishes synthesis, use the remaining playback time to synthesize the following unit; no full-book audio or generic queue is introduced.",
+    "Transfer only the first pending audio to its consumer, retain the matching next entry and cancel superseded future work. The service joins the next chapter only when the current chapter has fewer than two upcoming units; asynchronous publication must still match the current token and utterance."
+  ],
+  "evidence": [
+    "Normal API34 arm64 app, debug APK SHA256 1d7c9f9b579b41b72afcf277a1aaaaa9845f7441b7fd1d073d3ffe723a546788, offline, screen off, 30-minute timer; captured emulator output and native synthesis timings locate the interval at the first chapter handoff.",
+    "Two new preparation regressions failed against the one-item behavior. All ten preparation tests pass with bounded ordered lookahead, duplicate-text occurrences, reuse and cancellation isolation.",
+    "Debug APK 7b13f0638cd9ef6dcfe5a67043d562793b308abf0b8fc7c65dab869c966bc764 passes the complete real reader/audio flow (58.772s), using a 36-character first unit and eight-character tail. Captured output contains no silence of at least one second during the initial uninterrupted chapter handoff; native timings show the next chapter generated before the tail finishes. Intentional pause/restart and final test silence are excluded. This is a representative check, not an improvement percentage across all novels."
+  ],
+  "failed_attempts": [],
+  "impact": "The covered short-tail handoff no longer leaves the synthesizer unnecessarily idle. Cold start, cancellation/restart waiting and Xiaomi sustained performance remain separate measurement concerns.",
+  "tags": ["android", "tts", "offline", "audio-preparation", "chapter-boundary", "resolved"],
+  "confidence": 0.99,
+  "created_at": "2026-09-20",
+  "updated_at": "2026-09-20"
+}

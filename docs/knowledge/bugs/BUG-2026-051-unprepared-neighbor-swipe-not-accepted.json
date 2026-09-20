@@ -1,0 +1,22 @@
+{
+  "id": "BUG-2026-051",
+  "title": "A valid swipe is lost while the next chapter preview is unavailable",
+  "status": "resolved",
+  "symptom": "At the end of a short chapter A, one valid forward swipe does not enter chapter B when B is still being prepared. Even after B becomes available, the reader requires another input. On the 8c0e210 baseline, ReaderPageReflowTest.oneSwipeWaitsForUnpreparedNextChapterWithoutNeedingAnotherSwipe timed out after 10,000 ms waiting for confirmed anchor (1, 0).",
+  "root_cause": "Logical page turns were derived after native fling from the difference between pager.settledPage and the gesture's source page in the existing window. When the next chapter preview was absent, the Pager had no next page to settle on, so the distance stayed zero and no forward request was accepted. This is distinct from BUG-2026-049: waiting correctly for fling completion cannot recover an intent that produces no movement in the available window.",
+  "fix": [
+    "Observe each single-finger horizontal gesture without consuming the Pager drag. Accept at most one logical turn on a valid release through the common position request path, independently of neighbor-preview readiness.",
+    "Use the request's resolved target for snapping. While the target is unavailable, retain a valid visible page and let the existing asynchronous navigation path install the target after preparation; animation completion does not submit another turn.",
+    "Keep gesture ownership and navigation generation checks so cancellation and obsolete releases cannot append input to a newer directory target."
+  ],
+  "evidence": [
+    "The regression mounts the real StablePageReaderContent with a delayed repository read for B, confirms A, performs one 200 ms swipe, then releases B's read. The old build timed out; the implementation build passed with no positioning error and exact confirmed anchor (1, 0).",
+    "This is a component-level Android emulator result with controlled loading timing. It proves this cold-neighbor scenario, not every gesture or final delivery. Execution and broader verification belong to docs/superpowers/plans/2026-09-14-pagination-measurement-reuse.md."
+  ],
+  "failed_attempts": [],
+  "impact": "The covered cold-neighbor path preserves a valid swipe until the requested chapter is ready. This record does not establish all consecutive-gesture behavior, normal-application transition quality or Xiaomi device performance.",
+  "tags": ["android", "compose", "reader", "page-mode", "chapter-boundary", "gesture", "resolved"],
+  "confidence": 0.99,
+  "created_at": "2026-09-14",
+  "updated_at": "2026-09-14"
+}

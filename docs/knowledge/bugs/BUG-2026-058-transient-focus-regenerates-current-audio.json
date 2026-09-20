@@ -1,0 +1,27 @@
+{
+  "id": "BUG-2026-058",
+  "title": "Transient audio focus interruption discards audio and regenerates the current sentence",
+  "status": "resolved",
+  "symptom": "The user reports that a message notification interrupts narration and it resumes by itself only after several seconds. The current recovery can also replay the unfinished sentence from its beginning.",
+  "root_cause": "Both transient-loss variants invalidate service playback and call engine.stop(), which cancels playback, flushes/releases AudioTrack and clears prepared audio. Focus gain restarts the chapter queue and regenerates the unfinished sentence instead of resuming retained audio. USAGE_MEDIA and CONTENT_TYPE_SPEECH are already used; changing the audio type does not fix this loss of resumable state. The exact focus value of the reported notification has not been captured.",
+  "fix": [
+    "The production engine now retains its current PCM, AudioTrack session/frame position and bounded prepared audio during transient loss. A pause gate blocks output and completion until gain; pausing excludes that time from playback-stall accounting.",
+    "The service retains its current token/utterance/queue, freezes timer and watchdog budgets, and gates completion/storage/chapter handoff without including focus waiting in preparation timeouts. Explicit user pause, permanent focus loss, stop and navigation still invalidate retained work.",
+    "An initial or replacement preparation with no active utterance, or failure to retain an AudioTrack, may fall back to rebuilding and logs retained=false. Focus values and frame recovery events contain no novel text."
+  ],
+  "evidence": [
+    "User explicitly confirms that playback resumes automatically after a few seconds rather than requiring manual continuation.",
+    "Before the fix, ReaderTtsAudioFocusManager routed LOSS_TRANSIENT and LOSS_TRANSIENT_CAN_DUCK through pauseForAudioFocusLoss; ReaderTtsService invalidated playback and resumed via startPlayback; OfflineReaderTtsEngine.stop cleared preparation and destroyed the current AudioTrack.",
+    "The new real MAY_DUCK regression first failed on the old behavior: current-sentence synthesis count expected one but was two. This was a behavior failure, not a fixture or compile failure.",
+    "On the final implementation, five focus and ten preparation unit tests and three real-engine/AudioTrack Android tests pass. The interrupted sentence is generated once, keeps session 97, and advances from paused frame 18496 to 21760; this emulator sample resumes 96ms after focus return, not a Xiaomi performance claim.",
+    "A complete Service test also interrupts actual ongoing generation. Audio finishes generating while paused but remains silent with unchanged progress until GAIN, then plays and completes the sentence without regeneration. Existing transient auto-resume, explicit pause priority and permanent-loss/manual-resume behavior also pass.",
+    "On the final v3 Xiaomi 15 Ultra, a separate permission-free temporary Activity requests real platform MAY_DUCK and TRANSIENT focus for three seconds. Story App receives -3/-2 then GAIN, retains the interrupted utterances and AudioTrack sessions 2017/2049, and advances frames from 36352 to 38912 and from 84992 to 88064. Return of focus to frame advancement takes 121/120ms in these two samples; the interrupted sentences are not regenerated. Actual internal audio contains corresponding silence and resumption.",
+    "On the same phone and recording, an explicit media pause during transient loss prevents automatic continuation. Permanent focus loss also remains silent after the competing requester releases focus; only explicit play restores actual audio. The helper is uninstalled and all temporary helper code/build artifacts removed. Original voice 58, rate 1.45, pitch 1, no timer and media volume 0 remain unchanged."
+  ],
+  "failed_attempts": [],
+  "impact": "The covered temporary focus path no longer adds a full-sentence synthesis delay or replays the sentence start, now directly verified through real platform focus and captured audio on the user's 15 Ultra. The 121/120ms samples are focus-return-to-frame delays, not total notification interruption or acoustic latency guarantees. The user's original messaging app and actual calls remain distinct usage checks; a previous silent shell notification did not prove this behavior.",
+  "tags": ["android", "tts", "audio-focus", "pause-resume", "resolved"],
+  "confidence": 0.99,
+  "created_at": "2026-09-20",
+  "updated_at": "2026-09-20"
+}

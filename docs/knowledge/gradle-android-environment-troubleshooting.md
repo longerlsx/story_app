@@ -218,7 +218,22 @@ Use device/UI evidence when the question depends on real interaction or Android
 service behavior. Start with `adb devices -l`; inspect available AVDs before
 assuming no emulator can be used. Wake/start the relevant device when necessary
 for the task, and use `adb shell svc power stayon true` during long sessions if
-sleep would interrupt verification.
+sleep would interrupt an ordinary UI check. Do not force the screen or charging
+state awake for screen-off/background survival checks; preserve the user's normal
+power settings and record whether the device is physically charging.
+
+Before treating an ignored phone tap as an input-permission failure, confirm the
+foreground app and wake the screen. A dimmed screen may consume the first tap.
+The reader toolbar also auto-hides after 3 seconds: dumping the hierarchy and
+waiting for another agent/tool round trip can make its coordinates stale. Once
+the controls and their bounds are observed, perform the short dependent tap
+sequence on the device with enough time for the toolbar to render, then inspect
+the resulting screen. Do not repeatedly tap an unverified or unrelated app.
+When streaming `uiautomator dump /dev/tty`, use `adb shell -tt` to provide the
+remote TTY; an empty result without it is not proof that the controls are missing.
+Filter the target media card itself, rather than its notification-list ancestor,
+before printing control details. After an audio recorder exits, re-read the play/
+pause state before tapping because its route change can pause the app.
 
 Use Computer Use when existing automation cannot adequately check an interaction.
 Page animations, chapter transitions, gesture conflicts, auto-hide, flashing, and
@@ -230,6 +245,20 @@ Local video tools previously available:
 
 - `/opt/homebrew/bin/ffmpeg`
 - `/opt/homebrew/bin/ffprobe`
+
+For silent-phone audio checks, distinguish capture paths. On the tested Xiaomi,
+scrcpy 4.1 `--audio-source=output` yielded silence at media volume zero, while
+`--audio-source=playback --no-playback --no-video --no-control --no-window
+--require-audio` captured actual narration without changing that volume. Calibrate
+with one known preview before a long recording. A nonzero recording proves the
+captured output, not physical speaker/headphone sound or voice quality; preserve
+that evidence boundary. See the [official audio options](https://github.com/Genymobile/scrcpy/blob/v4.1/doc/audio.md).
+
+Stopping that capture can itself change the phone's audio route. In the measured
+Xiaomi run, scrcpy's AudioPolicy died, the route returned to speaker, and Android
+sent `ACTION_AUDIO_BECOMING_NOISY`; the app correctly paused. Correlate those
+existing system events before calling an end-of-capture pause a playback failure.
+Keep capture-tool shutdown outside claims about autonomous background playback.
 
 User-provided real novel corpus:
 
