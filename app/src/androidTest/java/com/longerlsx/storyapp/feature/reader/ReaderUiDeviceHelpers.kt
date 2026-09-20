@@ -29,6 +29,7 @@ internal fun resetStoryAppState(context: Context) {
     File(context.filesDir, "books").deleteRecursively()
     File(context.filesDir, "reader-anchors.properties").delete()
     File(context.filesDir, "reader-settings.properties").delete()
+    File(context.filesDir, "listening-progress.properties").delete()
     application?.let { application ->
         runBlocking {
             application.bookRepository.clearForTests()
@@ -90,6 +91,7 @@ internal fun UiDevice.tapPrimaryAction(slot: ReaderPrimaryActionSlot): Boolean {
         ReaderPrimaryActionSlot.APPEARANCE -> if (hasObject(By.text("夜间"))) "夜间" else "日间"
         ReaderPrimaryActionSlot.SETTINGS -> "设置"
         ReaderPrimaryActionSlot.TTS -> when {
+            hasObject(By.textContains("暂停朗读")) -> "暂停朗读"
             hasObject(By.textContains("停止朗读")) -> "停止朗读"
             hasObject(By.textContains("继续朗读")) -> "继续朗读"
             else -> "朗读"

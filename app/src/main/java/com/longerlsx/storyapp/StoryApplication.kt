@@ -11,7 +11,8 @@ import com.longerlsx.storyapp.data.book.ImportedBookStorage
 import com.longerlsx.storyapp.data.book.InMemoryBookRepository
 import com.longerlsx.storyapp.data.book.TextContentLoader
 import com.longerlsx.storyapp.data.reader.ReaderSettingsStore
-import com.longerlsx.storyapp.feature.reader.tts.AndroidReaderTtsEngine
+import com.longerlsx.storyapp.data.reader.ListeningProgressStore
+import com.longerlsx.storyapp.feature.reader.tts.OfflineReaderTtsEngine
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsController
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsEngine
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsIntentFactory
@@ -63,6 +64,8 @@ class StoryApplication : Application() {
     val anchorStore by lazy {
         FileAnchorStore(filesDir)
     }
+
+    val listeningProgressStore by lazy { ListeningProgressStore(filesDir) }
 
     val readerSettingsStore by lazy {
         ReaderSettingsStore(
@@ -158,24 +161,22 @@ class StoryApplication : Application() {
                 }.isSuccess
             },
             sendStopCommand = {
-                runCatching {
-                    startService(ReaderTtsIntentFactory.stopService(this))
-                }
+                startService(ReaderTtsIntentFactory.stopService(this))
             },
             sendResumeCommand = {
-                runCatching {
-                    startService(ReaderTtsIntentFactory.resumeService(this))
-                }
+                ContextCompat.startForegroundService(this, ReaderTtsIntentFactory.resumeService(this))
             },
             sendSettingsCommand = { settings ->
-                runCatching {
-                    startService(ReaderTtsIntentFactory.updateSettingsService(this, settings))
-                }
+                startService(ReaderTtsIntentFactory.updateSettingsService(this, settings))
             },
             sendRestartCommand = { request ->
-                runCatching {
-                    startService(ReaderTtsIntentFactory.restartService(this, request))
-                }
+                ContextCompat.startForegroundService(this, ReaderTtsIntentFactory.restartService(this, request))
+            },
+            sendPauseCommand = {
+                startService(ReaderTtsIntentFactory.pauseService(this))
+            },
+            sendVoicePreviewCommand = { settings ->
+                ContextCompat.startForegroundService(this, ReaderTtsIntentFactory.previewService(this, settings))
             },
         )
     }
@@ -184,7 +185,7 @@ class StoryApplication : Application() {
         callback: ReaderTtsEngine.Callback,
     ): ReaderTtsEngine {
         return readerTtsEngineFactoryForTests?.invoke(callback)
-            ?: AndroidReaderTtsEngine(this, callback)
+            ?: OfflineReaderTtsEngine(this, callback)
     }
 
     fun setReaderTtsEngineFactoryForTests(
@@ -194,6 +195,10 @@ class StoryApplication : Application() {
     }
 
     fun preloadReaderTtsVoices() {
+        if (readerTtsEngineFactoryForTests == null) {
+            readerTtsController.updateAvailableVoicesResult(Result.success(OfflineReaderTtsEngine.voices))
+            return
+        }
         if (readerTtsController.runtimeState.value.availableVoicesLoaded) {
             return
         }

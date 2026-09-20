@@ -36,6 +36,10 @@ android {
         compose = true
     }
 
+    sourceSets.getByName("main").assets.srcDir(rootProject.file(".local-tts/assets"))
+
+    defaultConfig.ndk.abiFilters += listOf("arm64-v8a", "x86_64")
+
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -44,6 +48,7 @@ android {
 }
 
 dependencies {
+    implementation(files(rootProject.file(".local-tts/runtime/sherpa-onnx-1.13.8.aar")))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

@@ -17,11 +17,12 @@ import com.longerlsx.storyapp.data.reader.ReaderSettingsStore
 import java.io.File
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -48,13 +49,33 @@ class ReaderNavigationInteractionTest {
     }
 
     private fun assertConfirmedChapter(device: UiDevice, chapter: Int, title: String) {
-        assertTrue("正文换章后顶栏也必须确认同一章节", device.wait(Until.hasObject(By.text("第${chapter + 1}章 $title")), 8_000))
         val context = ApplicationProvider.getApplicationContext<Context>()
         val anchors = FileAnchorStore(context.filesDir)
-        runBlocking {
-            withTimeout(8_000) {
-                while (anchors.loadAll().singleOrNull()?.anchor?.chapterIndex != chapter) delay(50)
-            }
+        val chapterTitle = "第${chapter + 1}章 $title"
+        val confirmed = runBlocking {
+            withTimeoutOrNull(8_000) {
+                while (true) {
+                    // The fixture's first line is also its imported book title. Match complete
+                    // production header identities; a body/preview Text node is not confirmation.
+                    val headerMatches = device.hasObject(By.desc("沉浸式章节：$chapterTitle")) ||
+                        device.hasObject(By.desc("顶部栏标题：第1章 甲 $chapterTitle"))
+                    val saved = anchors.loadAll().singleOrNull()
+                    if (headerMatches && saved?.anchor?.chapterIndex == chapter &&
+                        saved.anchor.charOffset == 0 && saved.readingMode == ReadingMode.PAGE) break
+                    delay(50)
+                }
+                true
+            } ?: false
+        }
+        if (!confirmed) {
+            val headers = runCatching {
+                (device.findObjects(By.descContains("顶部栏标题")) + device.findObjects(By.descContains("沉浸式章节")))
+                    .map { it.contentDescription }
+            }.getOrElse { listOf(it.toString()) }
+            val visibleText = runCatching {
+                device.findObjects(By.clazz("android.widget.TextView")).map { "${it.text?.take(80)}@${it.visibleBounds}" }
+            }.getOrElse { listOf(it.toString()) }
+            fail("正文换章后顶栏也必须确认同一章节；目标=$chapter；磁盘=${anchors.loadAll()}；头部=$headers；正文/错误=$visibleText")
         }
     }
 
@@ -66,6 +87,35 @@ class ReaderNavigationInteractionTest {
             device.click(device.displayWidth * 9 / 10, y)
             device.click(device.displayWidth / 10, y)
             assertTrue("连续两次前进一次后退应停在乙章", device.wait(Until.hasObject(By.textContains("乙章唯一正文")), 5_000))
+        }
+    }
+
+    @Test
+    fun consecutiveSwipesRetainAcceptedTurnsWhenTheNextFingerInterruptsAnimation() {
+        withThreeChapters { device ->
+            val y = device.displayHeight / 2
+            val left = device.displayWidth / 10
+            val right = device.displayWidth * 8 / 10
+            // No per-step content or idle wait: each release is an input, regardless of old animation.
+            device.swipe(right, y, left, y, 6)
+            device.swipe(right, y, left, y, 6)
+            device.swipe(left, y, right, y, 6)
+            // Only wait after the complete sequence, so the first visit to B cannot pass the test.
+            device.waitForIdle()
+            assertTrue("连续前、前、后滑动应停在乙章", device.wait(Until.hasObject(By.textContains("乙章唯一正文")), 8_000))
+            assertConfirmedChapter(device, 1, "乙")
+            assertTrue("三次滑动及确认结束后仍应显示乙章正文", device.hasObject(By.textContains("乙章唯一正文")))
+        }
+    }
+
+    @Test
+    fun cancellingTheNextDragDoesNotWithdrawAnAlreadyAcceptedTurn() {
+        withThreeChapters { device ->
+            val y = device.displayHeight / 2
+            device.swipe(device.displayWidth * 8 / 10, y, device.displayWidth / 10, y, 6)
+            device.swipe(device.displayWidth * 80 / 100, y, device.displayWidth * 76 / 100, y, 100)
+            assertTrue("新的短拖动取消后，先前已接受的翻页仍应到乙章", device.wait(Until.hasObject(By.textContains("乙章唯一正文")), 8_000))
+            assertConfirmedChapter(device, 1, "乙")
         }
     }
 

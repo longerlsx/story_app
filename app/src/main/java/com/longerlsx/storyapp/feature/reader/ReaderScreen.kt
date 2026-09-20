@@ -19,6 +19,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -28,6 +31,8 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -52,6 +57,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
@@ -60,6 +66,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextLayoutResult
@@ -80,6 +87,7 @@ import com.longerlsx.storyapp.core.model.Chapter
 import com.longerlsx.storyapp.core.model.ReaderAppearanceMode
 import com.longerlsx.storyapp.core.model.ReaderSettings
 import com.longerlsx.storyapp.core.model.ReaderTtsSettings
+import com.longerlsx.storyapp.core.model.ListeningProgress
 import com.longerlsx.storyapp.core.model.ReadingAnchor
 import com.longerlsx.storyapp.core.model.ReadingMode
 import com.longerlsx.storyapp.core.model.ReadingProgress
@@ -92,6 +100,8 @@ import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsCharacterRange
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsController
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsFollowSuppressionPolicy
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsStartRequest
+import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsSessionState
+import com.longerlsx.storyapp.feature.reader.tts.isOngoingSession
 import com.longerlsx.storyapp.feature.reader.tts.restartVisualRangeOrNull
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.CancellationException
@@ -100,6 +110,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withTimeout
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.math.roundToInt
@@ -119,6 +130,8 @@ fun ReaderScreen(
     settingsStore: ReaderSettingsStore,
     ttsController: ReaderTtsController,
     onBack: () -> Unit,
+    listeningOpenRequest: ReaderTtsStartRequest? = null,
+    onListeningOpenHandled: () -> Unit = {},
 ) {
     val state = produceState<ReaderScreenState>(
         initialValue = ReaderScreenState.Loading,
@@ -160,6 +173,8 @@ fun ReaderScreen(
             settingsStore = settingsStore,
             ttsController = ttsController,
             onBack = onBack,
+            listeningOpenRequest = listeningOpenRequest,
+            onListeningOpenHandled = onListeningOpenHandled,
         )
     }
 }
@@ -213,6 +228,8 @@ private fun ReaderReadyContent(
     settingsStore: ReaderSettingsStore,
     ttsController: ReaderTtsController,
     onBack: () -> Unit,
+    listeningOpenRequest: ReaderTtsStartRequest?,
+    onListeningOpenHandled: () -> Unit,
 ) {
     val context = LocalContext.current
     val rootDensity = LocalDensity.current
@@ -234,15 +251,18 @@ private fun ReaderReadyContent(
     var lastChromeInteractionAtMs by remember(state.book.id) {
         mutableStateOf<Long?>(null)
     }
-    var readerSettings by remember {
-        mutableStateOf(settingsStore.load())
-    }
+    var selectedSettings by remember(state.book.id) { mutableStateOf(settingsStore.load()) }
+    var readerSettings by remember(state.book.id) { mutableStateOf(selectedSettings) }
+    val pageState = rememberReaderPageState(state.book.id, repository)
+    var confirmedMode by remember(state.book.id) { mutableStateOf(selectedSettings.readingMode) }
+    var confirmedDisplaySettings by remember(state.book.id) { mutableStateOf(selectedSettings) }
+    var confirmedScrollViewport by remember(state.book.id) { mutableStateOf<ReaderScrollSnapshot?>(null) }
+    var preparedPageRequestId by remember(state.book.id) { mutableStateOf<Long?>(null) }
     var pendingChromeAutoHideRefreshAfterRestore by remember(state.book.id) {
         mutableStateOf(false)
     }
     val restoredPosition = position.hasConfirmedLayout && position.request == null && position.error == null
-    var deferredReadingMode by remember(state.book.id) { mutableStateOf<ReadingMode?>(null) }
-    val requestedSettings = readerSettings.copy(readingMode = deferredReadingMode ?: readerSettings.readingMode)
+    val requestedSettings = selectedSettings
     var contentRetry by remember(state.book.id) { mutableIntStateOf(0) }
     var viewportSize by remember(state.book.id) { mutableStateOf(IntSize.Zero) }
     var pendingNotificationPermissionStartRequest by remember(state.book.id) {
@@ -261,6 +281,34 @@ private fun ReaderReadyContent(
         mutableStateOf(false)
     }
     val ttsRuntime by ttsController.runtimeState.collectAsState()
+    var readerForeground by remember(lifecycleOwner) {
+        mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
+    }
+    var savedListeningProgress by remember(state.book.id) { mutableStateOf<ListeningProgress?>(null) }
+    var listeningProgressError by remember(state.book.id) { mutableStateOf<String?>(null) }
+    var listeningStartChoice by remember(state.book.id) { mutableStateOf<ReaderTextStartLocation?>(null) }
+    LaunchedEffect(state.book.id, ttsRuntime.playbackState) {
+        try {
+            savedListeningProgress = storyApplication.listeningProgressStore.load(state.book.id)
+            listeningProgressError = null
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            listeningProgressError = "上次听书位置暂时无法读取，可重试或从当前文字开始。"
+        }
+    }
+    val resumeListeningLocation = ReaderTtsResumeLocationResolver.resolve(state.book.id, ttsRuntime, savedListeningProgress)
+    LaunchedEffect(state.book.id, listeningOpenRequest) {
+        val request = listeningOpenRequest?.takeIf { it.bookId == state.book.id } ?: return@LaunchedEffect
+        if (state.chapters.any { it.chapterIndex == request.chapterIndex }) {
+            lastManualFollowInterruptionAtMs = null
+            position.jump(ReadingAnchor(request.chapterIndex, request.charOffset))
+            chromeMode = ReaderChromeMode.READING_ONLY
+        } else {
+            localRestartFeedbackMessage = "听书章节已不存在，请从目录选择正文。"
+        }
+        onListeningOpenHandled()
+    }
 
     LaunchedEffect(chromeMode, activeSettingsTab, ttsRuntime.availableVoices) {
         if (
@@ -274,28 +322,53 @@ private fun ReaderReadyContent(
 
     val selectedChapterPosition = state.chapters.indexOfFirst { it.chapterIndex == selectedChapterIndex }
     val selectedChapter = state.chapters.firstOrNull { it.chapterIndex == selectedChapterIndex }
-    val scrollFeedState = produceState<List<ReaderFeedChapterContent>>(
-        initialValue = emptyList(),
-        key1 = state.book.id,
-        key2 = readerSettings.readingMode,
-        key3 = (if (readerSettings.readingMode == ReadingMode.PAGE) selectedChapterIndex else -1) to contentRetry,
-    ) {
+    val feedKey = ReaderFeedKey(state.book.id, readerSettings.readingMode,
+        selectedChapterIndex.takeIf { readerSettings.readingMode == ReadingMode.PAGE }, contentRetry)
+    val feedResult by produceState<ReaderFeedResult>(ReaderFeedResult.Loading(feedKey), feedKey) {
+        value = ReaderFeedResult.Loading(feedKey)
         try {
-            val needed = if (readerSettings.readingMode == ReadingMode.SCROLL) state.chapters
-                else state.chapters.filter { it.chapterIndex == selectedChapterIndex }
-            value = needed.map { chapter ->
-                ReaderFeedChapterContent(chapter, repository.getChapterText(state.book.id, chapter.chapterIndex)
+            val needed = if (feedKey.mode == ReadingMode.SCROLL) state.chapters
+                else state.chapters.filter { it.chapterIndex == feedKey.chapterIndex }
+            val content = needed.map { chapter ->
+                ReaderFeedChapterContent(chapter, repository.getChapterText(feedKey.bookId, chapter.chapterIndex)
                     ?: error("无法读取第 ${chapter.chapterIndex + 1} 章正文。"))
             }
+            value = ReaderFeedResult.Ready(feedKey, content)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Exception) {
-            if (readerSettings.readingMode == ReadingMode.SCROLL) {
-                position.request?.let { position.fail(it.id, failure.message ?: "正文读取失败") }
-            }
+            value = ReaderFeedResult.Failed(feedKey, failure.message ?: "正文读取失败")
         }
     }
-    val scrollFeed = scrollFeedState.value
+    val readyFeed = (feedResult as? ReaderFeedResult.Ready)?.takeIf { it.key == feedKey }
+    val waitingForModeData = position.hasConfirmedLayout && when (readerSettings.readingMode) {
+        ReadingMode.SCROLL -> readyFeed == null
+        ReadingMode.PAGE -> confirmedMode == ReadingMode.SCROLL && preparedPageRequestId != position.request?.id
+    }
+    val displayMode = if (position.hasConfirmedLayout && (position.error != null || waitingForModeData))
+        confirmedMode else readerSettings.readingMode
+    val displaySettings = when {
+        position.error != null -> selectedSettings.copy(readingMode = displayMode)
+        displayMode != readerSettings.readingMode -> confirmedDisplaySettings
+        else -> readerSettings
+    }
+    val scrollFeed = if (displayMode == ReadingMode.SCROLL) {
+        if (position.error == null && readyFeed?.key?.mode == ReadingMode.SCROLL) readyFeed.content
+        else confirmedScrollViewport?.content.orEmpty()
+    } else readyFeed?.content.orEmpty()
+    val canLocateScroll = readerSettings.readingMode == ReadingMode.SCROLL && displayMode == ReadingMode.SCROLL &&
+        readyFeed?.key?.mode == ReadingMode.SCROLL && position.error == null
+    // Text availability is not a display acknowledgement. The real list lays out behind the
+    // last confirmed page until the current request has reached its target line.
+    val retainPageUntilScrollConfirmed = displayMode == ReadingMode.SCROLL && confirmedMode == ReadingMode.PAGE &&
+        position.request != null && position.error == null
+
+    LaunchedEffect(feedKey, feedResult, position.request?.id) {
+        val failed = (feedResult as? ReaderFeedResult.Failed)?.takeIf { it.key == feedKey } ?: return@LaunchedEffect
+        if (readerSettings.readingMode == ReadingMode.SCROLL) {
+            position.request?.let { position.fail(it.id, failed.message) }
+        }
+    }
     val chapterTextByIndex = remember(scrollFeed) {
         scrollFeed.associate { it.chapter.chapterIndex to it.text }
     }
@@ -308,9 +381,9 @@ private fun ReaderReadyContent(
         widthPx = viewportSize.width,
         density = rootDensity.density,
         fontScale = rootDensity.fontScale,
-        fontSizeSp = readerSettings.fontSizeSp,
-        lineHeightMultiplier = readerSettings.lineHeightMultiplier,
-        paragraphSpacingEm = readerSettings.paragraphSpacingEm,
+        fontSizeSp = displaySettings.fontSizeSp,
+        lineHeightMultiplier = displaySettings.lineHeightMultiplier,
+        paragraphSpacingEm = displaySettings.paragraphSpacingEm,
     )
     val scrollBodyMetricsByChapter = remember(
         state.book.id, scrollLayoutKey,
@@ -328,18 +401,17 @@ private fun ReaderReadyContent(
     val scrollListState = rememberLazyListState(
         initialFirstVisibleItemIndex = initialScrollItemIndex,
     )
-    var confirmedScrollViewport by remember(state.book.id) { mutableStateOf<Pair<Int, Int>?>(null) }
-    val themePalette = ReaderThemeResolver.resolveActivePalette(readerSettings)
-    val contentFontSize = readerSettings.fontSizeSp.sp
-    val contentLineHeight = (readerSettings.fontSizeSp * readerSettings.lineHeightMultiplier).sp
-    val paragraphSpacing = (readerSettings.fontSizeSp * readerSettings.paragraphSpacingEm).coerceIn(8f, 36f).dp
+    val themePalette = ReaderThemeResolver.resolveActivePalette(selectedSettings)
+    val contentFontSize = displaySettings.fontSizeSp.sp
+    val contentLineHeight = (displaySettings.fontSizeSp * displaySettings.lineHeightMultiplier).sp
+    val paragraphSpacing = (displaySettings.fontSizeSp * displaySettings.paragraphSpacingEm).coerceIn(8f, 36f).dp
     // Controls overlay a fixed reading viewport; showing chrome is not navigation.
     val scrollReadableViewportTopPx = with(rootDensity) { ReaderScrollReadableTopSpacing.roundToPx() }
     val progressSummary = ReaderChapterProgressFormatter.format(
         chapters = state.chapters,
         selectedChapterPosition = selectedChapterPosition,
     )
-    val activeBrightness = ReaderBrightnessResolver.resolveActiveBrightness(readerSettings)
+    val activeBrightness = ReaderBrightnessResolver.resolveActiveBrightness(selectedSettings)
     val brightnessOverlayAlpha = ((1f - activeBrightness).coerceIn(0f, 1f) * 0.42f)
 
     ReaderSystemBarsEffect(themePalette = themePalette)
@@ -362,12 +434,42 @@ private fun ReaderReadyContent(
         ))
     }
 
+    fun rememberScrollViewport(anchor: ReadingAnchor) {
+        confirmedMode = ReadingMode.SCROLL
+        confirmedDisplaySettings = displaySettings
+        confirmedScrollViewport = ReaderScrollSnapshot(state.book.id, scrollFeed, anchor,
+            scrollLayoutKey, viewportSize, scrollListState.firstVisibleItemIndex,
+            scrollListState.firstVisibleItemScrollOffset)
+    }
+
+    suspend fun scrollToAnchor(anchor: ReadingAnchor) {
+        val targetIndex = scrollFeed.indexOfFirst { it.chapter.chapterIndex == anchor.chapterIndex }
+        check(targetIndex >= 0) { "目标章节不存在" }
+        snapshotFlow { scrollListState.layoutInfo.totalItemsCount }.first { it > targetIndex }
+        if (scrollListState.layoutInfo.visibleItemsInfo.none { it.index == targetIndex }) {
+            scrollListState.scrollToItem(targetIndex)
+        }
+        val item = snapshotFlow {
+            buildScrollVisibleChapterItems(scrollListState, scrollFeed, scrollBodyMetricsByChapter)
+                .firstOrNull { it.itemIndex == targetIndex }
+                ?.takeIf { scrollBodyMetricsByChapter[it.chapterIndex]?.lines?.isNotEmpty() == true }
+        }.filterNotNull().first()
+        val lines = scrollBodyMetricsByChapter.getValue(anchor.chapterIndex).lines
+        val offset = (item.bodyOffsetWithinItemPx() +
+            ReaderLineAnchorMapper.topForCharOffset(lines, anchor.charOffset).roundToInt() -
+            scrollReadableViewportTopPx).coerceAtLeast(0)
+        scrollListState.scrollToItem(targetIndex, offset)
+        androidx.compose.runtime.withFrameNanos { }
+    }
+
     fun captureProgress(): ReadingProgress? {
         if (!position.hasConfirmedLayout) return null
-        if (readerSettings.readingMode == ReadingMode.SCROLL && position.request == null && position.error == null) {
-            visibleScrollAnchor()?.let(position::recordViewport)
+        if (canLocateScroll && confirmedMode == ReadingMode.SCROLL && position.request == null && position.error == null) {
+            visibleScrollAnchor()?.let { anchor ->
+                if (position.recordViewport(anchor)) rememberScrollViewport(anchor)
+            }
         }
-        return ReadingProgress(state.book.id, position.confirmedAnchor, readerSettings.readingMode, System.currentTimeMillis())
+        return ReadingProgress(state.book.id, position.confirmedAnchor, confirmedMode, System.currentTimeMillis())
     }
 
     fun queueCurrentProgress() = captureProgress()?.let { storyApplication.persistReadingProgress(it, repository) }
@@ -399,13 +501,18 @@ private fun ReaderReadyContent(
         }
     }
 
+    fun adjacentChapter(delta: Int): Chapter? {
+        val baseChapter = position.request?.anchor?.chapterIndex ?: selectedChapterIndex
+        val baseIndex = state.chapters.indexOfFirst { it.chapterIndex == baseChapter }
+        return if (baseIndex >= 0) state.chapters.getOrNull(baseIndex + delta) else null
+    }
+
     fun openAdjacentChapter(
         delta: Int,
         nextChromeMode: ReaderChromeMode,
         refreshChromeAutoHide: Boolean = false,
     ) {
-        val baseChapter = position.request?.anchor?.chapterIndex ?: selectedChapterIndex
-        val chapter = state.chapters.getOrNull(state.chapters.indexOfFirst { it.chapterIndex == baseChapter } + delta) ?: return
+        val chapter = adjacentChapter(delta) ?: return
         openChapter(
             chapterIndex = chapter.chapterIndex,
             nextChromeMode = nextChromeMode,
@@ -414,30 +521,34 @@ private fun ReaderReadyContent(
     }
 
     fun updateReaderSettings(requested: ReaderSettings) {
-        val postponeMode = requested.readingMode != readerSettings.readingMode && position.request?.turns?.isNotEmpty() == true
-        deferredReadingMode = requested.readingMode.takeIf { postponeMode }
-        val next = if (postponeMode) requested.copy(readingMode = readerSettings.readingMode) else requested
-        if (next == readerSettings) return
-        val needsLayout = next.readingMode != readerSettings.readingMode ||
-            next.fontSizeSp != readerSettings.fontSizeSp ||
-            next.lineHeightMultiplier != readerSettings.lineHeightMultiplier ||
-            next.paragraphSpacingEm != readerSettings.paragraphSpacingEm
-        if (needsLayout) {
-            if (readerSettings.readingMode == ReadingMode.SCROLL && position.request == null) {
-                visibleScrollAnchor()?.let(position::recordViewport)
+        if (requested == selectedSettings) return
+        val previous = selectedSettings
+        selectedSettings = requested
+        settingsStore.save(requested)
+        val needsLayout = requested.readingMode != previous.readingMode ||
+            requested.fontSizeSp != previous.fontSizeSp ||
+            requested.lineHeightMultiplier != previous.lineHeightMultiplier ||
+            requested.paragraphSpacingEm != previous.paragraphSpacingEm
+        if (needsLayout && position.error == null) {
+            if (canLocateScroll && position.request == null) visibleScrollAnchor()?.let {
+                if (position.recordViewport(it)) rememberScrollViewport(it)
             }
             position.reflow()
         }
-        readerSettings = next
-        settingsStore.save(next)
+        val needsPageAnchor = position.request?.let { it.turns.isNotEmpty() || it.lastPage } == true
+        readerSettings = if (needsPageAnchor && requested.readingMode != ReadingMode.PAGE)
+            requested.copy(readingMode = ReadingMode.PAGE) else requested
     }
 
-    LaunchedEffect(position.request) {
-        if (position.request == null) {
-            deferredReadingMode?.let { mode ->
-                deferredReadingMode = null
-                updateReaderSettings(readerSettings.copy(readingMode = mode))
-            }
+    // Absolute navigation can replace unresolved page turns while a mode choice is pending.
+    LaunchedEffect(position.request?.id, selectedSettings.readingMode) {
+        if (position.error != null) return@LaunchedEffect
+        val request = position.request
+        val needsPageAnchor = request?.let { it.turns.isNotEmpty() || it.lastPage } == true
+        val nextMode = if (needsPageAnchor) ReadingMode.PAGE else selectedSettings.readingMode
+        if (readerSettings.readingMode != nextMode) {
+            if (request == null) position.reflow() else position.handoff()
+            readerSettings = selectedSettings.copy(readingMode = nextMode)
         }
     }
 
@@ -461,19 +572,15 @@ private fun ReaderReadyContent(
     }
 
     fun updateTtsSettings(nextTtsSettings: ReaderTtsSettings) {
-        if (nextTtsSettings == readerSettings.ttsSettings) {
-            return
-        }
-        val nextSettings = readerSettings.copy(ttsSettings = nextTtsSettings)
-        readerSettings = nextSettings
-        settingsStore.save(nextSettings)
+        if (nextTtsSettings == selectedSettings.ttsSettings) return
+        updateReaderSettings(selectedSettings.copy(ttsSettings = nextTtsSettings))
         ttsController.applySettings(nextTtsSettings)
     }
 
     fun toggleAppearanceMode() {
         updateReaderSettings(
             requestedSettings.copy(
-                appearanceMode = if (readerSettings.appearanceMode == ReaderAppearanceMode.DAY) {
+                appearanceMode = if (selectedSettings.appearanceMode == ReaderAppearanceMode.DAY) {
                     ReaderAppearanceMode.NIGHT
                 } else {
                     ReaderAppearanceMode.DAY
@@ -503,7 +610,7 @@ private fun ReaderReadyContent(
     fun buildTtsStartRequest(
         explicitLocation: ReaderTextStartLocation? = null,
     ): ReaderTtsStartRequest {
-        val anchor = if (readerSettings.readingMode == ReadingMode.SCROLL && position.request == null) {
+        val anchor = if (canLocateScroll && position.request == null && position.error == null) {
             visibleScrollAnchor() ?: position.confirmedAnchor
         } else position.confirmedAnchor
         val startLocation = explicitLocation ?: ReaderTextStartLocation(anchor.chapterIndex, anchor.charOffset)
@@ -521,13 +628,16 @@ private fun ReaderReadyContent(
         pendingNotificationPermissionStartRequest = null
         ttsController.start(
             request = request,
-            settings = readerSettings.ttsSettings,
+            settings = selectedSettings.ttsSettings,
             notificationControlsAvailable = granted,
         )
     }
 
-    fun startTtsFromCurrentLocation() {
-        val request = buildTtsStartRequest()
+    fun startTtsRequest(request: ReaderTtsStartRequest) {
+        if (ttsRuntime.currentBookId == state.book.id && ttsRuntime.playbackState.isOngoingSession()) {
+            ttsController.restartFromLocation(request)
+            return
+        }
         val notificationsGranted = ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.POST_NOTIFICATIONS,
@@ -548,9 +658,44 @@ private fun ReaderReadyContent(
         }
         ttsController.start(
             request = request,
-            settings = readerSettings.ttsSettings,
+            settings = selectedSettings.ttsSettings,
             notificationControlsAvailable = true,
         )
+    }
+
+    fun startTtsFromCurrentLocation() = startTtsRequest(buildTtsStartRequest())
+
+    fun resumeListeningAt(location: ReaderTextStartLocation) {
+        listeningStartChoice = null
+        if (state.chapters.none { it.chapterIndex == location.chapterIndex }) {
+            listeningProgressError = "上次听书章节已不存在，请从当前文字开始。"
+            return
+        }
+        lastManualFollowInterruptionAtMs = null
+        position.jump(ReadingAnchor(location.chapterIndex, location.charOffset))
+        if (ReaderTtsCurrentBookSessionResolver.resolve(state.book.id, ttsRuntime).isPaused) {
+            ttsController.requestResumePlayback()
+        } else {
+            startTtsRequest(buildTtsStartRequest(location))
+        }
+    }
+
+    fun chooseListeningStart() {
+        scope.launch {
+            try {
+                savedListeningProgress = storyApplication.listeningProgressStore.load(state.book.id)
+                listeningProgressError = null
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                listeningProgressError = "上次听书位置暂时无法读取，可重试或从当前文字开始。"
+                activeSettingsTab = ReaderSettingsTab.TTS
+                setChromeMode(ReaderChromeMode.SETTINGS_EXPANDED)
+                return@launch
+            }
+            val target = ReaderTtsResumeLocationResolver.resolve(state.book.id, ttsController.runtimeState.value, savedListeningProgress)
+            if (target == null) startTtsFromCurrentLocation() else listeningStartChoice = target
+        }
     }
 
     val currentBookTtsSession = ReaderTtsCurrentBookSessionResolver.resolve(
@@ -602,7 +747,7 @@ private fun ReaderReadyContent(
     val isCurrentBookTtsPaused = currentBookTtsSession.isPaused
     val isCurrentBookTtsOngoing = currentBookTtsSession.isOngoing
     val ttsVoiceSelection = ReaderTtsVoiceSelectionResolver.resolve(
-        persistedVoiceName = readerSettings.ttsSettings.voiceName,
+        persistedVoiceName = selectedSettings.ttsSettings.voiceName,
         availableVoices = ttsRuntime.availableVoices,
         availableVoicesLoaded = ttsRuntime.availableVoicesLoaded,
     )
@@ -711,7 +856,7 @@ private fun ReaderReadyContent(
         onDispose {
             val latestRuntime = ttsController.runtimeState.value
             if (latestRuntime.currentBookId == state.book.id) {
-                if (!latestRuntime.localErrorMessage.isNullOrBlank()) {
+                if (latestRuntime.playbackState != ReaderTtsSessionState.FAILED && !latestRuntime.localErrorMessage.isNullOrBlank()) {
                     ttsController.clearLocalErrorMessage()
                 }
                 if (!latestRuntime.localStatusMessage.isNullOrBlank()) {
@@ -744,32 +889,43 @@ private fun ReaderReadyContent(
         }
     }
 
-    LaunchedEffect(state.book.id, position.request?.id, scrollFeed, readerSettings.readingMode, scrollLayoutKey) {
+    val pageInsets = WindowInsets.safeDrawing.asPaddingValues()
+    val pageViewport = ReaderPageViewportMetricsResolver.resolve(viewportSize.height,
+        with(rootDensity) { ReaderPageTopPadding.roundToPx() },
+        with(rootDensity) { ReaderPageBottomPadding.roundToPx() },
+        with(rootDensity) { pageInsets.calculateTopPadding().roundToPx() },
+        with(rootDensity) { pageInsets.calculateBottomPadding().roundToPx() })
+    val requestedPageLayout = ReaderPageLayoutKey(
+        with(rootDensity) { (viewportSize.width.toDp() - ReaderHorizontalPadding * 2).roundToPx() },
+        pageViewport.availableHeightPx, rootDensity.density, rootDensity.fontScale,
+        readerSettings.fontSizeSp,
+        (readerSettings.fontSizeSp * readerSettings.lineHeightMultiplier) / readerSettings.fontSizeSp,
+        with(rootDensity) { (readerSettings.fontSizeSp * readerSettings.paragraphSpacingEm).coerceIn(8f, 36f).dp.toPx() })
+
+    // Prepare PAGE without mounting a second body while the confirmed SCROLL remains visible.
+    LaunchedEffect(position.request?.id, readerSettings.readingMode, requestedPageLayout, displayMode) {
         val request = position.request ?: return@LaunchedEffect
-        if (readerSettings.readingMode != ReadingMode.SCROLL || scrollFeed.isEmpty()) return@LaunchedEffect
-        val targetIndex = scrollFeed.indexOfFirst { it.chapter.chapterIndex == request.anchor.chapterIndex }
-        if (targetIndex < 0) {
-            position.fail(request.id, "目标章节不存在")
-            return@LaunchedEffect
-        }
+        if (readerSettings.readingMode != ReadingMode.PAGE || displayMode != ReadingMode.SCROLL ||
+            requestedPageLayout.widthPx <= 0 || requestedPageLayout.heightPx <= 0) return@LaunchedEffect
         try {
-            snapshotFlow { scrollListState.layoutInfo.totalItemsCount }.first { it > targetIndex }
-            if (scrollListState.layoutInfo.visibleItemsInfo.none { it.index == targetIndex }) {
-                scrollListState.scrollToItem(targetIndex)
+            pageState.prepare(request, requestedPageLayout, state.chapters.map { it.chapterIndex })
+            if (position.request?.id == request.id && readerSettings.readingMode == ReadingMode.PAGE) {
+                preparedPageRequestId = request.id
             }
-            val item = snapshotFlow {
-                buildScrollVisibleChapterItems(scrollListState, scrollFeed, scrollBodyMetricsByChapter)
-                    .firstOrNull { it.itemIndex == targetIndex }
-                    ?.takeIf { scrollBodyMetricsByChapter[it.chapterIndex]?.lines?.isNotEmpty() == true }
-            }.filterNotNull().first()
-            val lines = scrollBodyMetricsByChapter.getValue(request.anchor.chapterIndex).lines
-            val offset = (item.bodyOffsetWithinItemPx() +
-                ReaderLineAnchorMapper.topForCharOffset(lines, request.anchor.charOffset).roundToInt() -
-                scrollReadableViewportTopPx).coerceAtLeast(0)
-            scrollListState.scrollToItem(targetIndex, offset)
-            androidx.compose.runtime.withFrameNanos { }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Exception) {
+            position.fail(request.id, failure.message ?: "分页准备失败，可以重试。")
+        }
+    }
+
+    LaunchedEffect(state.book.id, position.request?.id, scrollFeed, canLocateScroll, scrollLayoutKey) {
+        val request = position.request ?: return@LaunchedEffect
+        if (!canLocateScroll) return@LaunchedEffect
+        try {
+            scrollToAnchor(request.anchor)
             if (position.confirm(request.id, visibleScrollAnchor() ?: request.anchor)) {
-                confirmedScrollViewport = scrollListState.firstVisibleItemIndex to scrollListState.firstVisibleItemScrollOffset
+                rememberScrollViewport(position.confirmedAnchor)
                 if (pendingChromeAutoHideRefreshAfterRestore && chromeMode == ReaderChromeMode.CHROME_VISIBLE) {
                     lastChromeInteractionAtMs = SystemClock.elapsedRealtime()
                     pendingChromeAutoHideRefreshAfterRestore = false
@@ -783,20 +939,38 @@ private fun ReaderReadyContent(
         }
     }
 
-    LaunchedEffect(position.error) {
-        if (position.error != null && readerSettings.readingMode == ReadingMode.SCROLL) {
-            confirmedScrollViewport?.let { (index, offset) -> scrollListState.scrollToItem(index, offset) }
+    val recoveryKey = if (position.error != null && displayMode == ReadingMode.SCROLL) {
+        ReaderScrollRecoveryKey(position.error!!, contentRetry, position.confirmedAnchor, scrollLayoutKey, viewportSize)
+    } else null
+    var completedRecovery by remember(state.book.id) { mutableStateOf<ReaderScrollRecoveryKey?>(null) }
+    LaunchedEffect(recoveryKey) {
+        val recovery = recoveryKey ?: return@LaunchedEffect
+        val previous = confirmedScrollViewport ?: return@LaunchedEffect
+        try {
+            withTimeout(10_000) {
+                if (previous.bookId == state.book.id && previous.content == scrollFeed &&
+                    previous.layout == scrollLayoutKey && previous.viewport == viewportSize) {
+                    scrollListState.scrollToItem(previous.itemIndex, previous.itemOffset)
+                } else {
+                    // Pixel offsets belong to one layout only; the confirmed word survives a new layout.
+                    scrollToAnchor(previous.anchor)
+                }
+            }
+            completedRecovery = recovery
+        } catch (cancelled: CancellationException) {
+            // A timeout ends this one recovery attempt; a new request still cancels its work normally.
+            if (cancelled !is kotlinx.coroutines.TimeoutCancellationException) throw cancelled
+        } catch (_: Exception) {
+            // Retain the original error and retry target. Never turn a failed recovery into navigation.
         }
     }
 
-    LaunchedEffect(state.book.id, scrollFeed, restoredPosition, readerSettings.readingMode, isCurrentBookTtsPlaying, scrollLayoutKey) {
-        if (readerSettings.readingMode != ReadingMode.SCROLL || !restoredPosition) return@LaunchedEffect
+    LaunchedEffect(state.book.id, scrollFeed, restoredPosition, canLocateScroll, isCurrentBookTtsPlaying, scrollLayoutKey) {
+        if (!canLocateScroll || !restoredPosition) return@LaunchedEffect
         snapshotFlow { scrollListState.isScrollInProgress to visibleScrollAnchor() }
             .distinctUntilChanged()
             .collect { (isScrolling, anchor) ->
-                if (anchor != null && position.recordViewport(anchor)) {
-                    confirmedScrollViewport = scrollListState.firstVisibleItemIndex to scrollListState.firstVisibleItemScrollOffset
-                }
+                if (anchor != null && position.recordViewport(anchor)) rememberScrollViewport(anchor)
                 if (isScrolling && isCurrentBookTtsPlaying && !isProgrammaticScrollFollowInFlight) markManualFollowInterruption()
                 if (!isScrolling) {
                     isProgrammaticScrollFollowInFlight = false
@@ -805,9 +979,9 @@ private fun ReaderReadyContent(
             }
     }
 
-    LaunchedEffect(activePlaybackVisualRange, isCurrentBookTtsPlaying, isFollowSuppressed, readerSettings.readingMode) {
+    LaunchedEffect(activePlaybackVisualRange, isCurrentBookTtsPlaying, isFollowSuppressed, readerSettings.readingMode, readerForeground) {
         val range = activePlaybackVisualRange ?: return@LaunchedEffect
-        if (!isCurrentBookTtsPlaying || isFollowSuppressed || readerSettings.readingMode != ReadingMode.SCROLL) return@LaunchedEffect
+        if (!readerForeground || !isCurrentBookTtsPlaying || isFollowSuppressed || position.error != null || !canLocateScroll) return@LaunchedEffect
         val current = visibleScrollAnchor()
         if (current?.chapterIndex == range.chapterIndex && kotlin.math.abs(current.charOffset - range.startCharOffset) < 48) return@LaunchedEffect
         isProgrammaticScrollFollowInFlight = true
@@ -820,9 +994,10 @@ private fun ReaderReadyContent(
         isFollowSuppressed,
         readerSettings.readingMode,
         selectedChapterIndex,
+        readerForeground,
     ) {
         val activeRange = activePlaybackVisualRange ?: return@LaunchedEffect
-        if (!isCurrentBookTtsPlaying || isFollowSuppressed || readerSettings.readingMode != ReadingMode.PAGE) {
+        if (!readerForeground || !isCurrentBookTtsPlaying || isFollowSuppressed || position.error != null || readerSettings.readingMode != ReadingMode.PAGE) {
             return@LaunchedEffect
         }
         if (activeRange.chapterIndex != selectedChapterIndex) {
@@ -847,6 +1022,7 @@ private fun ReaderReadyContent(
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_START -> {
+                    readerForeground = true
                     val interruptionAt = lastManualFollowInterruptionAtMs
                     if (
                         interruptionAt != null &&
@@ -861,6 +1037,7 @@ private fun ReaderReadyContent(
                 }
 
                 Lifecycle.Event.ON_STOP -> {
+                    readerForeground = false
                     latestQueueCurrentProgress()
                 }
 
@@ -878,14 +1055,18 @@ private fun ReaderReadyContent(
             .fillMaxSize()
             .padding(padding)
             .onSizeChanged { size ->
-                if (viewportSize != IntSize.Zero && size != viewportSize) position.reflow()
+                if (viewportSize != IntSize.Zero && size != viewportSize && position.error == null) position.reflow()
                 viewportSize = size
             }
             .background(themePalette.background),
     ) {
-        when (readerSettings.readingMode) {
+        when (displayMode) {
             ReadingMode.SCROLL -> ScrollReaderContent(
                 chapters = scrollFeed,
+                modifier = if (retainPageUntilScrollConfirmed) {
+                    Modifier.graphicsLayer { alpha = 0f }.clearAndSetSemantics { }
+                } else Modifier,
+                userScrollEnabled = canLocateScroll && position.request == null,
                 layoutKey = scrollLayoutKey,
                 author = state.book.author,
                 themePalette = themePalette,
@@ -903,7 +1084,7 @@ private fun ReaderReadyContent(
                         )
                     }
                     .orEmpty(),
-                enableLongPressRestart = isCurrentBookTtsOngoing,
+                enableLongPressRestart = isCurrentBookTtsOngoing && !retainPageUntilScrollConfirmed,
                 onRestartFromLocation = { chapterIndex, charOffset ->
                     restartTtsFromPressedOffset(
                         chapterIndex = chapterIndex,
@@ -913,7 +1094,9 @@ private fun ReaderReadyContent(
                 onBodyMetricsChanged = onScrollBodyMetricsChanged,
                 onBodyMetricsDisposed = onScrollBodyMetricsDisposed,
                 onCenterTap = {
-                    setChromeMode(ReaderChromeStateReducer.onCenterTap(chromeMode))
+                    if (!retainPageUntilScrollConfirmed) {
+                        setChromeMode(ReaderChromeStateReducer.onCenterTap(chromeMode))
+                    }
                 },
             )
 
@@ -922,6 +1105,13 @@ private fun ReaderReadyContent(
                 chapters = state.chapters,
                 repository = repository,
                 position = position,
+                pageState = pageState,
+                executeRequests = readerSettings.readingMode == ReadingMode.PAGE && position.error == null,
+                onAnchorResolved = if (selectedSettings.readingMode != ReadingMode.PAGE && position.error == null) {
+                    { id, anchor ->
+                        if (position.resolvedAnchor(id, anchor)) readerSettings = selectedSettings
+                    }
+                } else null,
                 themePalette = themePalette,
                 fontSize = contentFontSize,
                 lineHeight = contentLineHeight,
@@ -930,7 +1120,7 @@ private fun ReaderReadyContent(
                 followTargetCharOffset = resolvePageFollowTargetCharOffset(
                     playbackSnapshot = ttsRuntime.playbackSnapshot,
                     selectedChapterIndex = selectedChapterIndex,
-                    isFollowSuppressed = isFollowSuppressed,
+                    isFollowSuppressed = isFollowSuppressed || !readerForeground || !isCurrentBookTtsPlaying,
                 ),
                 enableLongPress = isCurrentBookTtsOngoing,
                 dismissExpandedChrome = chromeMode == ReaderChromeMode.SETTINGS_EXPANDED,
@@ -938,6 +1128,8 @@ private fun ReaderReadyContent(
                 onManualFollowInterruption = ::markManualFollowInterruption,
                 onCrossChapter = ::stopTtsForNavigation,
                 onConfirmed = { _, _, _ ->
+                    confirmedMode = ReadingMode.PAGE
+                    confirmedDisplaySettings = readerSettings
                     queueCurrentProgress()
                     if (pendingChromeAutoHideRefreshAfterRestore && chromeMode == ReaderChromeMode.CHROME_VISIBLE) {
                         lastChromeInteractionAtMs = SystemClock.elapsedRealtime()
@@ -946,6 +1138,48 @@ private fun ReaderReadyContent(
                 },
                 onToggleChrome = { setChromeMode(ReaderChromeStateReducer.onCenterTap(chromeMode)) },
             )
+        }
+
+        if (retainPageUntilScrollConfirmed) {
+            val previous = pageState.display.confirmedWindow
+            val page = previous?.pages?.firstOrNull { it.id == pageState.display.confirmedPageId }
+            val look = previous?.appearance
+            val fitsViewport = look != null && look.layout.widthPx == requestedPageLayout.widthPx &&
+                look.layout.heightPx == requestedPageLayout.heightPx &&
+                look.layout.density == requestedPageLayout.density && look.layout.fontScale == requestedPageLayout.fontScale &&
+                with(rootDensity) { look.topPadding.roundToPx() } == pageViewport.topPaddingPx &&
+                with(rootDensity) { look.bottomPadding.roundToPx() } == pageViewport.bottomPaddingPx
+            Box(
+                modifier = Modifier.matchParentSize().background(themePalette.background).readerBodyTapInput { offset, size ->
+                    if (chromeMode == ReaderChromeMode.SETTINGS_EXPANDED ||
+                        ReaderTapZone.resolve(offset.x, size.width.toFloat()) == ReaderTapZone.TOGGLE_CHROME) {
+                        setChromeMode(ReaderChromeStateReducer.onCenterTap(chromeMode))
+                    }
+                },
+                contentAlignment = Alignment.Center,
+            ) {
+                if (page != null && look != null && fitsViewport) {
+                    ReaderPageSurface(
+                        page = page.slice,
+                        themePalette = themePalette,
+                        fontSize = look.fontSize,
+                        lineHeight = look.lineHeight,
+                        paragraphSpacing = look.paragraphSpacing,
+                        pageTopPadding = look.topPadding,
+                        pageBottomPadding = look.bottomPadding,
+                        highlightRange = activePlaybackVisualRange?.takeIf { it.chapterIndex == page.chapter.chapterIndex }
+                            ?.let { ReaderTtsCharacterRange(it.startCharOffset, it.endCharOffset) },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else Text("正在定位正文…", color = themePalette.content)
+            }
+        }
+
+        if (displayMode == ReadingMode.SCROLL &&
+            ((scrollFeed.isEmpty() && position.error == null) || (recoveryKey != null && completedRecovery != recoveryKey))) {
+            Box(Modifier.matchParentSize().background(themePalette.background), contentAlignment = Alignment.Center) {
+                if (position.error == null) Text("正在准备正文…", color = themePalette.content)
+            }
         }
 
         if (brightnessOverlayAlpha > 0.01f) {
@@ -999,11 +1233,11 @@ private fun ReaderReadyContent(
             ) {
                 ReaderControls(
                     chromeMode = chromeMode,
-                    appearanceMode = readerSettings.appearanceMode,
+                    appearanceMode = selectedSettings.appearanceMode,
                     progressSummary = progressSummary,
-                    showChapterNavigationRow = readerSettings.readingMode == ReadingMode.PAGE,
-                    canOpenPreviousChapter = selectedChapterPosition > 0,
-                    canOpenNextChapter = selectedChapterPosition >= 0 && selectedChapterPosition < state.chapters.lastIndex,
+                    showChapterNavigationRow = displayMode == ReadingMode.PAGE,
+                    canOpenPreviousChapter = adjacentChapter(-1) != null,
+                    canOpenNextChapter = adjacentChapter(1) != null,
                     themePalette = themePalette,
                     ttsToggleState = ttsToggleUiState,
                     onOpenPreviousChapter = {
@@ -1048,19 +1282,23 @@ private fun ReaderReadyContent(
                     },
                     onToggleTts = {
                         bumpChromeInteraction()
-                        if (isCurrentBookTtsPaused) {
-                            ttsController.requestResumePlayback()
-                        } else if (isCurrentBookTtsPlaying) {
+                        if (ttsRuntime.isVoicePreviewing) {
                             ttsController.stopByUser()
+                        } else if (isCurrentBookTtsPaused) {
+                            resumeListeningLocation?.let(::resumeListeningAt) ?: ttsController.requestResumePlayback()
+                        } else if (isCurrentBookTtsPlaying) {
+                            ttsController.requestPausePlayback()
                         } else {
-                            startTtsFromCurrentLocation()
+                            chooseListeningStart()
                         }
                     },
                     onImmersiveTtsAction = {
-                        if (isCurrentBookTtsPaused) {
-                            ttsController.requestResumePlayback()
-                        } else if (isCurrentBookTtsPlaying) {
+                        if (ttsRuntime.isVoicePreviewing) {
                             ttsController.stopByUser()
+                        } else if (isCurrentBookTtsPaused) {
+                            resumeListeningLocation?.let(::resumeListeningAt) ?: ttsController.requestResumePlayback()
+                        } else if (isCurrentBookTtsPlaying) {
+                            ttsController.requestPausePlayback()
                         }
                     },
                     expandedContent = when (chromeMode) {
@@ -1073,12 +1311,24 @@ private fun ReaderReadyContent(
                                     availableVoices = ttsRuntime.availableVoices,
                                     availableVoicesLoaded = ttsRuntime.availableVoicesLoaded,
                                     selectedVoiceName = selectedVoiceName,
-                                    ttsStatusText = ttsStatusText,
+                                    ttsStatusText = listeningProgressError ?: ttsStatusText,
                                     ttsRemainingTimeLabel = remainingTimeLabel,
                                     ttsSystemDefaultVoiceStatus = ttsSystemDefaultVoiceStatus,
                                     onSelectTab = { activeSettingsTab = it },
                                     onUpdateSettings = ::updateReaderSettings,
                                     onUpdateTtsSettings = ::updateTtsSettings,
+                                    onStartTtsFromCurrent = if (!ttsRuntime.isVoicePreviewing) ::startTtsFromCurrentLocation else null,
+                                    onResumeSavedTts = resumeListeningLocation?.takeIf { !isCurrentBookTtsPlaying && !ttsRuntime.isVoicePreviewing }
+                                        ?.let { { resumeListeningAt(it) } },
+                                    onStopTts = if (isCurrentBookTtsOngoing || ttsRuntime.isVoicePreviewing) ttsController::stopByUser else null,
+                                    onPreviewVoice = {
+                                        if (ttsRuntime.isVoicePreviewing) ttsController.stopByUser()
+                                        else ttsController.requestVoicePreview(selectedSettings.ttsSettings)
+                                    },
+                                    isVoicePreviewing = ttsRuntime.isVoicePreviewing,
+                                    savedListeningLabel = resumeListeningLocation?.let { location ->
+                                        state.chapters.firstOrNull { it.chapterIndex == location.chapterIndex }?.title
+                                    },
                                 )
                             }
                         }
@@ -1107,6 +1357,22 @@ private fun ReaderReadyContent(
             }
         }
     }
+    listeningStartChoice?.let { location ->
+        AlertDialog(
+            onDismissRequest = { listeningStartChoice = null },
+            title = { Text("开始听书") },
+            text = {
+                val chapterTitle = state.chapters.firstOrNull { it.chapterIndex == location.chapterIndex }?.title.orEmpty()
+                Text("上次听到：$chapterTitle。可以继续听，也可以从当前显示的文字开始。")
+            },
+            confirmButton = { TextButton(onClick = { resumeListeningAt(location) }) { Text("继续上次听书") } },
+            dismissButton = {
+                TextButton(onClick = { listeningStartChoice = null; startTtsFromCurrentLocation() }) {
+                    Text("从当前文字开始")
+                }
+            },
+        )
+    }
 }
 
 @Composable
@@ -1134,6 +1400,8 @@ private fun ReaderTransientTtsMessage(
 @Composable
 private fun ScrollReaderContent(
     chapters: List<ReaderFeedChapterContent>,
+    modifier: Modifier = Modifier,
+    userScrollEnabled: Boolean,
     layoutKey: ReaderScrollLayoutKey,
     author: String?,
     themePalette: ReaderThemePalette,
@@ -1149,7 +1417,7 @@ private fun ScrollReaderContent(
     onCenterTap: () -> Unit,
 ) {
     LazyColumn(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .padding(top = ReaderScrollViewportTopInset)
             .readerBodyTapInput { offset, size ->
@@ -1158,6 +1426,7 @@ private fun ScrollReaderContent(
                 }
             },
         state = listState,
+        userScrollEnabled = userScrollEnabled,
     ) {
         itemsIndexed(
             items = chapters,
@@ -1450,6 +1719,33 @@ private fun buildScrollVisibleChapterItems(
 private fun ReaderVisibleChapterItem.bodyOffsetWithinItemPx(): Int {
     return (bodyOffsetPx - offsetPx).coerceIn(0, sizePx.coerceAtLeast(0))
 }
+
+private data class ReaderFeedKey(val bookId: String, val mode: ReadingMode, val chapterIndex: Int?, val retry: Int)
+
+private sealed interface ReaderFeedResult {
+    val key: ReaderFeedKey
+    data class Loading(override val key: ReaderFeedKey) : ReaderFeedResult
+    data class Ready(override val key: ReaderFeedKey, val content: List<ReaderFeedChapterContent>) : ReaderFeedResult
+    data class Failed(override val key: ReaderFeedKey, val message: String) : ReaderFeedResult
+}
+
+private data class ReaderScrollSnapshot(
+    val bookId: String,
+    val content: List<ReaderFeedChapterContent>,
+    val anchor: ReadingAnchor,
+    val layout: ReaderScrollLayoutKey,
+    val viewport: IntSize,
+    val itemIndex: Int,
+    val itemOffset: Int,
+)
+
+private data class ReaderScrollRecoveryKey(
+    val error: String,
+    val retry: Int,
+    val anchor: ReadingAnchor,
+    val layout: ReaderScrollLayoutKey,
+    val viewport: IntSize,
+)
 
 private data class ReaderFeedChapterContent(
     val chapter: Chapter,

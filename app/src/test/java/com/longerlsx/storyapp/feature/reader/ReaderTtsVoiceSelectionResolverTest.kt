@@ -23,17 +23,17 @@ class ReaderTtsVoiceSelectionResolverTest {
     }
 
     @Test
-    fun showsSystemDefaultStatusWhenPersistedVoiceIsMissingAfterCatalogLoaded() {
+    fun missingPersistedVoiceSelectsTheBundledVoiceThatWillActuallyPlay() {
         val state = ReaderTtsVoiceSelectionResolver.resolve(
             persistedVoiceName = "voice-c",
             availableVoices = listOf(
-                ReaderTtsVoiceOption(name = "voice-a", displayName = "系统女声"),
+                ReaderTtsVoiceOption(name = "kokoro:59", displayName = "中文男声·云扬"),
             ),
             availableVoicesLoaded = true,
         )
 
-        assertNull(state.selectedVoiceName)
-        assertEquals("当前使用系统默认音色", state.systemDefaultVoiceStatus)
+        assertEquals("kokoro:59", state.selectedVoiceName)
+        assertEquals("原音色不可用，已使用中文男声·云扬", state.systemDefaultVoiceStatus)
     }
 
     @Test
@@ -57,6 +57,21 @@ class ReaderTtsVoiceSelectionResolverTest {
         )
 
         assertNull(state.selectedVoiceName)
+        assertNull(state.systemDefaultVoiceStatus)
+    }
+
+    @Test
+    fun firstUseShowsTheBundledDefaultAsSelectedWithoutDependingOnSystemVoices() {
+        val state = ReaderTtsVoiceSelectionResolver.resolve(
+            persistedVoiceName = null,
+            availableVoices = listOf(
+                ReaderTtsVoiceOption(name = "kokoro:59", displayName = "中文男声·云扬"),
+                ReaderTtsVoiceOption(name = "kokoro:58", displayName = "中文男声·云希"),
+            ),
+            availableVoicesLoaded = true,
+        )
+
+        assertEquals("kokoro:59", state.selectedVoiceName)
         assertNull(state.systemDefaultVoiceStatus)
     }
 }

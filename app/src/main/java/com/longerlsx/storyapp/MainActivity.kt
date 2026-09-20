@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.os.BundleCompat
 import com.longerlsx.storyapp.app.StoryApp
 import com.longerlsx.storyapp.ui.theme.StoryAppTheme
 
@@ -15,13 +16,20 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        pendingExternalIntent = intent
+        pendingExternalIntent = if (savedInstanceState == null) {
+            intent
+        } else {
+            BundleCompat.getParcelable(savedInstanceState, PENDING_EXTERNAL_INTENT, Intent::class.java)
+        }
         setContent {
+            val externalIntent = pendingExternalIntent
             StoryAppTheme {
                 StoryApp(
-                    externalIntent = pendingExternalIntent,
+                    externalIntent = externalIntent,
                     onExternalIntentConsumed = {
-                        pendingExternalIntent = null
+                        if (pendingExternalIntent === externalIntent) {
+                            pendingExternalIntent = null
+                        }
                     },
                 )
             }
@@ -30,7 +38,17 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        setIntent(intent)
         pendingExternalIntent = intent
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        // A null pending command means it was already consumed; the launch Intent
+        // must not replay it when Android recreates this Activity.
+        outState.putParcelable(PENDING_EXTERNAL_INTENT, pendingExternalIntent)
+        super.onSaveInstanceState(outState)
+    }
+
+    private companion object {
+        const val PENDING_EXTERNAL_INTENT = "pendingExternalIntent"
     }
 }

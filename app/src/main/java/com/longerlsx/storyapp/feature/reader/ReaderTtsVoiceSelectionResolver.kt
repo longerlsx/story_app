@@ -8,23 +8,23 @@ data class ReaderTtsVoiceSelectionUiState(
 )
 
 object ReaderTtsVoiceSelectionResolver {
-    private const val SystemDefaultVoiceStatus = "当前使用系统默认音色"
-
     fun resolve(
         persistedVoiceName: String?,
         availableVoices: List<ReaderTtsVoiceOption>,
         availableVoicesLoaded: Boolean,
     ): ReaderTtsVoiceSelectionUiState {
-        val selectedVoiceName = persistedVoiceName
+        val persistedOption = persistedVoiceName
             ?.takeIf { voiceName ->
                 availableVoices.any { it.name == voiceName }
             }
+        val fallback = availableVoices.firstOrNull()?.takeIf { availableVoicesLoaded }
+        val selectedVoiceName = persistedOption ?: fallback?.name
         val systemDefaultVoiceStatus = if (
             availableVoicesLoaded &&
             persistedVoiceName != null &&
-            selectedVoiceName == null
+            persistedOption == null && fallback != null
         ) {
-            SystemDefaultVoiceStatus
+            "原音色不可用，已使用${fallback.displayName}"
         } else {
             null
         }

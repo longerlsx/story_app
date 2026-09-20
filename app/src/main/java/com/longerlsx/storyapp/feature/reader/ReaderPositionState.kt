@@ -23,12 +23,20 @@ internal data class ReaderPositionRequest(
     val anchor: ReadingAnchor,
     val turns: List<ReaderPageMove> = emptyList(),
     val lastPage: Boolean = false,
+    val lastPageLayout: ReaderPageLayoutKey? = null,
+    val navigationEpoch: Long = 0,
+    val inputRevision: Long = 0,
 )
 
 /** A request is intent; only the visible layout can confirm durable progress. */
 internal class ReaderPositionState(initial: ReadingAnchor) {
     private var nextId = 0L
     private var failedRequest: ReaderPositionRequest? = null
+    private var pageLayout: ReaderPageLayoutKey? = null
+    var navigationEpoch by mutableStateOf(0L)
+        private set
+    var inputRevision by mutableStateOf(0L)
+        private set
     var confirmedAnchor by mutableStateOf(initial)
         private set
     var hasConfirmedLayout by mutableStateOf(false)
@@ -40,19 +48,45 @@ internal class ReaderPositionState(initial: ReadingAnchor) {
 
     fun jump(anchor: ReadingAnchor, lastPage: Boolean = false) {
         error = null
-        request = ReaderPositionRequest(nextId++, anchor, lastPage = lastPage)
+        failedRequest = null
+        navigationEpoch++
+        inputRevision++
+        request = ReaderPositionRequest(nextId++, anchor, lastPage = lastPage,
+            lastPageLayout = pageLayout.takeIf { lastPage },
+            navigationEpoch = navigationEpoch, inputRevision = inputRevision)
     }
 
-    fun turn(direction: Int, layout: ReaderPageLayoutKey) {
+    fun turn(direction: Int, layout: ReaderPageLayoutKey, expectedEpoch: Long? = null): ReaderPositionRequest? {
         require(direction == -1 || direction == 1)
+        if (expectedEpoch != null && expectedEpoch != navigationEpoch) return null
         error = null
+        failedRequest = null
+        inputRevision++
         val base = request ?: ReaderPositionRequest(nextId++, confirmedAnchor)
-        request = base.copy(id = nextId++, turns = base.turns + ReaderPageMove(direction, layout))
+        return base.copy(id = nextId++, turns = base.turns + ReaderPageMove(direction, layout),
+            navigationEpoch = navigationEpoch, inputRevision = inputRevision).also { request = it }
     }
 
     fun reflow() {
-        error = null
-        request = (request ?: ReaderPositionRequest(nextId++, confirmedAnchor)).copy(id = nextId++)
+        if (error != null) return
+        handoff()
+    }
+
+    fun notePageLayout(layout: ReaderPageLayoutKey) { pageLayout = layout }
+
+    /** Revoke the old executor without discarding the accepted navigation or retry state. */
+    fun handoff() {
+        if (error != null) return
+        request = (request ?: ReaderPositionRequest(nextId++, confirmedAnchor,
+            navigationEpoch = navigationEpoch, inputRevision = inputRevision)).copy(id = nextId++)
+    }
+
+    /** Resolving old PAGE input is not acknowledgement of a displayed page. */
+    fun resolvedAnchor(id: Long, anchor: ReadingAnchor): Boolean {
+        val current = request?.takeIf { it.id == id } ?: return false
+        request = current.copy(id = nextId++, anchor = anchor, turns = emptyList(),
+            lastPage = false, lastPageLayout = null)
+        return true
     }
 
     fun confirm(id: Long, anchor: ReadingAnchor): Boolean {

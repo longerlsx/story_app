@@ -2,6 +2,7 @@ package com.longerlsx.storyapp.feature.reader.tts
 
 import com.longerlsx.storyapp.core.model.ReaderTtsSettings
 import com.longerlsx.storyapp.core.model.ReaderTtsTimerPreset
+import com.longerlsx.storyapp.core.model.ListeningProgress
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -13,6 +14,8 @@ class ReaderTtsController(
     private val sendResumeCommand: () -> Unit = {},
     private val sendSettingsCommand: (ReaderTtsSettings) -> Unit = {},
     private val sendRestartCommand: (ReaderTtsStartRequest) -> Unit = {},
+    private val sendPauseCommand: () -> Unit = {},
+    private val sendVoicePreviewCommand: (ReaderTtsSettings) -> Unit = {},
 ) {
     private val runtime = MutableStateFlow(ReaderTtsRuntimeState())
 
@@ -111,7 +114,7 @@ class ReaderTtsController(
     }
 
     fun pauseByUser() {
-        if (!playbackState.isSpeakingSession()) {
+        if (!playbackState.isOngoingSession()) {
             return
         }
         runtime.update {
@@ -146,18 +149,27 @@ class ReaderTtsController(
     }
 
     fun requestResumePlayback() {
-        if (!playbackState.isPausedSession()) {
+        if (playbackState.isSpeakingSession() || runtime.value.isVoicePreviewing) {
             return
         }
-        sendResumeCommand()
+        dispatchCommand("无法继续朗读，请重试", sendResumeCommand)
+    }
+
+    fun requestPausePlayback() {
+        if (playbackState.isOngoingSession() || runtime.value.isVoicePreviewing) {
+            dispatchCommand("无法暂停朗读，请重试", sendPauseCommand)
+        }
+    }
+
+    fun requestVoicePreview(settings: ReaderTtsSettings) {
+        dispatchCommand("无法开始试听，请重试") { sendVoicePreviewCommand(settings) }
     }
 
     fun stopByUser() {
-        if (!playbackState.isOngoingSession()) {
+        if (!playbackState.isOngoingSession() && !runtime.value.isVoicePreviewing) {
             return
         }
-        sendStopCommand()
-        markStoppedByUser()
+        if (dispatchCommand("无法停止朗读，请重试", sendStopCommand)) markStoppedByUser()
     }
 
     fun markStoppedByUser() {
@@ -188,14 +200,14 @@ class ReaderTtsController(
                 playbackSnapshot = ReaderTtsPlaybackSnapshot(),
             )
         }
-        sendRestartCommand(request)
+        dispatchCommand("无法重新定位朗读，请重试") { sendRestartCommand(request) }
     }
 
     fun stopByNavigation(localMessage: String? = null) {
         if (!playbackState.isOngoingSession()) {
             return
         }
-        sendStopCommand()
+        if (!dispatchCommand("无法停止朗读，请重试", sendStopCommand)) return
         runtime.update {
             it.copy(
                 playbackState = ReaderTtsSessionState.STOPPED_BY_NAVIGATION,
@@ -235,7 +247,7 @@ class ReaderTtsController(
                 playbackState = ReaderTtsSessionState.FAILED,
                 localErrorMessage = message,
                 remainingTimerMillis = null,
-                playbackSnapshot = ReaderTtsPlaybackSnapshot(),
+                isVoicePreviewing = false,
             )
         }
     }
@@ -281,13 +293,62 @@ class ReaderTtsController(
             )
         }
         if (playbackState.isOngoingSession()) {
-            sendSettingsCommand(settings)
+            dispatchCommand("声音设置暂未生效，请重试") { sendSettingsCommand(settings) }
         }
     }
 
     fun updatePlaybackSummary(summary: String) {
         runtime.update {
             it.copy(currentPlaybackSummary = summary)
+        }
+    }
+
+    fun preparePlayback(request: ReaderTtsStartRequest, settings: ReaderTtsSettings) {
+        runtime.update {
+            it.copy(
+                playbackState = ReaderTtsSessionState.STARTING,
+                currentBookId = request.bookId,
+                currentBookTitle = request.bookTitle,
+                currentPlaybackSummary = request.chapterTitleOrSummary,
+                activeStateLabel = request.activeStateLabel,
+                selectedVoiceName = settings.voiceName,
+                speechRate = settings.speechRate,
+                pitch = settings.pitch,
+                timerPreset = settings.timerPreset,
+                localErrorMessage = null,
+                localStatusMessage = if (it.notificationControlsAvailable) null else NOTIFICATION_PERMISSION_DEGRADED_MESSAGE,
+                isVoicePreviewing = false,
+            )
+        }
+    }
+
+    fun updateListeningProgress(progress: ListeningProgress) {
+        runtime.update { it.copy(listeningProgress = progress) }
+    }
+
+    fun setVoicePreviewing(previewing: Boolean, error: String? = null) {
+        runtime.update { it.copy(isVoicePreviewing = previewing, localErrorMessage = error) }
+    }
+
+    fun onServiceDisconnected() {
+        runtime.update {
+            if (!it.isOngoingSession()) it.copy(isVoicePreviewing = false)
+            else it.copy(
+                playbackState = ReaderTtsSessionState.PAUSED_BY_USER,
+                isVoicePreviewing = false,
+                localStatusMessage = "朗读服务已中断，点继续可从已保存位置恢复",
+                playbackSnapshot = it.playbackSnapshot.copy(activePauseReason = ReaderTtsPauseReason.USER),
+            )
+        }
+    }
+
+    private fun dispatchCommand(message: String, command: () -> Unit): Boolean {
+        return try {
+            command()
+            true
+        } catch (_: Exception) {
+            runtime.update { it.copy(localErrorMessage = message) }
+            false
         }
     }
 

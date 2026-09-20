@@ -4,6 +4,7 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
+import android.media.session.MediaSession
 import androidx.core.app.NotificationCompat
 import com.longerlsx.storyapp.R
 
@@ -28,11 +29,12 @@ class ReaderTtsNotificationFactory(
         )
     }
 
-    fun build(runtimeState: ReaderTtsRuntimeState): Notification {
-        val primaryAction = ReaderTtsNotificationActionResolver.resolvePrimaryAction(
+    fun build(runtimeState: ReaderTtsRuntimeState, mediaSessionToken: MediaSession.Token? = null): Notification {
+        val primaryAction = if (runtimeState.isVoicePreviewing) ReaderTtsNotificationPrimaryAction.PAUSE
+        else ReaderTtsNotificationActionResolver.resolvePrimaryAction(
             runtimeState.playbackState,
         )
-        val contentText = ReaderTtsNotificationTextResolver.resolveContentText(runtimeState)
+        val contentText = if (runtimeState.isVoicePreviewing) "正在试听声音" else ReaderTtsNotificationTextResolver.resolveContentText(runtimeState)
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_lock_silent_mode_off)
@@ -43,7 +45,7 @@ class ReaderTtsNotificationFactory(
             .setContentText(contentText)
             .setStyle(NotificationCompat.BigTextStyle().bigText(contentText))
             .setOnlyAlertOnce(true)
-            .setOngoing(runtimeState.isOngoingSession())
+            .setOngoing(runtimeState.playbackState.isSpeakingSession() || runtimeState.isVoicePreviewing)
             .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
 
@@ -52,6 +54,7 @@ class ReaderTtsNotificationFactory(
                 ReaderTtsIntentFactory.createNotificationContentPendingIntent(
                     context = context,
                     bookId = bookId,
+                    request = runtimeState.notificationReaderRequest(),
                 ),
             )
         }
@@ -85,11 +88,30 @@ class ReaderTtsNotificationFactory(
             ),
         )
 
-        return builder.build()
+        val notification = builder.build()
+        return if (mediaSessionToken == null) notification else Notification.Builder
+            .recoverBuilder(context, notification)
+            .setStyle(Notification.MediaStyle().setMediaSession(mediaSessionToken).setShowActionsInCompactView(0, 1))
+            .build()
     }
 
     companion object {
         const val CHANNEL_ID = "reader_tts_playback"
         const val NOTIFICATION_ID = 4107
     }
+}
+
+internal fun ReaderTtsRuntimeState.notificationReaderRequest(): ReaderTtsStartRequest? {
+    val bookId = currentBookId ?: return null
+    val progress = listeningProgress?.takeIf { it.bookId == bookId }
+    val segment = playbackSnapshot.currentSegment
+    return ReaderTtsStartRequest(
+        bookId = bookId,
+        bookTitle = currentBookTitle ?: progress?.bookTitle.orEmpty(),
+        chapterIndex = segment?.chapterIndex ?: progress?.chapterIndex ?: return null,
+        charOffset = segment?.let { playbackSnapshot.nextRecoverableCharOffset ?: it.startCharOffset }
+            ?: progress?.charOffset ?: return null,
+        chapterTitleOrSummary = currentPlaybackSummary ?: progress?.chapterTitle.orEmpty(),
+        activeStateLabel = activeStateLabel,
+    )
 }

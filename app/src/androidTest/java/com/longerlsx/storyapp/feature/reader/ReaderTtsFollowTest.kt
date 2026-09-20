@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.assertIsDisplayed
@@ -46,6 +47,40 @@ class ReaderTtsFollowTest {
 
     @get:Rule
     val composeRule = createComposeRule()
+
+    @Test
+    fun pausedNotificationOpensListeningTextWhileOrdinaryOpeningKeepsReadingPosition() {
+        val bookId = "book-paused-notification"
+        val repository = createRepository(bookId, mapOf(0 to "普通打开保留阅读位置。", 1 to "通知应定位暂停听到的正文。"))
+        val settings = createSettingsStore("tts-paused-notification", ReaderSettings(readingMode = ReadingMode.PAGE))
+        val controller = ReaderTtsController(launchForegroundService = { true }, sendStopCommand = {})
+        val request = ReaderTtsStartRequest(bookId, "通知定位", 1, 0, "第2章", "朗读中")
+        controller.start(request, settings.load().ttsSettings)
+        controller.onPlaybackStarted()
+        controller.pauseByUser()
+        controller.updatePlaybackSnapshot(ReaderTtsPlaybackSnapshot(currentSegment = ReaderTtsSegment(1, 0, 13, "通知应定位暂停听到的正文。")))
+        val notification = mutableStateOf<ReaderTtsStartRequest?>(null)
+        composeRule.setContent {
+            ReaderScreen(
+                bookId, repository, settings, controller, onBack = {},
+                listeningOpenRequest = notification.value,
+                onListeningOpenHandled = { notification.value = null },
+            )
+        }
+        composeRule.waitUntil(5_000) {
+            composeRule.onAllNodesWithText("普通打开保留阅读位置。", substring = true).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText("普通打开保留阅读位置。", substring = true).assertIsDisplayed()
+        composeRule.runOnIdle { notification.value = request }
+        composeRule.waitUntil(5_000) {
+            composeRule.onAllNodesWithText("通知应定位暂停听到的正文。", substring = true).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText("通知应定位暂停听到的正文。", substring = true).assertIsDisplayed()
+        composeRule.runOnIdle {
+            assertNull(notification.value)
+            assertEquals(com.longerlsx.storyapp.feature.reader.tts.ReaderTtsSessionState.PAUSED_BY_USER, controller.playbackState)
+        }
+    }
 
     @Test
     fun longPressRestartDispatchesRestartAtPressedBodyOffsetWhenTtsIsActive() {
@@ -394,6 +429,9 @@ class ReaderTtsFollowTest {
             composeRule.onAllNodesWithText("第二章命中内容。").fetchSemanticsNodes().isNotEmpty()
         }
         composeRule.onNodeWithText("第二章命中内容。").assertIsDisplayed()
+        composeRule.runOnIdle {
+            assertEquals(com.longerlsx.storyapp.feature.reader.tts.ReaderTtsSessionState.PLAYING, controller.playbackState)
+        }
     }
 
     @Test
@@ -588,6 +626,7 @@ class ReaderTtsFollowTest {
     fun pausedSessionToggleResumesInsteadOfStopping() {
         val bookId = "book-resume-toggle"
         var stopCommands = 0
+        var pauseCommands = 0
         var resumeCommands = 0
         val repository = createRepository(
             bookId = bookId,
@@ -605,6 +644,10 @@ class ReaderTtsFollowTest {
                 resumeCommands += 1
                 controller.resumeFromPause()
             },
+            sendPauseCommand = {
+                pauseCommands += 1
+                controller.pauseByUser()
+            },
         )
         controller.start(
             request = ReaderTtsStartRequest(
@@ -618,7 +661,6 @@ class ReaderTtsFollowTest {
             settings = settingsStore.load().ttsSettings,
         )
         controller.onPlaybackStarted()
-        controller.pauseByUser()
 
         composeRule.setContent {
             ReaderScreen(
@@ -631,6 +673,11 @@ class ReaderTtsFollowTest {
         }
 
         composeRule.onRoot().performTouchInput { click(center) }
+        composeRule.onNodeWithContentDescription("暂停朗读").performClick()
+        composeRule.runOnIdle {
+            assertEquals(1, pauseCommands)
+            assertEquals(com.longerlsx.storyapp.feature.reader.tts.ReaderTtsSessionState.PAUSED_BY_USER, controller.playbackState)
+        }
         composeRule.onNodeWithContentDescription("继续朗读").performClick()
 
         composeRule.runOnIdle {

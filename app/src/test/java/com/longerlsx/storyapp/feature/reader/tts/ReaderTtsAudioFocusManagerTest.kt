@@ -7,6 +7,18 @@ import org.junit.Test
 class ReaderTtsAudioFocusManagerTest {
 
     @Test
+    fun permanentLossDoesNotAutomaticallyResumeOnLaterGain() {
+        val events = mutableListOf<String>()
+        val manager = ReaderTtsAudioFocusManager(
+            onPauseForFocusLoss = { events += "pause" },
+            onResumeAfterFocusGain = { events += "resume" },
+        )
+        manager.onFocusChange(AudioManager.AUDIOFOCUS_LOSS)
+        manager.onFocusChange(AudioManager.AUDIOFOCUS_GAIN)
+        assertEquals(listOf("pause"), events)
+    }
+
+    @Test
     fun pausesOnFocusLossAndResumesOnGainWhenLossTriggeredPause() {
         val events = mutableListOf<String>()
         val manager = ReaderTtsAudioFocusManager(
@@ -41,10 +53,29 @@ class ReaderTtsAudioFocusManagerTest {
             onResumeAfterFocusGain = { events += "resume" },
         )
 
-        manager.onFocusChange(AudioManager.AUDIOFOCUS_LOSS)
+        manager.onFocusChange(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK)
         manager.clearAutoResume()
         manager.onFocusChange(AudioManager.AUDIOFOCUS_GAIN)
 
         assertEquals(listOf("pause"), events)
+    }
+
+    @Test
+    fun repeatedTemporaryLossKeepsTheOriginalResumeIntentButPermanentLossClearsIt() {
+        val events = mutableListOf<String>()
+        var playing = true
+        val manager = ReaderTtsAudioFocusManager(
+            onPauseForFocusLoss = { events += "pause"; playing = false },
+            onResumeAfterFocusGain = { events += "resume"; playing = true },
+            canAutoResume = { playing },
+        )
+        manager.onFocusChange(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK)
+        manager.onFocusChange(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT)
+        manager.onFocusChange(AudioManager.AUDIOFOCUS_GAIN)
+        assertEquals(listOf("pause", "pause", "resume"), events)
+        manager.onFocusChange(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK)
+        manager.onFocusChange(AudioManager.AUDIOFOCUS_LOSS)
+        manager.onFocusChange(AudioManager.AUDIOFOCUS_GAIN)
+        assertEquals(listOf("pause", "pause", "resume", "pause", "pause"), events)
     }
 }

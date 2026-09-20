@@ -38,6 +38,31 @@ class ReaderTtsSettingsSheetTest {
     val composeRule = createComposeRule()
 
     @Test
+    fun listeningActionsKeepCurrentStartResumeAndStopAsExplicitChoices() {
+        val actions = mutableListOf<String>()
+        composeRule.setContent {
+            ReaderTtsSettingsSheet(
+                statusText = "当前状态：已暂停",
+                settings = ReaderTtsSettings(),
+                themePalette = ReaderThemePalette(Color.White, Color.White, Color.Black),
+                availableVoices = listOf(ReaderTtsVoiceOption("kokoro:59", "中文男声")),
+                selectedVoiceName = "kokoro:59",
+                onSelectVoice = {}, onUpdateSpeechRate = {}, onUpdatePitch = {}, onUpdateTimerPreset = {},
+                onStartFromCurrent = { actions += "current" },
+                onResumeSaved = { actions += "resume" },
+                onStop = { actions += "stop" },
+                onPreviewVoice = { actions += "preview" },
+                savedListeningLabel = "第4章",
+            )
+        }
+        composeRule.onNodeWithText("继续上次听书").performClick()
+        composeRule.onNodeWithText("从当前文字开始").performClick()
+        composeRule.onNodeWithText("停止朗读").performClick()
+        composeRule.onNodeWithText("试听当前音色").performClick()
+        assertEquals(listOf("resume", "current", "stop", "preview"), actions)
+    }
+
+    @Test
     fun unifiedSheetRendersTabsAndForwardsTtsSettingUpdates() {
         val selectedTabs = mutableListOf<ReaderSettingsTab>()
         val updatedTtsSettings = mutableListOf<ReaderTtsSettings>()
@@ -83,7 +108,7 @@ class ReaderTtsSettingsSheetTest {
     }
 
     @Test
-    fun ttsTabShowsSystemDefaultFallbackStatusWhenNoMainlandVoicesRemain() {
+    fun unavailableOfflineVoicesDoNotPromiseAnAutomaticSystemFallback() {
         composeRule.setContent {
             MaterialTheme {
                 ReaderSettingsSheet(
@@ -97,7 +122,6 @@ class ReaderTtsSettingsSheetTest {
                     availableVoices = emptyList(),
                     selectedVoiceName = null,
                     ttsStatusText = "当前状态：未朗读",
-                    ttsSystemDefaultVoiceStatus = "当前使用系统默认音色",
                     onSelectTab = {},
                     onUpdateSettings = {},
                     onUpdateTtsSettings = {},
@@ -105,8 +129,8 @@ class ReaderTtsSettingsSheetTest {
             }
         }
 
-        composeRule.onNodeWithText("当前使用系统默认音色").assertIsDisplayed()
-        composeRule.onNodeWithText("已筛除非大陆中文音色，当前将使用系统默认音色。").assertIsDisplayed()
+        composeRule.onAllNodesWithText("当前使用系统默认音色").assertCountEquals(0)
+        composeRule.onNodeWithText("离线音色暂不可用，请重新打开听书设置。").assertIsDisplayed()
     }
 
     @Test
@@ -135,9 +159,9 @@ class ReaderTtsSettingsSheetTest {
             }
         }
 
-        composeRule.onNodeWithText("正在加载系统音色...").assertIsDisplayed()
+        composeRule.onNodeWithText("正在载入离线音色…").assertIsDisplayed()
         composeRule.onAllNodesWithText("当前使用系统默认音色").assertCountEquals(0)
-        composeRule.onAllNodesWithText("已筛除非大陆中文音色，当前将使用系统默认音色。").assertCountEquals(0)
+        composeRule.onAllNodesWithText("离线音色暂不可用，请重新打开听书设置。").assertCountEquals(0)
     }
 
     @Test
@@ -164,7 +188,7 @@ class ReaderTtsSettingsSheetTest {
             }
         }
 
-        composeRule.onNodeWithText("仅显示可用的大陆中文音色。").assertIsDisplayed()
+        composeRule.onNodeWithText("声音在手机本地生成，无需联网。").assertIsDisplayed()
         composeRule.onAllNodesWithText("TTS engine", substring = true).assertCountEquals(0)
         composeRule.onAllNodesWithText("voice", substring = true).assertCountEquals(0)
         composeRule.onAllNodesWithText("短句块", substring = true).assertCountEquals(0)

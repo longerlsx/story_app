@@ -6,6 +6,55 @@ import org.junit.Test
 
 class ReaderPositionStateTest {
     @Test
+    fun directoryRejectsOldFingerReleaseButReflowPreservesItsInputOwnership() {
+        val state = ReaderPositionState(ReadingAnchor(0, 0))
+        val layout = ReaderPageLayoutKey(400, 700, 1f, 1f, 20, 1.6f, 12f)
+        val fingerEpoch = state.navigationEpoch
+        state.reflow()
+        assertNotNull(state.turn(1, layout, fingerEpoch))
+        state.jump(ReadingAnchor(3, 14))
+        assertNull(state.turn(-1, layout, fingerEpoch))
+        assertEquals(ReadingAnchor(3, 14), state.request!!.anchor)
+        assertTrue(state.request!!.turns.isEmpty())
+    }
+
+    @Test
+    fun modeHandoffResolvesPageInputWithoutAcknowledgingOrLosingRetry() {
+        val state = ReaderPositionState(ReadingAnchor(0, 7))
+        assertTrue(state.confirm(state.request!!.id, ReadingAnchor(0, 7)))
+        val layout = ReaderPageLayoutKey(400, 700, 1f, 1f, 20, 1.6f, 12f)
+        state.turn(1, layout)
+        val old = state.request!!
+        state.handoff()
+        assertFalse(state.resolvedAnchor(old.id, ReadingAnchor(1, 0)))
+        val handed = state.request!!
+        assertEquals(old.turns, handed.turns)
+        assertEquals(old.inputRevision, handed.inputRevision)
+        assertTrue(state.resolvedAnchor(handed.id, ReadingAnchor(1, 0)))
+        assertEquals(ReadingAnchor(0, 7), state.confirmedAnchor)
+        assertEquals(ReadingAnchor(1, 0), state.request!!.anchor)
+        assertTrue(state.request!!.turns.isEmpty())
+        state.fail(state.request!!.id, "读取失败")
+        state.handoff()
+        state.reflow()
+        assertEquals("读取失败", state.error)
+        assertNull(state.request)
+        state.retry()
+        assertEquals(ReadingAnchor(1, 0), state.request!!.anchor)
+    }
+
+    @Test
+    fun reversingReleaseCancelsThisDragAndQuickShortForwardSwipeStillCounts() {
+        assertEquals(0, readerPageTurnForRelease(0.7f, -500f))
+        assertEquals(0, readerPageTurnForRelease(-0.7f, 500f))
+        assertEquals(1, readerPageTurnForRelease(0.1f, 500f))
+        assertEquals(-1, readerPageTurnForRelease(-0.1f, -500f))
+        assertEquals(0, readerPageTurnForRelease(0.5f, 0f))
+        assertEquals(1, readerPageTurnForRelease(0.51f, 0f))
+        assertEquals(-1, readerPageTurnForRelease(-0.51f, 0f))
+    }
+
+    @Test
     fun appendsTurnsToPendingTargetButDirectoryReplacesThem() {
         val state = ReaderPositionState(ReadingAnchor(0, 8))
         val layout = ReaderPageLayoutKey(400, 700, 1f, 1f, 20, 1.6f, 12f)

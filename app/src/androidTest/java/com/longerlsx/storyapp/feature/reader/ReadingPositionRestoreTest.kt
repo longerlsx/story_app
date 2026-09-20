@@ -27,7 +27,10 @@ import com.longerlsx.storyapp.StoryApplication
 import com.longerlsx.storyapp.core.model.ReadingMode
 import com.longerlsx.storyapp.core.model.ReadingProgress
 import com.longerlsx.storyapp.data.book.FileAnchorStore
+import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsIntentFactory
+import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsStartRequest
 import java.io.File
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -40,6 +43,65 @@ import org.junit.runner.RunWith
 class ReadingPositionRestoreTest {
     @get:Rule
     val composeRule = createEmptyComposeRule()
+
+    @Test
+    fun consumedListeningNotificationDoesNotReplayAfterActivityRecreation() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        resetStoryAppState(context)
+        val application = context.applicationContext as StoryApplication
+        val firstText = "最初打开的正文。"
+        val listeningText = "通知打开的听书正文。"
+        val laterText = "消费通知后继续阅读的正文。"
+        val importFile = File(context.cacheDir, "notification-consumption.txt").apply {
+            writeText("第1章 初始\n$firstText\n第2章 听书\n$listeningText\n第3章 后续\n$laterText\n")
+        }
+        val importIntent = Intent(Intent.ACTION_VIEW).apply {
+            setClass(context, MainActivity::class.java)
+            setDataAndType(
+                FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", importFile),
+                "text/plain",
+            )
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        ActivityScenario.launch<MainActivity>(importIntent).use { scenario ->
+            composeRule.waitUntil(timeoutMillis = 8_000) { hasVisibleNode(hasText(firstText)) }
+            val book = runBlocking { application.bookRepository.observeBookshelf().first().single() }
+            val notification = ReaderTtsIntentFactory.createNotificationContentPendingIntent(
+                context = context,
+                bookId = book.id,
+                request = ReaderTtsStartRequest(
+                    bookId = book.id,
+                    bookTitle = book.title,
+                    chapterIndex = 1,
+                    charOffset = 0,
+                    chapterTitleOrSummary = "第2章 听书",
+                    activeStateLabel = "已暂停",
+                ),
+            )
+            notification.send()
+            composeRule.waitUntil(timeoutMillis = 8_000) { hasVisibleNode(hasText(listeningText)) }
+            composeRule.onRoot().performTouchInput {
+                click(Offset(width * 0.88f, height * 0.5f))
+            }
+            composeRule.waitUntil(timeoutMillis = 8_000) { hasVisibleNode(hasText(laterText)) }
+            composeRule.waitUntil(timeoutMillis = 5_000) {
+                FileAnchorStore(context.filesDir).loadAll().singleOrNull()?.anchor?.chapterIndex == 2
+            }
+
+            // Recreation is the trigger here: it must restore the new reading position,
+            // not consume the already-handled notification for a second time.
+            scenario.recreate()
+            composeRule.waitUntil(timeoutMillis = 8_000) {
+                hasVisibleNode(hasText(listeningText)) || hasVisibleNode(hasText(laterText))
+            }
+            composeRule.waitForIdle()
+            assertTrue("已消费的通知不能在 Activity 重建后覆盖后续阅读位置", hasVisibleNode(hasText(laterText)))
+
+            // A genuine new notification must still be handled by onNewIntent.
+            notification.send()
+            composeRule.waitUntil(timeoutMillis = 8_000) { hasVisibleNode(hasText(listeningText)) }
+        }
+    }
 
     @Test
     fun activityRelaunchFontChangeAndRotationKeepExactSavedScrollLine() {

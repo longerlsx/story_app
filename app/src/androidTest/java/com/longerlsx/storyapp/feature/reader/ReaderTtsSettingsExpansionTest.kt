@@ -77,7 +77,7 @@ class ReaderTtsSettingsExpansionTest {
             assertTrue(device.wait(Until.hasObject(By.textContains("第一章正文")), 8_000))
             assertTrue(device.revealReaderChrome("朗读"))
             assertTrue(device.tapPrimaryAction(ReaderPrimaryActionSlot.TTS))
-            assertTrue(device.wait(Until.hasObject(By.textContains("停止朗读")), 3_000))
+            assertTrue(device.wait(Until.hasObject(By.textContains("暂停朗读")), 3_000))
 
             assertTrue(device.tapPrimaryAction(ReaderPrimaryActionSlot.SETTINGS))
             assertTrue(device.wait(Until.hasObject(By.text("测试语音")), 3_000))

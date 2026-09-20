@@ -15,6 +15,7 @@ object ReaderTtsIntentFactory {
     const val ACTION_RESTART = "com.longerlsx.storyapp.reader.tts.RESTART"
     const val ACTION_UPDATE_SETTINGS = "com.longerlsx.storyapp.reader.tts.UPDATE_SETTINGS"
     const val ACTION_OPEN_READER = "com.longerlsx.storyapp.reader.tts.OPEN_READER"
+    const val ACTION_PREVIEW = "com.longerlsx.storyapp.reader.tts.PREVIEW"
 
     private const val EXTRA_BOOK_ID = "reader_tts_book_id"
     private const val EXTRA_BOOK_TITLE = "reader_tts_book_title"
@@ -82,6 +83,9 @@ object ReaderTtsIntentFactory {
         }
     }
 
+    fun previewService(context: Context, settings: ReaderTtsSettings): Intent =
+        updateSettingsService(context, settings).setAction(ACTION_PREVIEW)
+
     fun extractStartRequest(intent: Intent?): ReaderTtsStartRequest? {
         if (intent?.action != ACTION_START) {
             return null
@@ -112,7 +116,7 @@ object ReaderTtsIntentFactory {
     }
 
     fun extractSettings(intent: Intent?): ReaderTtsSettings? {
-        if (intent?.action != ACTION_UPDATE_SETTINGS) {
+        if (intent == null || (intent.action != ACTION_UPDATE_SETTINGS && intent.action != ACTION_PREVIEW)) {
             return null
         }
         return ReaderTtsSettings(
@@ -135,7 +139,7 @@ object ReaderTtsIntentFactory {
     }
 
     fun createResumeActionPendingIntent(context: Context): PendingIntent {
-        return PendingIntent.getService(
+        return PendingIntent.getForegroundService(
             context,
             1002,
             resumeService(context),
@@ -155,10 +159,18 @@ object ReaderTtsIntentFactory {
     fun createNotificationContentPendingIntent(
         context: Context,
         bookId: String,
+        request: ReaderTtsStartRequest? = null,
     ): PendingIntent {
         val intent = Intent(context, MainActivity::class.java).apply {
             action = ACTION_OPEN_READER
             putExtra(EXTRA_BOOK_ID, bookId)
+            request?.let {
+                putExtra(EXTRA_BOOK_TITLE, it.bookTitle)
+                putExtra(EXTRA_CHAPTER_INDEX, it.chapterIndex)
+                putExtra(EXTRA_CHAR_OFFSET, it.charOffset)
+                putExtra(EXTRA_CHAPTER_SUMMARY, it.chapterTitleOrSummary)
+                putExtra(EXTRA_ACTIVE_STATE_LABEL, it.activeStateLabel)
+            }
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
         return PendingIntent.getActivity(
@@ -174,5 +186,10 @@ object ReaderTtsIntentFactory {
             return null
         }
         return intent.getStringExtra(EXTRA_BOOK_ID)
+    }
+
+    fun extractOpenReaderRequest(intent: Intent?): ReaderTtsStartRequest? {
+        if (intent?.action != ACTION_OPEN_READER) return null
+        return extractPlaybackRequest(intent)
     }
 }

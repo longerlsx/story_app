@@ -10,7 +10,22 @@ import org.junit.Test
 class ReaderTtsReaderUiStateResolverTest {
 
     @Test
-    fun showsStopLabelForCurrentBookTimedPlayback() {
+    fun finishedListeningExplainsWhyItStoppedWithoutClaimingAnActiveSession() {
+        for ((terminal, message) in listOf(
+            ReaderTtsSessionState.STOPPED_BY_TIMER to "定时结束，已停止朗读",
+            ReaderTtsSessionState.STOPPED_AT_BOOK_END to "已读到全书末尾",
+        )) {
+            val runtime = ReaderTtsRuntimeState(playbackState = terminal, currentBookId = "book-1")
+            val state = ReaderTtsReaderUiStateResolver.resolve("book-1", runtime)
+            assertEquals(message, state.statusText)
+            assertEquals("朗读", state.toggleState.actionLabel)
+            assertFalse(state.toggleState.showImmersiveAction)
+            assertEquals("当前状态：未朗读", ReaderTtsReaderUiStateResolver.resolve("book-2", runtime).statusText)
+        }
+    }
+
+    @Test
+    fun playingPrimaryActionOffersPauseInsteadOfDestroyingTheListeningSession() {
         val state = ReaderTtsReaderUiStateResolver.resolve(
             currentBookId = "book-1",
             runtimeState = ReaderTtsRuntimeState(
@@ -20,8 +35,8 @@ class ReaderTtsReaderUiStateResolverTest {
             ),
         )
 
-        assertEquals("停止朗读 · 28m", state.toggleState.actionLabel)
-        assertEquals("停止朗读 · 28m", state.toggleState.immersiveActionLabel)
+        assertEquals("暂停朗读 · 28m", state.toggleState.actionLabel)
+        assertEquals("暂停朗读 · 28m", state.toggleState.immersiveActionLabel)
         assertTrue(state.toggleState.showImmersiveAction)
         assertEquals("当前状态：朗读中", state.statusText)
         assertEquals("28m", state.remainingTimeLabel)
@@ -55,8 +70,8 @@ class ReaderTtsReaderUiStateResolverTest {
             ),
         )
 
-        assertEquals("停止朗读", state.toggleState.actionLabel)
-        assertEquals("停止朗读", state.toggleState.immersiveActionLabel)
+        assertEquals("暂停朗读", state.toggleState.actionLabel)
+        assertEquals("暂停朗读", state.toggleState.immersiveActionLabel)
         assertTrue(state.toggleState.showImmersiveAction)
         assertEquals("当前状态：朗读中", state.statusText)
         assertEquals(null, state.remainingTimeLabel)
@@ -95,5 +110,31 @@ class ReaderTtsReaderUiStateResolverTest {
         assertFalse(state.toggleState.showImmersiveAction)
         assertEquals("当前状态：未朗读", state.statusText)
         assertEquals(null, state.remainingTimeLabel)
+    }
+
+    @Test
+    fun preparingAudioDoesNotClaimSoundIsAlreadyPlaying() {
+        val state = ReaderTtsReaderUiStateResolver.resolve(
+            "book-1",
+            ReaderTtsRuntimeState(playbackState = ReaderTtsSessionState.STARTING, currentBookId = "book-1"),
+        )
+
+        assertEquals("正在准备离线声音…", state.statusText)
+        assertEquals("暂停朗读", state.toggleState.actionLabel)
+    }
+
+    @Test
+    fun failedPlaybackKeepsTheReasonAndOffersAnExplicitRetryEntry() {
+        val state = ReaderTtsReaderUiStateResolver.resolve(
+            "book-1",
+            ReaderTtsRuntimeState(
+                playbackState = ReaderTtsSessionState.FAILED,
+                currentBookId = "book-1",
+                localErrorMessage = "无法读取声音文件",
+            ),
+        )
+
+        assertEquals("重试朗读", state.toggleState.actionLabel)
+        assertEquals("朗读失败：无法读取声音文件", state.statusText)
     }
 }

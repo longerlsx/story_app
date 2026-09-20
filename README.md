@@ -1,6 +1,8 @@
 # Story App
 
-Android TXT novel reader focused on local reading, external `.txt` import, and reliable reading-anchor restoration.
+Android TXT novel reader with local import, reliable reading-anchor restoration,
+and bundled offline Chinese listening. Current delivery and device-verification
+limits are maintained in [docs/current-state.md](docs/current-state.md).
 
 ## Local Setup
 
@@ -34,6 +36,11 @@ bug records are read when relevant, not as a mandatory sequence for every task.
 
 ## Build Notes
 
+- Prepare the pinned offline voice runtime and model once before building:
+  `scripts/prepare-offline-voice.sh`. The script can reuse an existing download
+  directory; see [voice dependencies](docs/knowledge/offline-voice-dependencies.md).
+  `.local-tts/` stays outside Git, and Gradle packages its assets into the APK.
+  Listening on the phone does not require a network connection or another TTS app.
 - The project is pinned to tool versions that are likely to hit the machine's existing Gradle and Android dependency caches first.
 - The app currently uses `compileSdk = 36` and `targetSdk = 34`. This keeps AndroidX/Compose dependencies happy without changing runtime-target behavior yet.
 - Instrumentation tests currently rely on a dependency-only fallback repo at `.local-maven/` for UTP artifacts on this machine. It is intentionally excluded from `pluginManagement` so Android Gradle Plugin resolution still comes from official repositories.

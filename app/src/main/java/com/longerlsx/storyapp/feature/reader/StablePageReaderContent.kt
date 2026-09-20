@@ -13,10 +13,12 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.foundation.gestures.snapping.SnapLayoutInfoProvider
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,8 +58,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlin.math.abs
-import kotlin.math.sign
 
 /** A chapter window shares one native pager for taps, drags and chapter boundaries. */
 @Composable
@@ -79,13 +79,15 @@ internal fun StablePageReaderContent(
     onCrossChapter: () -> Unit,
     onConfirmed: (Int, List<ReaderPageSlice>, Int) -> Unit,
     onToggleChrome: () -> Unit,
+    pageState: ReaderPageState = rememberReaderPageState(bookId, repository),
+    executeRequests: Boolean = true,
+    onAnchorResolved: ((Long, ReadingAnchor) -> Unit)? = null,
 ) {
-    val fontResolver = LocalFontFamilyResolver.current
+    val calculations = pageState.calculations
+    val display = pageState.display
+    val executing by rememberUpdatedState(executeRequests)
+    val anchorCallback by rememberUpdatedState(onAnchorResolved)
     val layoutDirection = LocalLayoutDirection.current
-    val calculations = remember(bookId, repository, fontResolver, layoutDirection) {
-        ChapterPageCalculations(bookId, repository, fontResolver, layoutDirection)
-    }
-    val display = remember(bookId) { PageWindowDisplay() }
     val confirmedCallback by rememberUpdatedState(onConfirmed)
     val crossChapterCallback by rememberUpdatedState(onCrossChapter)
     val interruptCallback by rememberUpdatedState(onManualFollowInterruption)
@@ -118,8 +120,22 @@ internal fun StablePageReaderContent(
             with(density) { viewport.topPaddingPx.toDp() },
             with(density) { viewport.bottomPaddingPx.toDp() },
         )
-        val pager = rememberPagerState { display.window?.pages?.size ?: 0 }
         val request = position.request
+        // A mode handoff can prepare PAGE without mounting a second reader. Its first composition
+        // starts at the prepared page; placement still acknowledges the request below.
+        val initialPage = remember(pageState) {
+            val prepared = pageState.prepared?.takeIf { it.requestId == request?.id && it.layout == layout }
+            if (prepared != null) {
+                display.window = calculations.window(prepared.result.page.chapter, appearance, chapterIndices)
+                display.placedPages = emptySet()
+                pageState.prepared = null
+                display.window!!.pages.indexOfFirst { it.id == prepared.result.page.id }.coerceAtLeast(0)
+            } else {
+                display.window?.pages?.indexOfFirst { it.id == display.confirmedPageId }?.coerceAtLeast(0) ?: 0
+            }
+        }
+        val pager = rememberPagerState(initialPage = initialPage) { display.window?.pages?.size ?: 0 }
+        SideEffect { if (executeRequests) position.notePageLayout(layout) }
 
         fun installWindow(window: ChapterPageWindow, visible: WindowPage) {
             if (display.window == window) return
@@ -133,18 +149,41 @@ internal fun StablePageReaderContent(
             pager.requestScrollToPage(window.pages.indexOfFirst { it.id == visible.id }.coerceAtLeast(0))
         }
 
-        fun centeredWindow(batch: ChapterPages, look: PageAppearance): ChapterPageWindow {
-            val at = chapterIndices.indexOf(batch.chapterIndex)
-            return ChapterPageWindow(
-                center = batch,
-                previous = chapterIndices.getOrNull(at - 1)?.let { calculations.cached(it, look.layout) },
-                next = chapterIndices.getOrNull(at + 1)?.let { calculations.cached(it, look.layout) },
-                appearance = look,
+        fun centeredWindow(batch: ChapterPages, look: PageAppearance): ChapterPageWindow =
+            calculations.window(batch, look, chapterIndices)
+
+        fun snapTargetIndex(): Int {
+            val window = display.window ?: return 0
+            val pending = position.request
+            val resolved = pending?.let { calculations.resolveCached(it, window.appearance.layout, chapterIndices) }
+            val desiredIds = listOfNotNull(
+                resolved?.page?.id,
+                display.acceptedPageId?.takeIf { display.acceptedEpoch == position.navigationEpoch },
+                display.gesture?.sourcePageId,
+                display.confirmedPageId,
             )
+            return desiredIds.firstNotNullOfOrNull { id ->
+                window.pages.indexOfFirst { it.id == id }.takeIf { it >= 0 }
+            } ?: pager.currentPage.coerceIn(window.pages.indices)
+        }
+
+        fun acceptTurn(direction: Int, sourceLayout: ReaderPageLayoutKey, epoch: Long? = null) {
+            val accepted = position.turn(direction, sourceLayout, epoch) ?: return
+            calculations.resolveCached(accepted, display.window?.appearance?.layout ?: layout, chapterIndices)?.let {
+                if (display.window?.pages?.any { candidate -> candidate.id == it.page.id } == true) {
+                    display.acceptedPageId = it.page.id
+                    display.acceptedEpoch = accepted.navigationEpoch
+                }
+            }
         }
 
         fun recordPage(page: WindowPage, requestId: Long? = null, targetAnchor: ReadingAnchor? = null) {
+            if (!executing || anchorCallback != null) return
             val previousChapter = position.confirmedAnchor.chapterIndex
+            // Only accepted page turns are manual navigation. Following speech, opening its
+            // notification or resuming listening also crosses chapters, without stopping audio.
+            val wasManualTurn = requestId != null && position.request
+                ?.takeIf { it.id == requestId }?.turns?.isNotEmpty() == true
             val anchor = targetAnchor ?: ReadingAnchor(page.chapter.chapterIndex, page.slice.visibleStartCharOffset)
             val accepted = if (requestId != null) position.confirm(requestId, anchor) else position.recordViewport(anchor)
             if (!accepted) return
@@ -154,60 +193,95 @@ internal fun StablePageReaderContent(
             display.confirmedWindow = display.window
             display.confirmedPageId = page.id
             calculations.retain(chapterIndices, page.chapter.chapterIndex, setOf(page.chapter.layout))
-            if (previousChapter != anchor.chapterIndex) crossChapterCallback()
+            if (wasManualTurn && previousChapter != anchor.chapterIndex) crossChapterCallback()
             confirmedCallback(anchor.chapterIndex, page.chapter.pages, page.pageIndex)
         }
 
-        LaunchedEffect(layout) {
-            if (display.window != null && display.window?.appearance?.layout != layout && position.request == null) {
+        LaunchedEffect(layout, executeRequests) {
+            if (executing && anchorCallback == null && position.error == null && display.window != null && display.window?.appearance?.layout != layout && position.request == null) {
                 position.reflow()
             }
         }
 
-        LaunchedEffect(position.error) {
-            if (position.error != null) {
-                val previous = display.confirmedWindow ?: return@LaunchedEffect
-                val page = previous.pages.firstOrNull { it.id == display.confirmedPageId } ?: return@LaunchedEffect
-                installWindow(previous, page)
-                pager.requestScrollToPage(previous.pages.indexOf(page))
+        LaunchedEffect(position.error, position.request?.id, appearance) {
+            val failure = position.error
+            if (failure != null && position.request == null) {
+                if (!position.hasConfirmedLayout) return@LaunchedEffect
+                val anchor = position.confirmedAnchor
+                val previous = display.confirmedWindow
+                val page = previous?.pages?.firstOrNull { it.id == display.confirmedPageId }
+                    ?.takeIf { it.chapter.chapterIndex == anchor.chapterIndex &&
+                        anchor.charOffset in it.slice.startCharOffset until it.slice.endCharOffset }
+                if (previous != null && page != null && previous.appearance.matchesViewport(appearance)) {
+                    installWindow(previous, page)
+                    pager.requestScrollToPage(previous.pages.indexOf(page))
+                } else if (layout.widthPx > 0 && layout.heightPx > 0) {
+                    try {
+                        val restored = calculations.resolve(ReaderPositionRequest(-1, anchor), layout, chapterIndices)
+                        if (position.request == null && position.error == failure && position.confirmedAnchor == anchor) {
+                            installWindow(centeredWindow(restored.page.chapter, appearance), restored.page)
+                        }
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        // The original failure and its retry target remain authoritative. Do not
+                        // loop, confirm fallback progress or apply old pixels to the new viewport.
+                    }
+                }
             }
         }
 
-        LaunchedEffect(request?.id, layout, chapterIndices, calculations) {
+        LaunchedEffect(request?.id, layout, chapterIndices, calculations, executeRequests, onAnchorResolved != null) {
+            if (!executing) return@LaunchedEffect
             val intent = request ?: return@LaunchedEffect
             if (layout.widthPx <= 0 || layout.heightPx <= 0) return@LaunchedEffect
             try {
                 calculations.retain(chapterIndices, intent.anchor.chapterIndex, intent.turns.map { it.layout }.toSet() + layout)
+                if (anchorCallback != null) {
+                    val anchor = calculations.resolveAnchor(intent, layout, chapterIndices)
+                    if (executing && position.request?.id == intent.id) anchorCallback?.invoke(intent.id, anchor)
+                    return@LaunchedEffect
+                }
                 val resolved = calculations.resolve(intent, layout, chapterIndices)
                 val target = resolved.page
-                snapshotFlow { !display.userGesture && !pager.isScrollInProgress }.first { it }
-                if (position.request?.id != intent.id) return@LaunchedEffect
-                val oldWindow = display.window
-                val existingIndex = oldWindow?.takeIf { it.appearance.layout == layout }
-                    ?.pages?.indexOfFirst { it.id == target.id } ?: -1
-                if (existingIndex >= 0) {
-                    pager.animateScrollToPage(existingIndex)
-                } else {
-                    installWindow(centeredWindow(target.chapter, appearance), target)
+                while (true) {
+                    try {
+                        snapshotFlow { !display.userGesture && !pager.isScrollInProgress }.first { it }
+                        if (!executing || anchorCallback != null || position.request?.id != intent.id) return@LaunchedEffect
+                        val oldWindow = display.window
+                        val existingIndex = oldWindow?.takeIf { it.appearance.layout == layout }
+                            ?.pages?.indexOfFirst { it.id == target.id } ?: -1
+                        if (existingIndex >= 0) {
+                            if (pager.settledPage != existingIndex) pager.animateScrollToPage(existingIndex)
+                        } else {
+                            installWindow(centeredWindow(target.chapter, appearance), target)
+                        }
+                        // Layout, not a computed page number, acknowledges a navigation request.
+                        snapshotFlow {
+                            val window = display.window
+                            !display.userGesture && !pager.isScrollInProgress &&
+                                window?.pages?.getOrNull(pager.settledPage)?.id == target.id &&
+                                target.id in display.placedPages
+                        }.first { it }
+                        recordPage(target, intent.id, resolved.anchor)
+                        break
+                    } catch (interrupted: CancellationException) {
+                        // A new finger may interrupt Pager's scroll mutation without revoking the
+                        // request. Wait for that gesture and resume its accepted target; an actual
+                        // request/effect cancellation still propagates immediately.
+                        currentCoroutineContext().ensureActive()
+                    }
                 }
-                // Layout, not a computed page number, acknowledges a navigation request.
-                snapshotFlow {
-                    val window = display.window
-                    !display.userGesture && !pager.isScrollInProgress &&
-                        window?.pages?.getOrNull(pager.settledPage)?.id == target.id &&
-                        target.id in display.placedPages
-                }.first { it }
-                recordPage(target, intent.id, resolved.anchor)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {
-                position.fail(intent.id, failure.message ?: "当前章节排版失败，请重试。")
+                if (executing) position.fail(intent.id, failure.message ?: "当前章节排版失败，请重试。")
             }
         }
 
         // Optional neighbors follow the visible target; a new request cancels this work first.
-        LaunchedEffect(display.window?.center, position.request?.id, calculations) {
-            if (position.request != null) return@LaunchedEffect
+        LaunchedEffect(display.window?.center, position.request?.id, calculations, executeRequests, onAnchorResolved != null) {
+            if (!executing || anchorCallback != null || position.request != null || position.error != null) return@LaunchedEffect
             val initial = display.window ?: return@LaunchedEffect
             val at = chapterIndices.indexOf(initial.center.chapterIndex)
             for (neighbor in listOfNotNull(chapterIndices.getOrNull(at + 1), chapterIndices.getOrNull(at - 1))) {
@@ -215,7 +289,7 @@ internal fun StablePageReaderContent(
                     calculations.pages(neighbor, initial.appearance.layout)
                     snapshotFlow { !display.userGesture && !pager.isScrollInProgress }.first { it }
                     val current = display.window ?: return@LaunchedEffect
-                    if (position.request != null || current.center != initial.center) return@LaunchedEffect
+                    if (!executing || anchorCallback != null || position.request != null || current.center != initial.center) return@LaunchedEffect
                     val visible = current.pages.getOrNull(pager.settledPage) ?: return@LaunchedEffect
                     installWindow(centeredWindow(current.center, current.appearance), visible)
                 } catch (cancelled: CancellationException) {
@@ -226,7 +300,8 @@ internal fun StablePageReaderContent(
             }
         }
 
-        LaunchedEffect(followTargetCharOffset, activeHighlight?.chapterIndex, position.request?.id) {
+        LaunchedEffect(followTargetCharOffset, activeHighlight?.chapterIndex, position.request?.id, executeRequests) {
+            if (!executing || anchorCallback != null) return@LaunchedEffect
             val offset = followTargetCharOffset ?: return@LaunchedEffect
             if (position.request != null) return@LaunchedEffect
             val window = display.window ?: return@LaunchedEffect
@@ -239,94 +314,101 @@ internal fun StablePageReaderContent(
             }
         }
 
-        val nativeFling = PagerDefaults.flingBehavior(pager)
-        val flingBehavior = remember(nativeFling, display, position) {
+        val currentSnapTarget by rememberUpdatedState(newValue = { snapTargetIndex() })
+        val snapProvider = remember(pager) {
+            object : SnapLayoutInfoProvider {
+                override fun calculateApproachOffset(velocity: Float, decayOffset: Float) = 0f
+                override fun calculateSnapOffset(velocity: Float): Float =
+                    pager.getOffsetDistanceInPages(currentSnapTarget()) * pager.layoutInfo.pageSize
+            }
+        }
+        val nativeSnap = rememberSnapFlingBehavior(snapProvider)
+        val flingBehavior = remember(nativeSnap, display) {
             object : TargetedFlingBehavior {
                 override suspend fun ScrollScope.performFling(
                     initialVelocity: Float,
                     onRemainingDistanceUpdated: (Float) -> Unit,
                 ): Float {
-                    val gestureId = display.gesture?.id
+                    val owner = display.gesture?.takeIf { it.released }?.id
                     try {
-                        val remaining = with(nativeFling) {
-                            performFling(initialVelocity, onRemainingDistanceUpdated)
-                        }
-                        currentCoroutineContext().ensureActive()
-                        display.gesture?.takeIf { it.id == gestureId }?.let {
+                        return with(nativeSnap) { performFling(initialVelocity, onRemainingDistanceUpdated) }
+                    } finally {
+                        // Fling owns animation only. An interrupted animation never retracts input.
+                        display.gesture?.takeIf { it.id == owner }?.let {
                             display.gesture = it.copy(flingFinished = true)
                         }
-                        return remaining
-                    } catch (cancelled: CancellationException) {
-                        if (display.gesture?.id == gestureId) {
-                            display.gesture = null
-                            if (position.request != null) position.reflow()
-                        }
-                        throw cancelled
                     }
                 }
             }
         }
-
-        LaunchedEffect(pager, display, position) {
+        LaunchedEffect(pager, display) {
             pager.interactionSource.interactions.collect { interaction ->
+                val current = display.gesture
                 when (interaction) {
-                    is DragInteraction.Start -> {
-                        val window = display.window ?: return@collect
-                        display.gesture = PageGesture(display.nextGestureId++, window, pager.settledPage)
-                        interruptCallback()
+                    is DragInteraction.Start -> if (current != null) {
+                        display.gesture = current.copy(nativeDrag = interaction)
                     }
-                    is DragInteraction.Stop -> {
-                        // Pointer release precedes the native fling; its brief idle is not a destination.
-                        display.gesture?.let { display.gesture = it.copy(released = true) }
-                    }
-                    is DragInteraction.Cancel -> {
+                    is DragInteraction.Cancel -> if (current?.nativeDrag == interaction.start) {
                         display.gesture = null
-                        if (position.request != null) position.reflow()
                     }
+                    else -> Unit
                 }
             }
         }
-
         val gesture = display.gesture
-        LaunchedEffect(gesture?.id, gesture?.released, gesture?.flingFinished) {
-            val completed = gesture?.takeIf { it.released && it.flingFinished } ?: return@LaunchedEffect
-            try {
-                // The native pager may finish adjusting its page after our fling delegate returns.
-                snapshotFlow { !pager.isScrollInProgress }.first { it }
-                if (display.gesture?.id != completed.id) return@LaunchedEffect
-                val current = display.window ?: return@LaunchedEffect
-                val sourceId = completed.window.pages.getOrNull(completed.startingPage)?.id
-                val startingIndex = current.pages.indexOfFirst { it.id == sourceId }
-                if (startingIndex < 0) {
-                    position.reflow()
-                    return@LaunchedEffect
-                }
-                val distance = pager.settledPage - startingIndex
-                repeat(abs(distance)) { position.turn(distance.sign, completed.window.appearance.layout) }
-                if (distance == 0 && position.request != null) position.reflow()
-                // The shared request path checks actual placement, handles timeout and saves progress.
-            } finally {
-                if (display.gesture?.id == completed.id) display.gesture = null
+        LaunchedEffect(gesture?.id, gesture?.released, gesture?.flingFinished, executeRequests) {
+            if (!executing) {
+                display.gesture = null
+                return@LaunchedEffect
             }
+            val finished = gesture?.takeIf { it.released && it.flingFinished } ?: return@LaunchedEffect
+            snapshotFlow { !pager.isScrollInProgress }.first { it }
+            if (display.gesture?.id == finished.id) display.gesture = null
         }
 
         HorizontalPager(
             state = pager,
             flingBehavior = flingBehavior,
+            userScrollEnabled = executeRequests && onAnchorResolved == null,
             key = { index -> checkNotNull(display.window).pages[index].id },
-            modifier = Modifier.fillMaxSize().readerBodyTapInput { offset, size ->
-                if (dismissChrome) {
+            modifier = Modifier.fillMaxSize().readerPageGestureInput(
+                enabled = executeRequests && onAnchorResolved == null,
+                longPressEnabled = enableLongPress && !dismissChrome,
+                forwardSign = if (layoutDirection == LayoutDirection.Ltr) -1f else 1f,
+                density = density.density,
+                onStart = {
+                    val window = display.window
+                    if (window == null) null else {
+                        val id = display.nextGestureId++
+                        display.gesture = PageGesture(id, window.appearance.layout,
+                            window.pages.getOrNull(pager.settledPage)?.id, position.navigationEpoch)
+                        id
+                    }
+                },
+                onDrag = { owner ->
+                    if (display.gesture?.id == owner) interruptCallback()
+                },
+                onRelease = { owner, direction ->
+                    display.gesture?.takeIf { it.id == owner }?.let { input ->
+                        if (direction != 0) acceptTurn(direction, input.layout, input.navigationEpoch)
+                        display.gesture = input.copy(released = true, flingFinished = input.nativeDrag == null)
+                    }
+                },
+                onCancel = { owner -> if (display.gesture?.id == owner) display.gesture = null },
+            ).readerBodyTapInput { offset, size ->
+                val zone = ReaderTapZone.resolve(offset.x, size.width.toFloat())
+                if (dismissChrome || zone == ReaderTapZone.TOGGLE_CHROME) {
                     toggleCallback()
-                } else {
-                    when (ReaderTapZone.resolve(offset.x, size.width.toFloat())) {
+                } else if (executing && anchorCallback == null) {
+                    when (zone) {
                         ReaderTapZone.TOGGLE_CHROME -> toggleCallback()
                         ReaderTapZone.PREVIOUS -> {
                             interruptCallback()
-                            position.turn(-1, display.window?.appearance?.layout ?: layout)
+                            acceptTurn(-1, display.window?.appearance?.layout ?: layout)
                         }
                         ReaderTapZone.NEXT -> {
                             interruptCallback()
-                            position.turn(1, display.window?.appearance?.layout ?: layout)
+                            acceptTurn(1, display.window?.appearance?.layout ?: layout)
                         }
                     }
                 }
@@ -335,6 +417,8 @@ internal fun StablePageReaderContent(
             val window = display.window ?: return@HorizontalPager
             val page = window.pages.getOrNull(index) ?: return@HorizontalPager
             val look = window.appearance
+            // A stale pixel layout cannot be painted into a changed viewport while restoring.
+            if (!look.matchesViewport(appearance)) return@HorizontalPager
             ReaderPageSurface(
                 page = page.slice,
                 themePalette = themePalette,
@@ -347,7 +431,7 @@ internal fun StablePageReaderContent(
                     ReaderTtsCharacterRange(it.startCharOffset, it.endCharOffset)
                 },
                 onTapText = null,
-                onLongPressCharOffset = if (enableLongPress && index == pager.currentPage && !dismissChrome) {
+                onLongPressCharOffset = if (executeRequests && onAnchorResolved == null && enableLongPress && index == pager.currentPage && !dismissChrome) {
                     { offset -> restartCallback(page.chapter.chapterIndex, offset) }
                 } else null,
                 modifier = Modifier.fillMaxSize().onPlaced {
@@ -387,23 +471,28 @@ internal fun Modifier.readerBodyTapInput(onTap: (Offset, IntSize) -> Unit): Modi
     }
 }
 
-private data class PageAppearance(
+internal data class PageAppearance(
     val layout: ReaderPageLayoutKey,
     val fontSize: TextUnit,
     val lineHeight: TextUnit,
     val paragraphSpacing: Dp,
     val topPadding: Dp,
     val bottomPadding: Dp,
-)
+) {
+    fun matchesViewport(other: PageAppearance): Boolean =
+        layout.widthPx == other.layout.widthPx && layout.heightPx == other.layout.heightPx &&
+            layout.density == other.layout.density && layout.fontScale == other.layout.fontScale &&
+            topPadding == other.topPadding && bottomPadding == other.bottomPadding
+}
 
-private data class ChapterPages(val chapterIndex: Int, val layout: ReaderPageLayoutKey, val pages: List<ReaderPageSlice>)
+internal data class ChapterPages(val chapterIndex: Int, val layout: ReaderPageLayoutKey, val pages: List<ReaderPageSlice>)
 
-private data class WindowPage(val chapter: ChapterPages, val pageIndex: Int) {
+internal data class WindowPage(val chapter: ChapterPages, val pageIndex: Int) {
     val slice get() = chapter.pages[pageIndex]
     val id get() = "${chapter.chapterIndex}:${slice.startCharOffset}:${slice.endCharOffset}"
 }
 
-private data class ChapterPageWindow(
+internal data class ChapterPageWindow(
     val center: ChapterPages,
     val previous: ChapterPages?,
     val next: ChapterPages?,
@@ -416,15 +505,17 @@ private data class ChapterPageWindow(
     }
 }
 
-private data class PageGesture(
+internal data class PageGesture(
     val id: Long,
-    val window: ChapterPageWindow,
-    val startingPage: Int,
+    val layout: ReaderPageLayoutKey,
+    val sourcePageId: String?,
+    val navigationEpoch: Long,
+    val nativeDrag: DragInteraction.Start? = null,
     val released: Boolean = false,
     val flingFinished: Boolean = false,
 )
 
-private class PageWindowDisplay {
+internal class PageWindowDisplay {
     var window by mutableStateOf<ChapterPageWindow?>(null)
     var placedPages by mutableStateOf<Set<String>>(emptySet())
     var gesture by mutableStateOf<PageGesture?>(null)
@@ -432,12 +523,36 @@ private class PageWindowDisplay {
     val userGesture get() = gesture != null
     var confirmedWindow: ChapterPageWindow? = null
     var confirmedPageId: String? = null
+    var acceptedPageId: String? = null
+    var acceptedEpoch: Long = -1
 }
 
-private data class ResolvedPage(val page: WindowPage, val anchor: ReadingAnchor)
+internal data class ResolvedPage(val page: WindowPage, val anchor: ReadingAnchor)
+internal data class PreparedReaderPage(val requestId: Long, val layout: ReaderPageLayoutKey, val result: ResolvedPage)
+
+internal class ReaderPageState internal constructor(internal val calculations: ChapterPageCalculations) {
+    internal val display = PageWindowDisplay()
+    internal var prepared: PreparedReaderPage? = null
+
+    suspend fun prepare(request: ReaderPositionRequest, layout: ReaderPageLayoutKey, chapters: List<Int>): ReadingAnchor {
+        val resolved = calculations.resolve(request, layout, chapters)
+        currentCoroutineContext().ensureActive()
+        prepared = PreparedReaderPage(request.id, layout, resolved)
+        return resolved.anchor
+    }
+}
+
+@Composable
+internal fun rememberReaderPageState(bookId: String, repository: BookRepository): ReaderPageState {
+    val resolver = LocalFontFamilyResolver.current
+    val direction = LocalLayoutDirection.current
+    return remember(bookId, repository, resolver, direction) {
+        ReaderPageState(ChapterPageCalculations(bookId, repository, resolver, direction))
+    }
+}
 
 /** One computation at a time; each worker owns its measurer and its mutable layout cache. */
-private class ChapterPageCalculations(
+internal class ChapterPageCalculations(
     private val bookId: String,
     private val repository: BookRepository,
     private val fontResolver: FontFamily.Resolver,
@@ -454,65 +569,101 @@ private class ChapterPageCalculations(
         cache.keys.removeAll { it.first !in retained || it.second !in layouts }
     }
 
-    suspend fun pages(chapter: Int, layout: ReaderPageLayoutKey): ChapterPages = mutex.withLock {
+    suspend fun pages(chapter: Int, layout: ReaderPageLayoutKey): ChapterPages {
         currentCoroutineContext().ensureActive()
-        cached(chapter, layout)?.let { return@withLock it }
-        val content = repository.getChapterText(bookId, chapter) ?: error("无法读取第 ${chapter + 1} 章正文。")
-        val result = withContext(Dispatchers.Default) {
-            Trace.beginSection("Reader.paginate:$chapter:${layout.fontSizeSp}:${content.length}")
-            try {
-                val measurer = TextMeasurer(
-                    defaultFontFamilyResolver = fontResolver,
-                    defaultDensity = Density(layout.density, layout.fontScale),
-                    defaultLayoutDirection = layoutDirection,
-                )
-                paginatePageSlices(
-                    content = content,
-                    availableWidthPx = layout.widthPx,
-                    availableHeightPx = layout.heightPx,
-                    paragraphSpacingPx = layout.paragraphSpacingPx,
-                    textMeasurer = measurer,
-                    textStyle = TextStyle(
-                        fontSize = layout.fontSizeSp.sp,
-                        lineHeight = (layout.fontSizeSp * layout.lineHeightMultiplier).sp,
-                        textAlign = TextAlign.Start,
-                        platformStyle = PlatformTextStyle(includeFontPadding = false),
-                    ),
-                    cancellationContext = currentCoroutineContext(),
-                )
-            } finally {
-                Trace.endSection()
+        cached(chapter, layout)?.let { return it }
+        return mutex.withLock {
+            currentCoroutineContext().ensureActive()
+            cached(chapter, layout)?.let { return@withLock it }
+            val content = repository.getChapterText(bookId, chapter) ?: error("无法读取第 ${chapter + 1} 章正文。")
+            val result = withContext(Dispatchers.Default) {
+                Trace.beginSection("Reader.paginate:$chapter:${layout.fontSizeSp}:${content.length}")
+                try {
+                    val measurer = TextMeasurer(
+                        defaultFontFamilyResolver = fontResolver,
+                        defaultDensity = Density(layout.density, layout.fontScale),
+                        defaultLayoutDirection = layoutDirection,
+                    )
+                    paginatePageSlices(
+                        content = content,
+                        availableWidthPx = layout.widthPx,
+                        availableHeightPx = layout.heightPx,
+                        paragraphSpacingPx = layout.paragraphSpacingPx,
+                        textMeasurer = measurer,
+                        textStyle = TextStyle(
+                            fontSize = layout.fontSizeSp.sp,
+                            lineHeight = (layout.fontSizeSp * layout.lineHeightMultiplier).sp,
+                            textAlign = TextAlign.Start,
+                            platformStyle = PlatformTextStyle(includeFontPadding = false),
+                        ),
+                        cancellationContext = currentCoroutineContext(),
+                    )
+                } finally {
+                    Trace.endSection()
+                }
             }
+            currentCoroutineContext().ensureActive()
+            ChapterPages(chapter, layout, result).also { cache[chapter to layout] = it }
         }
-        currentCoroutineContext().ensureActive()
-        ChapterPages(chapter, layout, result).also { cache[chapter to layout] = it }
     }
 
+    fun window(batch: ChapterPages, appearance: PageAppearance, chapters: List<Int>): ChapterPageWindow {
+        val at = chapters.indexOf(batch.chapterIndex)
+        return ChapterPageWindow(batch,
+            chapters.getOrNull(at - 1)?.let { cached(it, appearance.layout) },
+            chapters.getOrNull(at + 1)?.let { cached(it, appearance.layout) }, appearance)
+    }
+
+    suspend fun resolveAnchor(request: ReaderPositionRequest, layout: ReaderPageLayoutKey, chapters: List<Int>): ReadingAnchor =
+        resolveNavigation(request, layout, chapters) { chapter, key ->
+            currentCoroutineContext().ensureActive()
+            pages(chapter, key)
+        }
+
     suspend fun resolve(request: ReaderPositionRequest, layout: ReaderPageLayoutKey, chapters: List<Int>): ResolvedPage {
+        val anchor = resolveAnchor(request, layout, chapters)
+        return resolvePage(anchor, pages(anchor.chapterIndex, layout))
+    }
+
+    fun resolveCached(request: ReaderPositionRequest, layout: ReaderPageLayoutKey, chapters: List<Int>): ResolvedPage? {
+        if (request.anchor.chapterIndex !in chapters) return null
+        val anchor = resolveNavigation(request, layout, chapters) { chapter, key ->
+            cached(chapter, key) ?: return null
+        }
+        return resolvePage(anchor, cached(anchor.chapterIndex, layout) ?: return null)
+    }
+
+    /** Inline loading keeps cached-only and suspending navigation on exactly the same algorithm. */
+    private inline fun resolveNavigation(
+        request: ReaderPositionRequest,
+        layout: ReaderPageLayoutKey,
+        chapters: List<Int>,
+        load: (Int, ReaderPageLayoutKey) -> ChapterPages,
+    ): ReadingAnchor {
         require(request.anchor.chapterIndex in chapters) { "章节不存在。" }
-        val neededLayouts = request.turns.map { it.layout }.toSet() + layout
         var anchor = request.anchor
         if (request.lastPage) {
-            val initial = pages(anchor.chapterIndex, request.turns.firstOrNull()?.layout ?: layout)
+            val initial = load(anchor.chapterIndex, request.lastPageLayout ?: request.turns.firstOrNull()?.layout ?: layout)
             anchor = ReadingAnchor(anchor.chapterIndex, initial.pages.last().visibleStartCharOffset)
         }
         for (turn in request.turns) {
-            currentCoroutineContext().ensureActive()
-            val current = pages(anchor.chapterIndex, turn.layout)
+            val current = load(anchor.chapterIndex, turn.layout)
             val targetIndex = ReaderPageAnchorMapper.pageIndexForCharOffset(current.pages, anchor.charOffset) + turn.direction
             if (targetIndex in current.pages.indices) {
                 anchor = ReadingAnchor(current.chapterIndex, current.pages[targetIndex].visibleStartCharOffset)
             } else {
                 val neighbor = chapters.getOrNull(chapters.indexOf(current.chapterIndex) + turn.direction)
                 if (neighbor != null) {
-                    retain(chapters, neighbor, neededLayouts)
-                    val target = pages(neighbor, turn.layout)
+                    val target = load(neighbor, turn.layout)
                     val page = if (turn.direction > 0) target.pages.first() else target.pages.last()
                     anchor = ReadingAnchor(neighbor, page.visibleStartCharOffset)
                 }
             }
         }
-        val target = pages(anchor.chapterIndex, layout)
+        return anchor
+    }
+
+    private fun resolvePage(anchor: ReadingAnchor, target: ChapterPages): ResolvedPage {
         val page = WindowPage(target, ReaderPageAnchorMapper.pageIndexForCharOffset(target.pages, anchor.charOffset))
         val raw = page.slice.rawText
         val local = (anchor.charOffset - page.slice.startCharOffset).coerceIn(0, raw.length)

@@ -38,6 +38,7 @@ import com.longerlsx.storyapp.feature.importer.ExternalImportPayload
 import com.longerlsx.storyapp.feature.reader.ReaderScreen
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsIntentFactory
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsNavigationPolicy
+import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsStartRequest
 import com.longerlsx.storyapp.feature.source.SourceEntryScreen
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
@@ -122,9 +123,11 @@ private fun ReadyStoryApp(
     val snackbarHost = remember { SnackbarHostState() }
     val importMutex = remember { Mutex() }
     var importing by remember { mutableStateOf(false) }
+    var pendingListeningOpenRequest by remember { mutableStateOf<ReaderTtsStartRequest?>(null) }
     val settingsWriteError by application.readerSettingsStore.writeError.collectAsState()
     val progressWriteError by application.progressWriteError.collectAsState()
     fun openReaderWithTtsGuard(bookId: String) {
+        pendingListeningOpenRequest = null
         if (
             ReaderTtsNavigationPolicy.shouldStopForOpenReader(
                 playbackState = ttsController.playbackState,
@@ -181,6 +184,13 @@ private fun ReadyStoryApp(
         }
     }
     LaunchedEffect(externalIntent) {
+        val listeningRequest = ReaderTtsIntentFactory.extractOpenReaderRequest(externalIntent)
+        if (listeningRequest != null) {
+            openReaderWithTtsGuard(listeningRequest.bookId)
+            pendingListeningOpenRequest = listeningRequest
+            onExternalIntentConsumed()
+            return@LaunchedEffect
+        }
         val notificationBookId = ReaderTtsIntentFactory.extractOpenReaderBookId(externalIntent)
         if (notificationBookId != null) {
             openReaderWithTtsGuard(notificationBookId)
@@ -234,6 +244,8 @@ private fun ReadyStoryApp(
                 settingsStore = application.readerSettingsStore,
                 ttsController = ttsController,
                 onBack = appState::openBookshelf,
+                listeningOpenRequest = pendingListeningOpenRequest,
+                onListeningOpenHandled = { pendingListeningOpenRequest = null },
             )
 
             AppScreen.SOURCE_ENTRY -> SourceEntryScreen(

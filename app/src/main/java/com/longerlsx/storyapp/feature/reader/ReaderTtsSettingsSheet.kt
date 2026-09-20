@@ -39,6 +39,12 @@ fun ReaderTtsSettingsSheet(
     onUpdateSpeechRate: (Float) -> Unit,
     onUpdatePitch: (Float) -> Unit,
     onUpdateTimerPreset: (ReaderTtsTimerPreset) -> Unit,
+    onStartFromCurrent: (() -> Unit)? = null,
+    onResumeSaved: (() -> Unit)? = null,
+    onStop: (() -> Unit)? = null,
+    onPreviewVoice: (() -> Unit)? = null,
+    isVoicePreviewing: Boolean = false,
+    savedListeningLabel: String? = null,
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -48,6 +54,20 @@ fun ReaderTtsSettingsSheet(
             style = MaterialTheme.typography.bodyMedium,
             color = themePalette.content,
         )
+        if (!savedListeningLabel.isNullOrBlank()) {
+            Text("上次听到：$savedListeningLabel", style = MaterialTheme.typography.bodySmall, color = themePalette.content)
+        }
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            onResumeSaved?.let { ReaderTtsChoicePill("继续上次听书", false, themePalette, it) }
+            onStartFromCurrent?.let { ReaderTtsChoicePill("从当前文字开始", false, themePalette, it) }
+            onStop?.takeIf { !isVoicePreviewing }?.let { ReaderTtsChoicePill("停止朗读", false, themePalette, it) }
+        }
+        onPreviewVoice?.let {
+            ReaderTtsChoicePill(if (isVoicePreviewing) "停止试听" else "试听当前音色", false, themePalette, it)
+        }
         if (!remainingTimeLabel.isNullOrBlank()) {
             Text(
                 text = "剩余时间：$remainingTimeLabel",
@@ -64,20 +84,20 @@ fun ReaderTtsSettingsSheet(
         }
         if (!availableVoicesLoaded) {
             Text(
-                text = "正在加载系统音色...",
+                text = "正在载入离线音色…",
                 style = MaterialTheme.typography.bodySmall,
                 color = themePalette.content.copy(alpha = 0.65f),
             )
         } else if (availableVoices.isEmpty()) {
             Text(
-                text = "已筛除非大陆中文音色，当前将使用系统默认音色。",
+                text = "离线音色暂不可用，请重新打开听书设置。",
                 style = MaterialTheme.typography.bodySmall,
                 color = themePalette.content.copy(alpha = 0.65f),
             )
         } else {
             ReaderTtsChoiceSection(
                 title = "音色",
-                supportingText = "仅显示可用的大陆中文音色。",
+                supportingText = "声音在手机本地生成，无需联网。",
                 themePalette = themePalette,
             ) {
                 availableVoices.forEach { option ->
@@ -106,7 +126,7 @@ fun ReaderTtsSettingsSheet(
         }
         ReaderTtsChoiceSection(
             title = "音高",
-            supportingText = "调低会更沉稳，调高会更清亮。",
+            supportingText = "调整音调高低，不会更换发音人。",
             themePalette = themePalette,
         ) {
             PitchOptions.forEach { option ->

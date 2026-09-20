@@ -1,6 +1,7 @@
 .gradle/
 .kotlin/
 .local-maven/
+.local-tts/
 .idea/
 local.properties
 build/

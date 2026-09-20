@@ -1,6 +1,7 @@
 package com.longerlsx.storyapp.feature.reader
 
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsRuntimeState
+import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsSessionState
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -67,5 +68,20 @@ class ReaderTtsTransientMessageClearancePolicyTest {
 
         assertFalse(clearance.clearLocalErrorMessage)
         assertFalse(clearance.clearLocalStatusMessage)
+    }
+
+    @Test
+    fun failedPlaybackDoesNotLoseItsErrorMerelyBecauseTheToastHasTimedOut() {
+        val clearance = ReaderTtsTransientMessageClearancePolicy.resolve(
+            currentBookId = "book-1",
+            runtimeState = ReaderTtsRuntimeState(
+                currentBookId = "book-1",
+                playbackState = ReaderTtsSessionState.FAILED,
+                localErrorMessage = "声音准备失败",
+            ),
+            displayedMessage = "声音准备失败",
+        )
+
+        assertFalse(clearance.clearLocalErrorMessage)
     }
 }

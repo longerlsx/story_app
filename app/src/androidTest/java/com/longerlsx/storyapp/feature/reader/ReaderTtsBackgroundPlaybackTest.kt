@@ -4,6 +4,8 @@ import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.media.session.MediaController
+import android.media.session.MediaSession
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -60,6 +62,102 @@ class ReaderTtsBackgroundPlaybackTest {
     }
 
     @Test
+    fun pauseAfterRangeStartsReplaysUnfinishedSentenceInsteadOfSkippingIt() {
+        val book = seedBook("range-pause", "范围暂停", listOf("第1章" to "第一句还没听完。"))
+        ActivityScenario.launch<MainActivity>(mainIntent()).use {
+            startPlaybackFor(book.id, book.title, 0, 0, "第1章")
+            val engine = engineHarness.awaitSpokenSegment(0, 0)
+            waitForPlaybackState(ReaderTtsSessionState.PLAYING)
+            engine.startRange(0, 4)
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            context.startService(ReaderTtsIntentFactory.pauseService(context))
+            waitForPlaybackState(ReaderTtsSessionState.PAUSED_BY_USER)
+            assertEquals(0, application.readerTtsController.playbackSnapshot.nextRecoverableCharOffset)
+            context.startService(ReaderTtsIntentFactory.resumeService(context))
+            waitForPlaybackState(ReaderTtsSessionState.PLAYING)
+            assertEquals("第一句还没听完。", engine.lastSpokenSegment?.spokenText)
+        }
+    }
+
+    @Test
+    fun resumeAfterServiceDisappearsRebuildsAtLastCompletedBoundary() {
+        val book = seedBook("service-recovery", "服务恢复", listOf("第1章" to "第一句。", "第2章" to "第二句未完成。"))
+        ActivityScenario.launch<MainActivity>(mainIntent()).use {
+            startPlaybackFor(book.id, book.title, 0, 0, "第1章")
+            val engine = engineHarness.awaitSpokenSegment(0, 0)
+            engine.complete()
+            engineHarness.awaitSpokenSegment(1, 0)
+            context.stopService(Intent(context, com.longerlsx.storyapp.feature.reader.tts.ReaderTtsService::class.java))
+            val deadline = System.currentTimeMillis() + 3_000
+            while (!engine.destroyed && System.currentTimeMillis() < deadline) Thread.sleep(20)
+            assertTrue(engine.destroyed)
+            waitForPlaybackState(ReaderTtsSessionState.PAUSED_BY_USER)
+            context.startForegroundService(ReaderTtsIntentFactory.resumeService(context))
+            val resumed = engineHarness.awaitSpokenSegment(1, 0, differentFrom = engine)
+            assertEquals("第二句未完成。", resumed.lastSpokenSegment?.spokenText)
+            waitForPlaybackState(ReaderTtsSessionState.PLAYING)
+        }
+    }
+
+    @Test
+    fun mediaSessionPauseRejectsLateCompletionAndContinuesUnfinishedText() {
+        val book = seedBook("media-controls", "媒体控制", listOf("第1章" to "尚未播放完成的正文。", "第2章" to "下一章。"))
+        ActivityScenario.launch<MainActivity>(mainIntent()).use {
+            startPlaybackFor(book.id, book.title, 0, 0, "第1章")
+            val engine = engineHarness.awaitSpokenSegment(0, 0)
+            val oldCompletion = engine.completionForCurrentUtterance()
+            val notification = waitForTtsNotification()
+            @Suppress("DEPRECATION")
+            val token = notification.extras.getParcelable<MediaSession.Token>(Notification.EXTRA_MEDIA_SESSION)
+            assertNotNull("Lock-screen controls require the real service's session token", token)
+            val media = MediaController(context, requireNotNull(token))
+            val playingUtterance = engine.activeUtteranceId
+            val unexpectedStop = engine.observeNextStop()
+            media.transportControls.play()
+            assertFalse("Redundant PLAY must not interrupt the current utterance",
+                unexpectedStop.await(1, java.util.concurrent.TimeUnit.SECONDS))
+            assertEquals("Redundant PLAY must not start the same text again", playingUtterance, engine.activeUtteranceId)
+            media.transportControls.pause()
+            waitForPlaybackState(ReaderTtsSessionState.PAUSED_BY_USER)
+            oldCompletion()
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            assertEquals(0, runBlocking { application.listeningProgressStore.load(book.id) }?.charOffset)
+            assertEquals(0, runBlocking { application.listeningProgressStore.load(book.id) }?.chapterIndex)
+            media.transportControls.play()
+            waitForPlaybackState(ReaderTtsSessionState.PLAYING)
+            assertEquals("尚未播放完成的正文。", engine.lastSpokenSegment?.spokenText)
+        }
+    }
+
+    @Test
+    fun previewUsesSameEngineKeepsBookPausedAndNeverWritesItsTextAsListeningProgress() {
+        val book = seedBook("preview-checkpoint", "试听续听", listOf("第1章" to "这段正文还没有听完。"))
+        ActivityScenario.launch<MainActivity>(mainIntent()).use {
+            startPlaybackFor(book.id, book.title, 0, 0, "第1章")
+            val engine = engineHarness.awaitSpokenSegment(0, 0)
+            val before = runBlocking { application.listeningProgressStore.load(book.id) }
+            application.readerTtsController.requestVoicePreview(ReaderTtsSettings())
+            val deadline = System.currentTimeMillis() + 8_000
+            while (System.currentTimeMillis() < deadline &&
+                (!application.readerTtsController.runtimeState.value.isVoicePreviewing || engine.lastSpokenSegment?.spokenText == "这段正文还没有听完。")) {
+                Thread.sleep(20)
+            }
+            assertTrue(application.readerTtsController.runtimeState.value.isVoicePreviewing)
+            assertTrue(engine === engineHarness.currentEngineOrNull())
+            assertFalse(engine.lastSpokenSegment?.spokenText == "这段正文还没有听完。")
+            engine.complete()
+            val finishDeadline = System.currentTimeMillis() + 3_000
+            while (application.readerTtsController.runtimeState.value.isVoicePreviewing && System.currentTimeMillis() < finishDeadline) Thread.sleep(20)
+            assertFalse(application.readerTtsController.runtimeState.value.isVoicePreviewing)
+            assertEquals(ReaderTtsSessionState.PAUSED_BY_USER, application.readerTtsController.playbackState)
+            assertEquals(before, runBlocking { application.listeningProgressStore.load(book.id) })
+            application.readerTtsController.requestResumePlayback()
+            waitForPlaybackState(ReaderTtsSessionState.PLAYING)
+            assertEquals("这段正文还没有听完。", engine.lastSpokenSegment?.spokenText)
+        }
+    }
+
+    @Test
     fun backgroundPlaybackStaysActiveAndNotificationPauseResumeStayInSync() {
         val seededBook = seedBook(
             bookId = "background-book",
@@ -94,8 +192,8 @@ class ReaderTtsBackgroundPlaybackTest {
             engineHarness.awaitLatestEngine()
             waitForPlaybackState(ReaderTtsSessionState.PLAYING)
 
-            assertTrue(device.revealReaderChrome("停止朗读"))
-            assertTrue(device.wait(Until.hasObject(By.textContains("停止朗读")), 3_000))
+            assertTrue(device.revealReaderChrome("暂停朗读"))
+            assertTrue(device.wait(Until.hasObject(By.textContains("暂停朗读")), 3_000))
             assertFalse(device.hasObject(By.textContains("剩余")))
 
             device.pressHome()
@@ -151,7 +249,6 @@ class ReaderTtsBackgroundPlaybackTest {
             engineHarness.awaitLatestEngine()
             waitForPlaybackState(ReaderTtsSessionState.PLAYING)
 
-            assertTrue(device.wait(Until.hasObject(By.textContains("停止朗读")), 3_000))
             assertTrue(device.revealReaderChrome("目录", attempts = 5))
             assertTrue(device.tapPrimaryAction(ReaderPrimaryActionSlot.DIRECTORY))
             val chapterTwo = device.wait(Until.findObject(By.text("第2章 继续")), 5_000)
@@ -166,6 +263,9 @@ class ReaderTtsBackgroundPlaybackTest {
                 ?: device.wait(Until.findObject(By.text("朗读")), 3_000)
             assertNotNull(toggle)
             assertTrue(device.clickObjectCenter(toggle!!))
+            val startHere = device.wait(Until.findObject(By.text("从当前文字开始")), 3_000)
+            assertNotNull(startHere)
+            assertTrue(device.clickObjectCenter(startHere!!))
 
             waitForPlaybackState(ReaderTtsSessionState.PLAYING)
             val restartedEngine = engineHarness.awaitSpokenSegment(
@@ -212,6 +312,9 @@ class ReaderTtsBackgroundPlaybackTest {
                 ?: device.wait(Until.findObject(By.text("朗读")), 3_000)
             assertNotNull(toggle)
             assertTrue(device.clickObjectCenter(toggle!!))
+            val startHere = device.wait(Until.findObject(By.text("从当前文字开始")), 3_000)
+            assertNotNull(startHere)
+            assertTrue(device.clickObjectCenter(startHere!!))
 
             waitForPlaybackState(ReaderTtsSessionState.PLAYING)
             val restartedEngine = engineHarness.awaitSpokenSegment(
@@ -516,6 +619,7 @@ private class ControlledReaderTtsEngineHarness {
     fun awaitSpokenSegment(
         chapterIndex: Int,
         startCharOffset: Int,
+        differentFrom: ControlledReaderTtsEngine? = null,
     ): ControlledReaderTtsEngine {
         val timeoutAt = System.currentTimeMillis() + 8_000
         while (System.currentTimeMillis() < timeoutAt) {
@@ -523,6 +627,7 @@ private class ControlledReaderTtsEngineHarness {
             val segment = current?.lastSpokenSegment
             if (
                 current != null &&
+                current !== differentFrom &&
                 segment?.chapterIndex == chapterIndex &&
                 segment.startCharOffset == startCharOffset
             ) {
@@ -541,7 +646,12 @@ private class ControlledReaderTtsEngine(
     val generation: Int,
     private val awaitInitialize: suspend () -> Unit,
 ) : ReaderTtsEngine {
-    var lastSpokenSegment: ReaderTtsSegment? = null
+    @Volatile var destroyed: Boolean = false
+        private set
+    @Volatile var activeUtteranceId: String? = null
+        private set
+    @Volatile private var stopObserver: CountDownLatch? = null
+    @Volatile var lastSpokenSegment: ReaderTtsSegment? = null
         private set
 
     override suspend fun initialize(): Result<List<ReaderTtsVoiceOption>> {
@@ -562,12 +672,28 @@ private class ControlledReaderTtsEngine(
         utteranceId: String,
         segment: ReaderTtsSegment,
     ): Boolean {
+        activeUtteranceId = utteranceId
         lastSpokenSegment = segment
         callback.onUtteranceStarted(utteranceId)
         return true
     }
 
-    override fun stop() = Unit
+    override fun stop() { stopObserver?.countDown() }
 
-    override fun shutdown() = Unit
+    fun observeNextStop(): CountDownLatch = CountDownLatch(1).also { stopObserver = it }
+
+    fun startRange(start: Int, end: Int) {
+        callback.onUtteranceRangeStart(requireNotNull(activeUtteranceId), start, end)
+    }
+
+    fun complete() {
+        callback.onUtteranceCompleted(requireNotNull(activeUtteranceId))
+    }
+
+    fun completionForCurrentUtterance(): () -> Unit {
+        val id = requireNotNull(activeUtteranceId)
+        return { callback.onUtteranceCompleted(id) }
+    }
+
+    override fun shutdown() { destroyed = true }
 }

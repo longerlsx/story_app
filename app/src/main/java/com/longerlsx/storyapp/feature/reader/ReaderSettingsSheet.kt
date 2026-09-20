@@ -48,6 +48,12 @@ fun ReaderSettingsSheet(
     onSelectTab: (ReaderSettingsTab) -> Unit,
     onUpdateSettings: (ReaderSettings) -> Unit,
     onUpdateTtsSettings: (ReaderTtsSettings) -> Unit,
+    onStartTtsFromCurrent: (() -> Unit)? = null,
+    onResumeSavedTts: (() -> Unit)? = null,
+    onStopTts: (() -> Unit)? = null,
+    onPreviewVoice: (() -> Unit)? = null,
+    isVoicePreviewing: Boolean = false,
+    savedListeningLabel: String? = null,
 ) {
     val readingScrollState = rememberScrollState()
     val ttsScrollState = rememberScrollState()
@@ -98,6 +104,12 @@ fun ReaderSettingsSheet(
                     onUpdateTimerPreset = { timerPreset ->
                         onUpdateTtsSettings(settings.ttsSettings.copy(timerPreset = timerPreset))
                     },
+                    onStartFromCurrent = onStartTtsFromCurrent,
+                    onResumeSaved = onResumeSavedTts,
+                    onStop = onStopTts,
+                    onPreviewVoice = onPreviewVoice,
+                    isVoicePreviewing = isVoicePreviewing,
+                    savedListeningLabel = savedListeningLabel,
                 )
             }
         }

@@ -1,6 +1,7 @@
 package com.longerlsx.storyapp.feature.reader
 
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsRuntimeState
+import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsSessionState
 
 data class ReaderTtsTransientMessageClearance(
     val clearLocalErrorMessage: Boolean,
@@ -21,7 +22,8 @@ object ReaderTtsTransientMessageClearancePolicy {
         }
 
         return ReaderTtsTransientMessageClearance(
-            clearLocalErrorMessage = runtimeState.localErrorMessage == displayedMessage,
+            clearLocalErrorMessage = runtimeState.playbackState != ReaderTtsSessionState.FAILED &&
+                runtimeState.localErrorMessage == displayedMessage,
             clearLocalStatusMessage = runtimeState.localStatusMessage == displayedMessage,
         )
     }
