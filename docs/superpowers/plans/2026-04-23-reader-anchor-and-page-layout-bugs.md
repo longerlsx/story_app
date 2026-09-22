@@ -1,6 +1,8 @@
 # Reader Anchor And Page Layout Bugfixes Implementation Plan
 
-> **历史计划归档（2026-09-22补入版本管理）**：本文保留当时的方案、工作区备注与未勾选步骤，不表示当前待办，也不能据此认定当时逐项执行完成。下文的工具要求、命令和协作流程仅属原始记录，不作为新任务指令。后续阅读定位与分页实现已调整，项目现状以[当前状态](../../current-state.md)为准，相关后续实施与证据见[第一阶段阅读稳定计划](2026-09-11-reader-stability-phase-one.md)。本次仅整理归档，未重新执行旧计划或补记历史验收通过。
+> **管理状态：已关闭、已归档；由后续版本接替（2026-09-22）。** 阅读锚点、分页与段距问题由[第一阶段阅读稳定](2026-09-11-reader-stability-phase-one.md)及[阅读性能与交互优化](2026-09-14-pagination-measurement-reuse.md)接续处理；页顶起读与跟读接线的最新证据见[听书交互实施计划](2026-09-22-zipvoice-listening-upgrade.md)。本旧计划不再单独推进，当前实现与验证边界以[当前状态](../../current-state.md)为准。
+>
+> 以下保留原方案、工作区备注与勾选状态，未勾选项不再代表当前待办；不补记当时未经证实的执行结果。旧工具要求、命令和协作流程仅属历史记录，不作为新任务指令。
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 

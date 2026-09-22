@@ -10,6 +10,8 @@
 
 第一阶段历史成果为 `c639941`（存储与导入）、`e9b9498`（阅读定位与交互）；[9月11日计划](superpowers/plans/2026-09-11-reader-stability-phase-one.md) 保存当时的构建与验证，未受本轮影响的证据继续继承。
 
+**旧计划管理状态：** [4月23日阅读锚点与排版计划](superpowers/plans/2026-04-23-reader-anchor-and-page-layout-bugs.md)、[5月21日章末翻页与跨章过渡计划](superpowers/plans/2026-05-21-page-reader-boundary-and-transition.md)均已关闭、归档，由后续阅读重构和听书实现接替；原勾选记录仅保留历史身份，不形成当前待办。相关问题若再次出现，按新版实际路径和新证据跟踪，不恢复执行旧方案。
+
 **视觉方向探索（历史，当时未实施）：** 用户要求使用UI UX Pro Max与mobile-android-design查看美化方向，两项技能已安装；[9月20日视觉讨论稿](superpowers/specs/2026-09-20-visual-direction.md)提供书架、阅读控制、听书及阅读设置四组真实截图／概念图对比。讨论稿当时仅用于选择方向，未改变App行为；用户随后授权实施，由[9月20日实施计划](superpowers/plans/2026-09-20-visual-listening-upgrade.md)承接，不能继续把这四页改版整体描述为“未实施”。
 
 ## 需求与项目定位

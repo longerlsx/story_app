@@ -1,6 +1,8 @@
 # Page Reader Boundary And Transition Fix Implementation Plan
 
-> **历史执行记录归档（2026-09-22补入版本管理）**：本文保留当时已勾选步骤及未完成的独立手工检查，不将整份计划补标为全部完成。对应问题的后续处理见[BUG-2026-011](../../knowledge/bugs/BUG-2026-011-page-boundary-pager-state.json)与[BUG-2026-012](../../knowledge/bugs/BUG-2026-012-boundary-transition-layout-mismatch.json)：原来的分章Pager及独立过渡动画已被后续实现替代。项目现状以[当前状态](../../current-state.md)为准；下文的工具要求、命令、审查轮次及临时路径仅属原始记录，不作为新任务指令或当前可用证据。本次仅整理归档，未重新执行旧计划或追加历史验收结论。
+> **管理状态：已关闭、已归档；由后续版本接替（2026-09-22）。** 章末点击无响应与跨章文字跳动已在[BUG-2026-011](../../knowledge/bugs/BUG-2026-011-page-boundary-pager-state.json)和[BUG-2026-012](../../knowledge/bugs/BUG-2026-012-boundary-transition-layout-mismatch.json)记录后续解决；旧分章Pager及独立过渡动画已被统一分页窗口替代。后续实现与回归见[第一阶段阅读稳定](2026-09-11-reader-stability-phase-one.md)及[阅读性能与交互优化](2026-09-14-pagination-measurement-reuse.md)，当前结论以[当前状态](../../current-state.md)为准，本旧计划不再单独推进。
+>
+> 以下保留当时勾选状态，未勾选的旧手工检查不再作为当前待办，也不补记为当时已经通过。旧工具要求、命令、审查轮次及临时路径仅属历史记录，不作为新任务指令或当前可用证据。
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
