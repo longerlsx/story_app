@@ -70,7 +70,7 @@
 ## 交付与停止
 
 - [可覆盖安装debug APK](/Users/longshengxi/proj/story_app/app/build/outputs/zipvoice-upgrade/daliamao-reader-debug-20260922.apk)：225,249,411字节，约215MiB；SHA256 `f65e016f24fb8f0b7c82a9d8c65a1594e3228f23ea0597dc19e995f3bbcaba78`。最终安装及数字实播对应此构建。包内仅ARM64、ZipVoice INT8模型／声码器和一个`leijun-1.wav`，没有旧Kokoro模型或voices.bin；旧约443MiB交付包仍保留历史身份。
-- 代码与长期回归由`feat-android-reader-foundation`维护，本次同时收纳已授权且尚未提交的9月20日视觉改版；两份无关4月／5月历史计划保持原样、不混入交付。模型与原试听下载不提交Git，资源固定摘要及准备入口见[依赖说明](../../knowledge/offline-voice-dependencies.md)。
+- 代码与长期回归由`feat-android-reader-foundation`维护。最初交付把9月20日视觉改版与本轮听书混在一起，用户要求纠正提交组织；4月／5月两份遗留阅读计划经核清后独立归档，保留原文与历史完成状态。该整理不改变最终代码、APK或既有验证结论。模型与原试听下载不提交Git，资源固定摘要及准备入口见[依赖说明](../../knowledge/offline-voice-dependencies.md)。
 - 实现关系、操作约束与已确认BUG-060／061已回写文档；独立实现检查的实际问题已收口。实际音轨与界面截图保留在APK旁的`evidence`构建产物目录，不把小说、完整日志或临时报告放入docs。
 - 临时验收代码最终32行；临时ASR脚本／模型、完整日志、升级数据快照、scrcpy下载及模拟器测试包／导入副本已删除。专用模拟器已关闭，原始小说、试听目录及交付产物保留；未清除原Pixel_8或手机数据。
 - 最终限制：冷模型首次开读仍有数秒等待；当前真实小说正常路径样本约7.4–8.4秒。2×连续供给结论只覆盖已记录窗口与环境，不保证任意文本、手机温度或长时间负载；模型对专名、口音、复杂数字表达仍可能有误读。真机、物理耳机／来电及30分钟长听不在本轮验收范围。以上不伪称通过，也不追加到本轮停止门槛。
