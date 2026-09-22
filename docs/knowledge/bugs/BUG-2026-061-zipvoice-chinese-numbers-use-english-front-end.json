@@ -1,0 +1,28 @@
+{
+  "id": "BUG-2026-061",
+  "title": "ZipVoice sends unnormalized Arabic numbers in Chinese narration to its English front end",
+  "status": "resolved",
+  "symptom": "Actual novel playback containing 连着48小时 prompted investigation after SenseVoice transcribed the number as English words. That single transcription does not establish whether the exact spoken value was incorrect or words were omitted. The fixed front-end path nevertheless confirms that this multi-digit Chinese quantity is sent to English phonemization.",
+  "root_cause": "In sherpa-onnx Android 1.13.8, the ZipVoice implementation uses MatchaTtsLexicon. SplitUtf8 merges consecutive ASCII digits, and the bundled lexicon/token tables do not contain the resulting 48 token. ConvertWordToIds therefore routes it through eSpeak with voice=en-us. The front end also replaces colons with commas. Unlike the official ZipVoice Python EmiliaTokenizer's ChineseTextNormalizer and cn2an conversion, this native path lacks Chinese number normalization; its ZipVoice implementation does not load or apply OfflineTtsConfig.ruleFsts.",
+  "fix": [
+    "ReaderTtsChineseNumberNormalizer is called immediately before ZipVoice generation. The repair uses a local deterministic Chinese integer conversion for 0 through 999999999999, with explicit decimal, percentage, valid clock-time and four-digit-year handling; it does not add reflection or a new runtime dependency.",
+    "Normalization applies only to texts containing Han characters. Leading-zero and larger integer runs are spoken digit by digit. Adjacent English/model identifiers, pure English text, invalid clock times and unsupported grouped or multi-part numeric forms remain unchanged.",
+    "Only model input changes. Original book text, ReaderTtsSegment spoken/source offset mapping, utterance completion and persisted progress retain their original source identities. The model, reference voice, framework and offline packaging remain unchanged."
+  ],
+  "evidence": [
+    "The actual novel 1x recording raised the 48-hours English-reading question; the ASR phrase is a diagnostic clue rather than proof of the precise spoken numeral.",
+    "The fixed v1.13.8 text-utils.cc, matcha-tts-lexicon.cc and offline-tts-zipvoice-impl.h establish the native routing and missing normalization. Source links are maintained in docs/knowledge/offline-voice-dependencies.md.",
+    "The Android normalization behavior regression reached RED: five tests ran, four failed before the normalizer implementation. After replacing the non-public ICU API attempt with local deterministic conversion, ReaderTtsChineseNumberNormalizerTest passed all six JVM tests with zero failures or errors, including the four-digit group boundary cases.",
+    "assembleDebug and assembleDebugAndroidTest succeeded. The corresponding APK SHA256 is f65e016f24fb8f0b7c82a9d8c65a1594e3228f23ea0597dc19e995f3bbcaba78.",
+    "ReaderOfflineVoiceTest passed one actual-engine playback test at each of 1x and 2x using two excerpts from the same real novel. The captured numbers-1x-2x.mka windows are 34.258–46.452 seconds and 56.336–62.449 seconds. Independent SenseVoice transcription identifies 四十八小时 and 二十三点五十九分 in both windows, with no observed whole-sentence omission or repetition. Isolated homophones and an extra recognized 这 in the 1x transcript are not treated as proven speech faults.",
+    "The audio evidence comes from the task's Android 14 / API 34 ARM64 emulator and the bundled ZipVoice-Distill INT8 reference voice. It does not establish Xiaomi behavior or universal pronunciation correctness."
+  ],
+  "failed_attempts": [
+    "The initial integer conversion used android.icu.text.RuleBasedNumberFormat, which is not part of the current Android SDK public API and failed compilation. Do not restore this call or work around it with reflection; the bounded integer forms can be handled locally without a new dependency."
+  ],
+  "impact": "The covered ordinary Chinese quantity and clock-time paths now use Chinese reading forms, verified through rule regressions and actual 1x/2x output on the emulator. Books and progress are not rewritten, and the chosen voice and framework are unchanged. Unsupported mixed numeric syntax remains outside this bounded repair; the result does not imply Xiaomi acceptance or universally correct pronunciation.",
+  "tags": ["android", "tts", "zipvoice", "text-normalization", "chinese-numbers", "resolved"],
+  "confidence": 0.99,
+  "created_at": "2026-09-22",
+  "updated_at": "2026-09-22"
+}

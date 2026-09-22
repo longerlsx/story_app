@@ -12,6 +12,7 @@ import android.media.AudioManager
 import android.media.MediaMetadata
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
+import android.os.Bundle
 import android.os.IBinder
 import android.os.PowerManager
 import android.os.SystemClock
@@ -118,6 +119,10 @@ class ReaderTtsService : Service(), ReaderTtsEngine.Callback {
                 override fun onStop() {
                     this@ReaderTtsService.controller.markStoppedByUser()
                     stopPlaybackService()
+                }
+                override fun onCustomAction(action: String, extras: Bundle?) {
+                    if (action == ReaderTtsIntentFactory.ACTION_STOP) onStop()
+                    else super.onCustomAction(action, extras)
                 }
             })
             isActive = true
@@ -573,8 +578,17 @@ class ReaderTtsService : Service(), ReaderTtsEngine.Callback {
 
     private fun applyRuntimeSettings(settings: ReaderTtsSettings) {
         val changedTimer = activeSettings.timerPreset != settings.timerPreset
+        val changedSynthesis = activeSettings.voiceName != settings.voiceName ||
+            activeSettings.speechRate != settings.speechRate
         activeSettings = settings
-        if (!controller.runtimeState.value.isVoicePreviewing) engine?.applySettings(settings)
+        if (!controller.runtimeState.value.isVoicePreviewing) {
+            engine?.applySettings(settings)
+            if (changedSynthesis) {
+                // The current taken/playing sentence keeps its original speed. Refill
+                // only the next two units, including the next chapter, at the new speed.
+                activeUtteranceId?.let { prepareUpcomingAudio(playbackToken, it) }
+            }
+        }
         if (changedTimer) resetTimerBudget(settings.timerPreset)
         refreshNotification()
     }
@@ -612,6 +626,8 @@ class ReaderTtsService : Service(), ReaderTtsEngine.Callback {
         }
         mediaSession.setPlaybackState(
             PlaybackState.Builder().setActions(PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE or PlaybackState.ACTION_PLAY_PAUSE or PlaybackState.ACTION_STOP)
+                // Android 13+ builds media-card buttons from PlaybackState, not notification actions.
+                .addCustomAction(ReaderTtsIntentFactory.ACTION_STOP, "停止", android.R.drawable.ic_menu_close_clear_cancel)
                 .setState(mediaState, PlaybackState.PLAYBACK_POSITION_UNKNOWN, if (mediaState == PlaybackState.STATE_PLAYING) 1f else 0f).build(),
         )
         mediaSession.setMetadata(MediaMetadata.Builder()

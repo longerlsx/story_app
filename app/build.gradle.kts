@@ -38,7 +38,8 @@ android {
 
     sourceSets.getByName("main").assets.srcDir(rootProject.file(".local-tts/assets"))
 
-    defaultConfig.ndk.abiFilters += listOf("arm64-v8a", "x86_64")
+    // Both target phones and the local acceptance emulator use ARM64.
+    defaultConfig.ndk.abiFilters += "arm64-v8a"
 
     packaging {
         resources {

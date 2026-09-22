@@ -1,7 +1,13 @@
 package com.longerlsx.storyapp.feature.reader
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Modifier
 import androidx.compose.material3.Text
 import androidx.compose.ui.test.assertCountEquals
@@ -15,10 +21,12 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.unit.dp
 import com.longerlsx.storyapp.core.model.ReaderAppearanceMode
-import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsRuntimeState
-import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsSessionState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -30,157 +38,108 @@ class ReaderTtsControlsTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun chromeVisibleUsesExplicitStopLabelAndNoLegacyLongPressHint() {
-        var toggleClicks = 0
-
+    fun continuationTextTouchDoesNotTriggerTheImmersiveBackButton() {
+        var backClicks = 0
+        var textClicks = 0
         composeRule.setContent {
-            ReaderControls(
-                chromeMode = ReaderChromeMode.CHROME_VISIBLE,
-                appearanceMode = ReaderAppearanceMode.DAY,
-                progressSummary = "1/1",
-                showChapterNavigationRow = false,
-                canOpenPreviousChapter = false,
-                canOpenNextChapter = false,
-                themePalette = ReaderThemePalette(
-                    background = androidx.compose.ui.graphics.Color.White,
-                    surface = androidx.compose.ui.graphics.Color(0xFFF4F4F4),
-                    content = androidx.compose.ui.graphics.Color.Black,
-                ),
-                ttsToggleState = ReaderTtsToggleUiState(actionLabel = "停止朗读 · 28m"),
-                onOpenPreviousChapter = {},
-                onOpenNextChapter = {},
-                onOpenToc = {},
-                onToggleAppearanceMode = {},
-                onOpenSettings = {},
-                onToggleTts = { toggleClicks += 1 },
-            )
+            Box(Modifier.width(320.dp).height(200.dp).testTag("continuation-touch")) {
+                Box(Modifier.fillMaxWidth().padding(top = 52.dp).height(148.dp)
+                    .clickable { textClicks++ }) { Text("续页第一行正文") }
+                ReaderImmersiveHeader("第二页", ReaderThemePreset.PAPER.palette(), { backClicks++ })
+            }
         }
-
-        composeRule.onAllNodesWithContentDescription("停止朗读 · 28m").assertCountEquals(1)
-        composeRule.onAllNodesWithText("长按设置").assertCountEquals(0)
-        composeRule.onNodeWithText("停止朗读 · 28m").assertIsDisplayed().performClick()
-
-        assertEquals(1, toggleClicks)
+        composeRule.onNodeWithTag("continuation-touch").performTouchInput {
+            click(Offset(20.dp.toPx(), 55.dp.toPx()))
+        }
+        assertEquals("正文首行左端必须留给阅读手势", 0, backClicks)
+        assertEquals(1, textClicks)
     }
 
     @Test
-    fun settingsExpandedKeepsBottomBarMountedWithTtsAction() {
+    fun visibleControlsSeparateOpeningListeningFromPlaybackAndStop() =
+        assertIndependentListeningActions(ReaderChromeMode.CHROME_VISIBLE)
+
+    @Test
+    fun immersiveControlsSeparateOpeningListeningFromPlaybackAndStop() =
+        assertIndependentListeningActions(ReaderChromeMode.READING_ONLY)
+
+    private fun assertIndependentListeningActions(mode: ReaderChromeMode) {
+        val actions = mutableListOf<String>()
         composeRule.setContent {
             ReaderControls(
-                chromeMode = ReaderChromeMode.SETTINGS_EXPANDED,
-                appearanceMode = ReaderAppearanceMode.DAY,
-                progressSummary = "1/1",
-                showChapterNavigationRow = false,
-                canOpenPreviousChapter = false,
-                canOpenNextChapter = false,
-                themePalette = ReaderThemePalette(
-                    background = androidx.compose.ui.graphics.Color.White,
-                    surface = androidx.compose.ui.graphics.Color(0xFFF4F4F4),
-                    content = androidx.compose.ui.graphics.Color.Black,
-                ),
-                ttsToggleState = ReaderTtsToggleUiState(actionLabel = "朗读"),
-                onOpenPreviousChapter = {},
-                onOpenNextChapter = {},
-                onOpenToc = {},
-                onToggleAppearanceMode = {},
-                onOpenSettings = {},
+                chromeMode = mode, appearanceMode = ReaderAppearanceMode.DAY,
+                progressSummary = "1/2", showChapterNavigationRow = false,
+                canOpenPreviousChapter = false, canOpenNextChapter = true,
+                themePalette = ReaderThemePreset.PAPER.palette(),
+                ttsToggleState = ReaderTtsToggleUiState("听书", true, "继续朗读",
+                    statusText = "已暂停", remainingTimeLabel = "28m", speechRate = 1.45f),
+                onOpenPreviousChapter = {}, onOpenNextChapter = {}, onOpenToc = {},
+                onToggleAppearanceMode = {}, onOpenSettings = {},
+                onToggleTts = { actions += "toolbar" },
+                onOpenListening = { actions += "open" },
+                onImmersiveTtsAction = { actions += "resume" },
+                onStopTts = { actions += "stop" },
+            )
+        }
+        composeRule.onNodeWithContentDescription("展开听书面板").performClick()
+        composeRule.onNodeWithContentDescription("继续朗读").assertIsDisplayed().performClick()
+        composeRule.onNodeWithContentDescription("停止朗读").assertIsDisplayed().performClick()
+        assertEquals(listOf("open", "resume", "stop"), actions)
+        composeRule.onNodeWithText("剩余 28m · 1.45×").assertIsDisplayed()
+        composeRule.onAllNodesWithText("继续朗读").assertCountEquals(0)
+        composeRule.onAllNodesWithText("停止朗读").assertCountEquals(0)
+        if (mode == ReaderChromeMode.CHROME_VISIBLE) {
+            composeRule.onNodeWithContentDescription("听书").performClick()
+            assertEquals("toolbar", actions.last())
+        }
+    }
+
+    @Test
+    fun longPressListeningOpensSettingsWithoutAlsoStartingOnRelease() {
+        val actions = mutableListOf<String>()
+        composeRule.setContent {
+            ReaderControls(
+                chromeMode = ReaderChromeMode.CHROME_VISIBLE, appearanceMode = ReaderAppearanceMode.DAY,
+                progressSummary = "1/1", showChapterNavigationRow = false,
+                canOpenPreviousChapter = false, canOpenNextChapter = false,
+                themePalette = ReaderThemePreset.PAPER.palette(), ttsToggleState = ReaderTtsToggleUiState(),
+                onOpenPreviousChapter = {}, onOpenNextChapter = {}, onOpenToc = {},
+                onToggleAppearanceMode = {}, onOpenSettings = {},
+                onToggleTts = { actions += "start" }, onOpenListeningSettings = { actions += "settings" },
+            )
+        }
+        composeRule.onNodeWithContentDescription("朗读").performTouchInput { longClick() }
+        assertEquals(listOf("settings"), actions)
+        composeRule.onNodeWithContentDescription("朗读").performClick()
+        assertEquals(listOf("settings", "start"), actions)
+    }
+
+    @Test
+    fun listeningExpandedKeepsOriginalReadingNavigationAndDoesNotDuplicatePlaybackActions() {
+        composeRule.setContent {
+            ReaderControls(
+                chromeMode = ReaderChromeMode.LISTENING_EXPANDED,
+                appearanceMode = ReaderAppearanceMode.DAY, progressSummary = "1/1",
+                showChapterNavigationRow = false, canOpenPreviousChapter = false, canOpenNextChapter = false,
+                themePalette = ReaderThemePreset.PAPER.palette(),
+                ttsToggleState = ReaderTtsToggleUiState("听书", true, "暂停朗读", statusText = "正在朗读"),
+                onOpenPreviousChapter = {}, onOpenNextChapter = {}, onOpenToc = {},
+                onToggleAppearanceMode = {}, onOpenSettings = {},
                 expandedContent = {
-                    Text("统一设置面板")
+                    ReaderTtsSettingsSheet(
+                        statusText = "正在朗读", settings = com.longerlsx.storyapp.core.model.ReaderTtsSettings(),
+                        themePalette = ReaderThemePreset.PAPER.palette(), primaryActionLabel = "暂停朗读",
+                        onPrimaryAction = {}, onStop = {}, onClose = {},
+                        onUpdateSpeechRate = {}, onUpdatePitch = {}, onUpdateTimerPreset = {},
+                    )
                 },
             )
         }
-
-        composeRule.onNodeWithText("统一设置面板").assertIsDisplayed()
+        composeRule.onNodeWithText("定时关闭").assertIsDisplayed()
         composeRule.onNodeWithText("目录").assertIsDisplayed()
         composeRule.onNodeWithText("设置").assertIsDisplayed()
-        composeRule.onAllNodesWithContentDescription("朗读").assertCountEquals(1)
-    }
-
-    @Test
-    fun immersiveRowUsesSameResumeLabelModel() {
-        var stopClicks = 0
-
-        composeRule.setContent {
-            ReaderControls(
-                chromeMode = ReaderChromeMode.READING_ONLY,
-                appearanceMode = ReaderAppearanceMode.DAY,
-                progressSummary = "1/1",
-                showChapterNavigationRow = false,
-                canOpenPreviousChapter = false,
-                canOpenNextChapter = false,
-                themePalette = ReaderThemePalette(
-                    background = androidx.compose.ui.graphics.Color.White,
-                    surface = androidx.compose.ui.graphics.Color(0xFFF4F4F4),
-                    content = androidx.compose.ui.graphics.Color.Black,
-                ),
-                ttsToggleState = ReaderTtsToggleUiState(
-                    actionLabel = "继续朗读 · 28m",
-                    showImmersiveAction = true,
-                    immersiveActionLabel = "继续朗读 · 28m",
-                ),
-                onOpenPreviousChapter = {},
-                onOpenNextChapter = {},
-                onOpenToc = {},
-                onToggleAppearanceMode = {},
-                onOpenSettings = {},
-                onImmersiveTtsAction = { stopClicks += 1 },
-            )
-        }
-
-        composeRule.onNodeWithText("继续朗读 · 28m").assertIsDisplayed().performClick()
-        assertEquals(1, stopClicks)
-    }
-
-    @Test
-    fun timedTtsActionStaysSingleLineInFourSlotBottomBar() {
-        val label = ReaderTtsReaderUiStateResolver.resolve(
-            currentBookId = "book-1",
-            runtimeState = ReaderTtsRuntimeState(
-                playbackState = ReaderTtsSessionState.PAUSED_BY_USER,
-                currentBookId = "book-1",
-                remainingTimerMillis = 90 * 60_000L,
-            ),
-        ).toggleState.actionLabel
-
-        composeRule.setContent {
-            Box(modifier = Modifier.width(360.dp)) {
-                ReaderControls(
-                    chromeMode = ReaderChromeMode.CHROME_VISIBLE,
-                    appearanceMode = ReaderAppearanceMode.DAY,
-                    progressSummary = "1/1",
-                    showChapterNavigationRow = false,
-                    canOpenPreviousChapter = false,
-                    canOpenNextChapter = false,
-                    themePalette = ReaderThemePalette(
-                        background = androidx.compose.ui.graphics.Color.White,
-                        surface = androidx.compose.ui.graphics.Color(0xFFF4F4F4),
-                        content = androidx.compose.ui.graphics.Color.Black,
-                    ),
-                    ttsToggleState = ReaderTtsToggleUiState(actionLabel = label),
-                    onOpenPreviousChapter = {},
-                    onOpenNextChapter = {},
-                    onOpenToc = {},
-                    onToggleAppearanceMode = {},
-                    onOpenSettings = {},
-                )
-            }
-        }
-
-        val labelBounds = composeRule
-            .onNodeWithText(label)
-            .assertIsDisplayed()
-            .getUnclippedBoundsInRoot()
-        val labelHeight = labelBounds.bottom - labelBounds.top
-        val singleLineActionBounds = composeRule
-            .onNodeWithText("设置")
-            .assertIsDisplayed()
-            .getUnclippedBoundsInRoot()
-        val singleLineActionHeight = singleLineActionBounds.bottom - singleLineActionBounds.top
-
-        assertTrue(
-            "Timed TTS action label should stay single-line in the four-slot bottom bar; actual height=$labelHeight, reference single-line height=$singleLineActionHeight",
-            labelHeight <= singleLineActionHeight,
-        )
+        composeRule.onAllNodesWithContentDescription("暂停朗读").assertCountEquals(1)
+        composeRule.onAllNodesWithContentDescription("停止朗读").assertCountEquals(1)
     }
 
     @Test

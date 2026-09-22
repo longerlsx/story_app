@@ -31,8 +31,6 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Button
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -50,7 +48,6 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -87,7 +84,6 @@ import com.longerlsx.storyapp.core.model.Chapter
 import com.longerlsx.storyapp.core.model.ReaderAppearanceMode
 import com.longerlsx.storyapp.core.model.ReaderSettings
 import com.longerlsx.storyapp.core.model.ReaderTtsSettings
-import com.longerlsx.storyapp.core.model.ListeningProgress
 import com.longerlsx.storyapp.core.model.ReadingAnchor
 import com.longerlsx.storyapp.core.model.ReadingMode
 import com.longerlsx.storyapp.core.model.ReadingProgress
@@ -245,9 +241,6 @@ private fun ReaderReadyContent(
     var chromeMode by remember(state.book.id) {
         mutableStateOf(ReaderChromeMode.READING_ONLY)
     }
-    var activeSettingsTab by rememberSaveable(state.book.id) {
-        mutableStateOf<ReaderSettingsTab?>(null)
-    }
     var lastChromeInteractionAtMs by remember(state.book.id) {
         mutableStateOf<Long?>(null)
     }
@@ -274,8 +267,11 @@ private fun ReaderReadyContent(
     var pendingRestartVisualRange by remember(state.book.id) {
         mutableStateOf<ReaderTtsActiveVisualRange?>(null)
     }
-    var localRestartFeedbackMessage by remember(state.book.id) {
+    var localListeningError by remember(state.book.id) {
         mutableStateOf<String?>(null)
+    }
+    var lastListeningStartRequest by remember(state.book.id) {
+        mutableStateOf<ReaderTtsStartRequest?>(null)
     }
     var isProgrammaticScrollFollowInFlight by remember(state.book.id) {
         mutableStateOf(false)
@@ -284,20 +280,6 @@ private fun ReaderReadyContent(
     var readerForeground by remember(lifecycleOwner) {
         mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED))
     }
-    var savedListeningProgress by remember(state.book.id) { mutableStateOf<ListeningProgress?>(null) }
-    var listeningProgressError by remember(state.book.id) { mutableStateOf<String?>(null) }
-    var listeningStartChoice by remember(state.book.id) { mutableStateOf<ReaderTextStartLocation?>(null) }
-    LaunchedEffect(state.book.id, ttsRuntime.playbackState) {
-        try {
-            savedListeningProgress = storyApplication.listeningProgressStore.load(state.book.id)
-            listeningProgressError = null
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            listeningProgressError = "上次听书位置暂时无法读取，可重试或从当前文字开始。"
-        }
-    }
-    val resumeListeningLocation = ReaderTtsResumeLocationResolver.resolve(state.book.id, ttsRuntime, savedListeningProgress)
     LaunchedEffect(state.book.id, listeningOpenRequest) {
         val request = listeningOpenRequest?.takeIf { it.bookId == state.book.id } ?: return@LaunchedEffect
         if (state.chapters.any { it.chapterIndex == request.chapterIndex }) {
@@ -305,19 +287,10 @@ private fun ReaderReadyContent(
             position.jump(ReadingAnchor(request.chapterIndex, request.charOffset))
             chromeMode = ReaderChromeMode.READING_ONLY
         } else {
-            localRestartFeedbackMessage = "听书章节已不存在，请从目录选择正文。"
+            localListeningError = "听书章节已不存在，请从目录选择正文。"
+            chromeMode = ReaderChromeMode.LISTENING_EXPANDED
         }
         onListeningOpenHandled()
-    }
-
-    LaunchedEffect(chromeMode, activeSettingsTab, ttsRuntime.availableVoices) {
-        if (
-            chromeMode == ReaderChromeMode.SETTINGS_EXPANDED &&
-            activeSettingsTab == ReaderSettingsTab.TTS &&
-            ttsRuntime.availableVoices.isEmpty()
-        ) {
-            storyApplication.preloadReaderTtsVoices()
-        }
     }
 
     val selectedChapterPosition = state.chapters.indexOfFirst { it.chapterIndex == selectedChapterIndex }
@@ -566,7 +539,8 @@ private fun ReaderReadyContent(
     }
 
     BackHandler {
-        if (chromeMode == ReaderChromeMode.DIRECTORY_OPEN || chromeMode == ReaderChromeMode.SETTINGS_EXPANDED) {
+        if (chromeMode == ReaderChromeMode.DIRECTORY_OPEN || chromeMode == ReaderChromeMode.SETTINGS_EXPANDED ||
+            chromeMode == ReaderChromeMode.LISTENING_EXPANDED) {
             chromeMode = ReaderChromeMode.CHROME_VISIBLE
         } else leaveReader()
     }
@@ -607,17 +581,33 @@ private fun ReaderReadyContent(
         }
     }
 
-    fun buildTtsStartRequest(
-        explicitLocation: ReaderTextStartLocation? = null,
-    ): ReaderTtsStartRequest {
-        val anchor = if (canLocateScroll && position.request == null && position.error == null) {
-            visibleScrollAnchor() ?: position.confirmedAnchor
-        } else position.confirmedAnchor
-        val startLocation = explicitLocation ?: ReaderTextStartLocation(anchor.chapterIndex, anchor.charOffset)
+    fun displayedTopLine(): ReaderTextStartLocation? {
+        if (!position.hasConfirmedLayout) return null
+        if (displayMode == ReadingMode.PAGE || retainPageUntilScrollConfirmed) {
+            // A restored anchor can be in the middle of its page. Use the displayed
+            // page's actual first body line, including when another target is loading.
+            val display = pageState.display
+            val page = display.confirmedWindow?.pages?.firstOrNull { it.id == display.confirmedPageId }
+                ?: return null
+            return ReaderTextStartLocation(page.chapter.chapterIndex, page.slice.visibleStartCharOffset)
+        }
+        val visible = buildScrollVisibleChapterItems(scrollListState, scrollFeed, scrollBodyMetricsByChapter)
+        val viewportEnd = scrollListState.layoutInfo.viewportEndOffset
+        for (item in visible.sortedBy { it.offsetPx }) {
+            val line = scrollBodyMetricsByChapter[item.chapterIndex]?.lines?.firstOrNull {
+                item.bodyOffsetPx + it.bottomPx > scrollReadableViewportTopPx &&
+                    item.bodyOffsetPx + it.topPx < viewportEnd
+            } ?: continue
+            return ReaderTextStartLocation(item.chapterIndex, line.startCharOffset)
+        }
+        return null
+    }
+
+    fun buildTtsStartRequest(explicitLocation: ReaderTextStartLocation): ReaderTtsStartRequest {
         return ReaderTtsStartRequestFactory.create(
             book = state.book,
             chapters = state.chapters,
-            startLocation = startLocation,
+            startLocation = explicitLocation,
         )
     }
 
@@ -634,6 +624,8 @@ private fun ReaderReadyContent(
     }
 
     fun startTtsRequest(request: ReaderTtsStartRequest) {
+        localListeningError = null
+        lastListeningStartRequest = request
         if (ttsRuntime.currentBookId == state.book.id && ttsRuntime.playbackState.isOngoingSession()) {
             ttsController.restartFromLocation(request)
             return
@@ -663,39 +655,28 @@ private fun ReaderReadyContent(
         )
     }
 
-    fun startTtsFromCurrentLocation() = startTtsRequest(buildTtsStartRequest())
-
-    fun resumeListeningAt(location: ReaderTextStartLocation) {
-        listeningStartChoice = null
-        if (state.chapters.none { it.chapterIndex == location.chapterIndex }) {
-            listeningProgressError = "上次听书章节已不存在，请从当前文字开始。"
+    fun startTtsFromCurrentLocation() {
+        val location = displayedTopLine()
+        if (location == null) {
+            localListeningError = "正文还未显示完成，请稍后重试。"
             return
         }
         lastManualFollowInterruptionAtMs = null
-        position.jump(ReadingAnchor(location.chapterIndex, location.charOffset))
-        if (ReaderTtsCurrentBookSessionResolver.resolve(state.book.id, ttsRuntime).isPaused) {
-            ttsController.requestResumePlayback()
-        } else {
-            startTtsRequest(buildTtsStartRequest(location))
-        }
+        // Snapshot before opening an overlay or waiting for Android permission.
+        startTtsRequest(buildTtsStartRequest(location))
     }
 
-    fun chooseListeningStart() {
-        scope.launch {
-            try {
-                savedListeningProgress = storyApplication.listeningProgressStore.load(state.book.id)
-                listeningProgressError = null
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                listeningProgressError = "上次听书位置暂时无法读取，可重试或从当前文字开始。"
-                activeSettingsTab = ReaderSettingsTab.TTS
-                setChromeMode(ReaderChromeMode.SETTINGS_EXPANDED)
-                return@launch
-            }
-            val target = ReaderTtsResumeLocationResolver.resolve(state.book.id, ttsController.runtimeState.value, savedListeningProgress)
-            if (target == null) startTtsFromCurrentLocation() else listeningStartChoice = target
-        }
+    fun retryListening() {
+        val snapshot = ttsRuntime.playbackSnapshot
+        val segment = snapshot.currentSegment
+        val failedRequest = if (ttsRuntime.currentBookId == state.book.id &&
+            ttsRuntime.playbackState == ReaderTtsSessionState.FAILED) {
+            segment?.let {
+                buildTtsStartRequest(ReaderTextStartLocation(it.chapterIndex,
+                    snapshot.nextRecoverableCharOffset ?: it.startCharOffset))
+            } ?: lastListeningStartRequest
+        } else null
+        if (failedRequest != null) startTtsRequest(failedRequest) else startTtsFromCurrentLocation()
     }
 
     val currentBookTtsSession = ReaderTtsCurrentBookSessionResolver.resolve(
@@ -710,7 +691,6 @@ private fun ReaderReadyContent(
         pendingRestartVisualRange = location.restartVisualRangeOrNull(
             chapterText = chapterTextByIndex[location.chapterIndex].orEmpty(),
         )
-        localRestartFeedbackMessage = "从这里重新朗读"
         lastManualFollowInterruptionAtMs = null
         ttsController.restartFromLocation(
             buildTtsStartRequest(explicitLocation = location),
@@ -739,20 +719,23 @@ private fun ReaderReadyContent(
 
     fun stopTtsForNavigation() {
         if (currentBookTtsSession.isOngoing) {
-            ttsController.stopByNavigation("已停止朗读，重新开始将从当前位置开始")
+            ttsController.stopByNavigation()
         }
     }
 
     val isCurrentBookTtsPlaying = currentBookTtsSession.isSpeaking
     val isCurrentBookTtsPaused = currentBookTtsSession.isPaused
     val isCurrentBookTtsOngoing = currentBookTtsSession.isOngoing
-    val ttsVoiceSelection = ReaderTtsVoiceSelectionResolver.resolve(
-        persistedVoiceName = selectedSettings.ttsSettings.voiceName,
-        availableVoices = ttsRuntime.availableVoices,
-        availableVoicesLoaded = ttsRuntime.availableVoicesLoaded,
-    )
-    val selectedVoiceName = ttsVoiceSelection.selectedVoiceName
-    val ttsSystemDefaultVoiceStatus = ttsVoiceSelection.systemDefaultVoiceStatus
+    fun toggleListening() {
+        bumpChromeInteraction()
+        when {
+            ttsRuntime.isVoicePreviewing -> ttsController.stopByUser()
+            isCurrentBookTtsPaused -> ttsController.requestResumePlayback()
+            isCurrentBookTtsPlaying -> ttsController.requestPausePlayback()
+            ttsRuntime.currentBookId == state.book.id && ttsRuntime.playbackState == ReaderTtsSessionState.FAILED -> retryListening()
+            else -> startTtsFromCurrentLocation()
+        }
+    }
     val livePlaybackVisualRange = ReaderTtsActiveVisualRangeResolver.resolveLiveRange(
         runtimeState = ttsRuntime,
         currentBookSession = currentBookTtsSession,
@@ -769,14 +752,13 @@ private fun ReaderReadyContent(
         currentBookId = state.book.id,
         runtimeState = ttsRuntime,
     )
-    val ttsToggleUiState = readerTtsUiState.toggleState
+    val ttsToggleUiState = readerTtsUiState.toggleState.copy(
+        speechRate = selectedSettings.ttsSettings.speechRate,
+    )
     val ttsStatusText = readerTtsUiState.statusText
     val remainingTimeLabel = readerTtsUiState.remainingTimeLabel
-    val transientTtsMessage = ReaderTtsTransientMessageResolver.resolve(
-        currentBookId = state.book.id,
-        runtimeState = ttsRuntime,
-        localRestartFeedbackMessage = localRestartFeedbackMessage,
-    )
+    val listeningError = localListeningError ?: ttsRuntime.localErrorMessage
+        ?.takeIf { ttsRuntime.currentBookId == state.book.id }
 
     LaunchedEffect(chromeMode, lastChromeInteractionAtMs) {
         val interactionAt = lastChromeInteractionAtMs
@@ -796,33 +778,6 @@ private fun ReaderReadyContent(
             )
         ) {
             setChromeMode(ReaderChromeMode.READING_ONLY, refreshAutoHide = false)
-        }
-    }
-
-    LaunchedEffect(transientTtsMessage) {
-        if (transientTtsMessage == null) {
-            return@LaunchedEffect
-        }
-        delay(2_500)
-        val latestRuntime = ttsController.runtimeState.value
-        val clearance = ReaderTtsTransientMessageClearancePolicy.resolve(
-            currentBookId = state.book.id,
-            runtimeState = latestRuntime,
-            displayedMessage = transientTtsMessage,
-        )
-        if (clearance.clearLocalErrorMessage) {
-            ttsController.clearLocalErrorMessage()
-        }
-        if (clearance.clearLocalStatusMessage) {
-            ttsController.clearLocalStatusMessage()
-        }
-    }
-
-    LaunchedEffect(localRestartFeedbackMessage) {
-        val latestMessage = localRestartFeedbackMessage ?: return@LaunchedEffect
-        delay(1_500)
-        if (localRestartFeedbackMessage == latestMessage) {
-            localRestartFeedbackMessage = null
         }
     }
 
@@ -1123,7 +1078,8 @@ private fun ReaderReadyContent(
                     isFollowSuppressed = isFollowSuppressed || !readerForeground || !isCurrentBookTtsPlaying,
                 ),
                 enableLongPress = isCurrentBookTtsOngoing,
-                dismissExpandedChrome = chromeMode == ReaderChromeMode.SETTINGS_EXPANDED,
+                dismissExpandedChrome = chromeMode == ReaderChromeMode.SETTINGS_EXPANDED ||
+                    chromeMode == ReaderChromeMode.LISTENING_EXPANDED,
                 onRestartFromLocation = { chapterIndex, charOffset -> restartTtsFromPressedOffset(chapterIndex, charOffset) },
                 onManualFollowInterruption = ::markManualFollowInterruption,
                 onCrossChapter = ::stopTtsForNavigation,
@@ -1200,16 +1156,6 @@ private fun ReaderReadyContent(
             }
         }
 
-        if (!transientTtsMessage.isNullOrBlank()) {
-            ReaderTransientTtsMessage(
-                message = transientTtsMessage,
-                themePalette = themePalette,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 72.dp),
-            )
-        }
-
         if (chromeMode == ReaderChromeMode.READING_ONLY) {
             ReaderImmersiveHeader(
                 chapterTitle = selectedChapter?.title ?: "正文",
@@ -1270,10 +1216,6 @@ private fun ReaderReadyContent(
                         toggleAppearanceMode()
                     },
                     onOpenSettings = {
-                        activeSettingsTab = ReaderSettingsTabResolver.resolveOnOpen(
-                            currentTab = activeSettingsTab,
-                            isCurrentBookTtsOngoing = isCurrentBookTtsOngoing,
-                        )
                         val nextChromeMode = ReaderChromeStateReducer.onOpenSettings(chromeMode)
                         setChromeMode(
                             nextChromeMode,
@@ -1281,54 +1223,47 @@ private fun ReaderReadyContent(
                         )
                     },
                     onToggleTts = {
-                        bumpChromeInteraction()
-                        if (ttsRuntime.isVoicePreviewing) {
-                            ttsController.stopByUser()
-                        } else if (isCurrentBookTtsPaused) {
-                            resumeListeningLocation?.let(::resumeListeningAt) ?: ttsController.requestResumePlayback()
-                        } else if (isCurrentBookTtsPlaying) {
-                            ttsController.requestPausePlayback()
-                        } else {
-                            chooseListeningStart()
-                        }
+                        if (!isCurrentBookTtsOngoing && !(ttsRuntime.currentBookId == state.book.id &&
+                            ttsRuntime.playbackState == ReaderTtsSessionState.FAILED)) startTtsFromCurrentLocation()
+                        setChromeMode(ReaderChromeMode.LISTENING_EXPANDED)
                     },
-                    onImmersiveTtsAction = {
-                        if (ttsRuntime.isVoicePreviewing) {
-                            ttsController.stopByUser()
-                        } else if (isCurrentBookTtsPaused) {
-                            resumeListeningLocation?.let(::resumeListeningAt) ?: ttsController.requestResumePlayback()
-                        } else if (isCurrentBookTtsPlaying) {
-                            ttsController.requestPausePlayback()
-                        }
-                    },
+                    onImmersiveTtsAction = ::toggleListening,
+                    onOpenListening = { setChromeMode(ReaderChromeMode.LISTENING_EXPANDED) },
+                    onOpenListeningSettings = { setChromeMode(ReaderChromeMode.LISTENING_EXPANDED) },
+                    onStopTts = if (isCurrentBookTtsOngoing || ttsRuntime.isVoicePreviewing) {
+                        { bumpChromeInteraction(); ttsController.stopByUser() }
+                    } else null,
+                    onCloseExpanded = { setChromeMode(ReaderChromeMode.CHROME_VISIBLE, refreshAutoHide = true) },
                     expandedContent = when (chromeMode) {
                         ReaderChromeMode.SETTINGS_EXPANDED -> {
                             {
                                 ReaderSettingsSheet(
                                     settings = requestedSettings,
                                     themePalette = themePalette,
-                                    activeTab = activeSettingsTab ?: ReaderSettingsTab.READING,
-                                    availableVoices = ttsRuntime.availableVoices,
-                                    availableVoicesLoaded = ttsRuntime.availableVoicesLoaded,
-                                    selectedVoiceName = selectedVoiceName,
-                                    ttsStatusText = listeningProgressError ?: ttsStatusText,
-                                    ttsRemainingTimeLabel = remainingTimeLabel,
-                                    ttsSystemDefaultVoiceStatus = ttsSystemDefaultVoiceStatus,
-                                    onSelectTab = { activeSettingsTab = it },
                                     onUpdateSettings = ::updateReaderSettings,
-                                    onUpdateTtsSettings = ::updateTtsSettings,
-                                    onStartTtsFromCurrent = if (!ttsRuntime.isVoicePreviewing) ::startTtsFromCurrentLocation else null,
-                                    onResumeSavedTts = resumeListeningLocation?.takeIf { !isCurrentBookTtsPlaying && !ttsRuntime.isVoicePreviewing }
-                                        ?.let { { resumeListeningAt(it) } },
-                                    onStopTts = if (isCurrentBookTtsOngoing || ttsRuntime.isVoicePreviewing) ttsController::stopByUser else null,
-                                    onPreviewVoice = {
-                                        if (ttsRuntime.isVoicePreviewing) ttsController.stopByUser()
-                                        else ttsController.requestVoicePreview(selectedSettings.ttsSettings)
+                                )
+                            }
+                        }
+
+                        ReaderChromeMode.LISTENING_EXPANDED -> {
+                            {
+                                ReaderTtsSettingsSheet(
+                                    statusText = if (localListeningError != null) "暂时无法开始" else ttsStatusText,
+                                    settings = selectedSettings.ttsSettings,
+                                    themePalette = themePalette,
+                                    remainingTimeLabel = remainingTimeLabel,
+                                    primaryActionLabel = when {
+                                        isCurrentBookTtsOngoing -> ttsToggleUiState.immersiveActionLabel
+                                        listeningError != null -> "重试朗读"
+                                        else -> "开始朗读"
                                     },
-                                    isVoicePreviewing = ttsRuntime.isVoicePreviewing,
-                                    savedListeningLabel = resumeListeningLocation?.let { location ->
-                                        state.chapters.firstOrNull { it.chapterIndex == location.chapterIndex }?.title
-                                    },
+                                    onPrimaryAction = ::toggleListening,
+                                    onStop = if (isCurrentBookTtsOngoing) ttsController::stopByUser else null,
+                                    onClose = { setChromeMode(ReaderChromeMode.READING_ONLY, refreshAutoHide = false) },
+                                    onUpdateSpeechRate = { updateTtsSettings(selectedSettings.ttsSettings.copy(speechRate = it)) },
+                                    onUpdatePitch = { updateTtsSettings(selectedSettings.ttsSettings.copy(pitch = it)) },
+                                    onUpdateTimerPreset = { updateTtsSettings(selectedSettings.ttsSettings.copy(timerPreset = it)) },
+                                    errorText = listeningError,
                                 )
                             }
                         }
@@ -1356,44 +1291,6 @@ private fun ReaderReadyContent(
                 )
             }
         }
-    }
-    listeningStartChoice?.let { location ->
-        AlertDialog(
-            onDismissRequest = { listeningStartChoice = null },
-            title = { Text("开始听书") },
-            text = {
-                val chapterTitle = state.chapters.firstOrNull { it.chapterIndex == location.chapterIndex }?.title.orEmpty()
-                Text("上次听到：$chapterTitle。可以继续听，也可以从当前显示的文字开始。")
-            },
-            confirmButton = { TextButton(onClick = { resumeListeningAt(location) }) { Text("继续上次听书") } },
-            dismissButton = {
-                TextButton(onClick = { listeningStartChoice = null; startTtsFromCurrentLocation() }) {
-                    Text("从当前文字开始")
-                }
-            },
-        )
-    }
-}
-
-@Composable
-private fun ReaderTransientTtsMessage(
-    message: String,
-    themePalette: ReaderThemePalette,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier,
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp),
-        tonalElevation = 6.dp,
-        shadowElevation = 6.dp,
-        color = themePalette.surface.copy(alpha = 0.96f),
-    ) {
-        ReaderSingleLineText(
-            text = message,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-            style = MaterialTheme.typography.bodySmall,
-            color = themePalette.content,
-        )
     }
 }
 

@@ -1,32 +1,32 @@
 package com.longerlsx.storyapp.feature.reader
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.width
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.click
-import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipe
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
 import com.longerlsx.storyapp.core.model.Book
 import com.longerlsx.storyapp.core.model.Chapter
 import com.longerlsx.storyapp.core.model.ImportSourceType
 import com.longerlsx.storyapp.core.model.ReaderSettings
+import com.longerlsx.storyapp.core.model.ReaderTtsSettings
+import com.longerlsx.storyapp.core.model.ReaderTtsTimerPreset
+import com.longerlsx.storyapp.core.model.ReadingAnchor
+import com.longerlsx.storyapp.core.model.ReadingProgress
 import com.longerlsx.storyapp.core.model.ReadingMode
 import com.longerlsx.storyapp.data.book.InMemoryBookRepository
 import com.longerlsx.storyapp.data.reader.ReaderSettingsStore
@@ -47,6 +47,184 @@ class ReaderTtsFollowTest {
 
     @get:Rule
     val composeRule = createComposeRule()
+
+    @Test
+    fun newPageListeningStartsAtRenderedFirstLineInsteadOfRestoredMidPageAnchor() {
+        grantNotificationPermission()
+        val bookId = "book-start-page-top"
+        val prefix = "页顶从这里开始。"
+        val text = prefix + "山风吹过石桥，沿路的树影渐渐移到河岸。".repeat(100)
+        val restoredOffset = 80
+        val repository = createRepository(bookId, mapOf(0 to text))
+        runBlocking {
+            repository.saveReadingProgress(ReadingProgress(bookId, ReadingAnchor(0, restoredOffset), ReadingMode.PAGE, 2L))
+        }
+        val settings = createSettingsStore("tts-start-page-top", ReaderSettings(readingMode = ReadingMode.PAGE))
+        val starts = mutableListOf<ReaderTtsStartRequest>()
+        val controller = ReaderTtsController(launchForegroundService = { starts += it; true }, sendStopCommand = {})
+        composeRule.setContent {
+            ReaderScreen(bookId, repository, settings, controller, onBack = {})
+        }
+        composeRule.waitUntil(8_000) {
+            composeRule.onAllNodesWithText(prefix, substring = true).fetchSemanticsNodes().isNotEmpty()
+        }
+        val layouts = mutableListOf<TextLayoutResult>()
+        composeRule.onNodeWithText(prefix, substring = true).assertIsDisplayed()
+            .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        val layout = layouts.single()
+        assertTrue("Fixture must restore beyond the first rendered line", restoredOffset > layout.getLineEnd(0))
+        assertTrue("The restored text must still be on this rendered page", restoredOffset < layout.layoutInput.text.length)
+        assertEquals(0, layout.getLineStart(0))
+
+        composeRule.onRoot().performTouchInput { click(center) }
+        composeRule.onNodeWithContentDescription("朗读").performClick()
+        composeRule.waitUntil(5_000) { starts.size == 1 }
+        composeRule.runOnIdle {
+            assertEquals("Fresh start must use the displayed page top, not its restoration target", 0, starts.single().charOffset)
+            assertEquals(0, starts.single().chapterIndex)
+        }
+    }
+
+    @Test
+    fun scrollingStartsAtActualTopLineAndStopReopenUsesNewTopWhilePauseOnlyResumes() {
+        grantNotificationPermission()
+        val bookId = "book-start-scroll-top"
+        // One long paragraph makes returning to the paragraph/chapter start an observable error.
+        val text = (0 until 120).joinToString("") { "第${it}处山风经过石桥，树影沿着河岸慢慢移动。" }
+        val repository = createRepository(bookId, mapOf(0 to text))
+        val settings = createSettingsStore("tts-start-scroll-top", ReaderSettings(
+            readingMode = ReadingMode.SCROLL,
+            ttsSettings = ReaderTtsSettings(timerPreset = ReaderTtsTimerPreset.Countdown(30)),
+        ))
+        val starts = mutableListOf<ReaderTtsStartRequest>()
+        val restarts = mutableListOf<ReaderTtsStartRequest>()
+        var resumes = 0
+        lateinit var controller: ReaderTtsController
+        controller = ReaderTtsController(
+            launchForegroundService = { starts += it; true },
+            sendStopCommand = {},
+            sendPauseCommand = { controller.pauseByUser() },
+            sendResumeCommand = { resumes++; controller.resumeFromPause() },
+            sendRestartCommand = { restarts += it },
+        )
+        composeRule.setContent { ReaderScreen(bookId, repository, settings, controller, onBack = {}) }
+        composeRule.waitUntil(8_000) {
+            composeRule.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
+        }
+
+        fun scrollForward() {
+            composeRule.onAllNodes(hasScrollAction())[0].performTouchInput {
+                swipe(
+                    start = androidx.compose.ui.geometry.Offset(centerX, height * 0.75f),
+                    end = androidx.compose.ui.geometry.Offset(centerX, height * 0.35f),
+                    durationMillis = 600,
+                )
+            }
+            composeRule.waitForIdle()
+        }
+
+        fun openAndStartListening() {
+            if (composeRule.onAllNodesWithContentDescription("朗读").fetchSemanticsNodes().isEmpty()) {
+                composeRule.onRoot().performTouchInput { click(center) }
+            }
+            composeRule.onNodeWithContentDescription("朗读").performClick()
+        }
+
+        fun renderedTopLineStart(): Int {
+            val body = composeRule.onNodeWithText(text)
+            val layouts = mutableListOf<TextLayoutResult>()
+            body.performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+            val layout = layouts.single()
+            val bodyTop = body.fetchSemanticsNode().positionInRoot.y
+            val scrollBounds = composeRule.onAllNodes(hasScrollAction())[0].fetchSemanticsNode().boundsInRoot
+            // The actual list begins below the header; its readable area has the existing 8dp inset.
+            val readableTop = scrollBounds.top + with(composeRule.density) { 8.dp.toPx() }
+            val line = (0 until layout.lineCount).first { bodyTop + layout.getLineBottom(it) > readableTop }
+            assertTrue("Fixture must place the viewport inside the long paragraph", line > 0)
+            return layout.getLineStart(line)
+        }
+
+        scrollForward()
+        val firstTop = renderedTopLineStart()
+        openAndStartListening()
+        composeRule.waitUntil(5_000) { starts.size == 1 }
+        composeRule.runOnIdle {
+            assertEquals("New listening must begin at the actual rendered top line", firstTop, starts.single().charOffset)
+            controller.onPlaybackStarted()
+            controller.updateRemainingTimerMillis(42_000L)
+        }
+        composeRule.onNodeWithContentDescription("暂停朗读").performClick()
+        composeRule.onNodeWithContentDescription("继续朗读").performClick()
+        composeRule.runOnIdle {
+            assertEquals(1, resumes)
+            assertEquals("Resume must not launch a fresh page-top session", 1, starts.size)
+            assertTrue("Resume must not dispatch a restart at another position", restarts.isEmpty())
+            assertEquals(42_000L, controller.remainingTimerMillis)
+        }
+
+        composeRule.onNodeWithContentDescription("停止朗读").performClick()
+        composeRule.onNodeWithContentDescription("收起听书面板").performClick()
+        scrollForward()
+        val secondTop = renderedTopLineStart()
+        assertTrue("The second start must exercise a different visible line", secondTop > firstTop)
+        openAndStartListening()
+        composeRule.waitUntil(5_000) { starts.size == 2 }
+        composeRule.runOnIdle {
+            assertEquals("Stop then start must use the newly visible line, not the old listening point", secondTop, starts.last().charOffset)
+            assertEquals(0, starts.last().chapterIndex)
+        }
+    }
+
+    @Test
+    fun failedPlaybackRetryAfterPanelCollapsePreservesRecoverableOffset() {
+        grantNotificationPermission()
+        val bookId = "book-failed-retry-panel"
+        val prefix = "页首正文与失败恢复位置不同。"
+        val text = prefix + "山风吹过石桥，树影沿着河岸慢慢移动。".repeat(8)
+        val repository = createRepository(bookId, mapOf(0 to text))
+        val settings = createSettingsStore("tts-failed-retry-panel", ReaderSettings(readingMode = ReadingMode.PAGE))
+        val starts = mutableListOf<ReaderTtsStartRequest>()
+        val controller = ReaderTtsController(launchForegroundService = { starts += it; true }, sendStopCommand = {})
+        val error = "这一段声音准备失败，请重试。"
+        composeRule.setContent {
+            ReaderScreen(bookId, repository, settings, controller, onBack = {})
+        }
+        composeRule.waitUntil(8_000) {
+            composeRule.onAllNodesWithText(prefix, substring = true).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText(prefix, substring = true).assertIsDisplayed()
+        composeRule.onRoot().performTouchInput { click(center) }
+        composeRule.onNodeWithContentDescription("朗读").performClick()
+        composeRule.waitUntil(5_000) { starts.size == 1 }
+        composeRule.runOnIdle {
+            assertEquals("Fresh listening begins at this page's first line", 0, starts.single().charOffset)
+            controller.onPlaybackStarted()
+            controller.updatePlaybackSnapshot(ReaderTtsPlaybackSnapshot(
+                currentSegment = ReaderTtsSegment(0, 40, 120, text.substring(40, 120)),
+                lastConfirmedSpokenRange = ReaderTtsCharacterRange(40, 76),
+                nextRecoverableCharOffset = 76,
+                nextRecoverableRange = ReaderTtsCharacterRange(76, 120),
+            ))
+            controller.handleStartupFailure(error)
+        }
+        composeRule.onNodeWithText(error).assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("收起听书面板").performClick()
+        composeRule.onNodeWithText(error).assertDoesNotExist()
+        composeRule.runOnIdle {
+            assertEquals(com.longerlsx.storyapp.feature.reader.tts.ReaderTtsSessionState.FAILED, controller.playbackState)
+            assertEquals(error, controller.localErrorMessage)
+            assertEquals(76, controller.playbackSnapshot.nextRecoverableCharOffset)
+            assertEquals("Closing the panel must not restart playback", 1, starts.size)
+        }
+        composeRule.onNodeWithContentDescription("展开听书面板").performClick()
+        composeRule.onNodeWithText(error).assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("重试朗读").performClick()
+        composeRule.waitUntil(5_000) { starts.size == 2 }
+        composeRule.runOnIdle {
+            assertEquals(0, starts.last().chapterIndex)
+            assertEquals("Retry must recover the failed sentence, not restart from the page top", 76, starts.last().charOffset)
+        }
+    }
 
     @Test
     fun pausedNotificationOpensListeningTextWhileOrdinaryOpeningKeepsReadingPosition() {
@@ -133,7 +311,8 @@ class ReaderTtsFollowTest {
         composeRule.onNodeWithText("第二段正文")
             .assertIsDisplayed()
             .performTouchInput { longClick() }
-        composeRule.onNodeWithText("从这里重新朗读").assertIsDisplayed()
+        composeRule.waitUntil(timeoutMillis = 5_000) { restartRequests.size == 1 }
+        composeRule.onNodeWithText("从这里重新朗读").assertDoesNotExist()
 
         composeRule.runOnIdle {
             assertEquals(1, restartRequests.size)
@@ -273,7 +452,7 @@ class ReaderTtsFollowTest {
     }
 
     @Test
-    fun tappingBodyWhileTtsIsActiveAndSettingsExpandedReturnsToReadingOnly() {
+    fun tappingBodyWhileTtsIsActiveAndListeningExpandedReturnsToReadingOnlyWithoutStopping() {
         val bookId = "book-tts-settings-body-tap"
         val repository = createRepository(
             bookId = bookId,
@@ -316,13 +495,23 @@ class ReaderTtsFollowTest {
             )
         }
 
-        composeRule.onRoot().performTouchInput { click(center) }
-        composeRule.onNodeWithContentDescription("设置").performClick()
-        composeRule.onNodeWithText("当前状态：朗读中").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("展开听书面板").performClick()
+        composeRule.onNodeWithText("定时关闭").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("暂停朗读").assertIsDisplayed()
 
-        composeRule.onNodeWithText("第二段正文。").assertIsDisplayed().performClick()
+        val paragraphBounds = composeRule.onNodeWithText("第二段正文。").assertIsDisplayed()
+            .fetchSemanticsNode().boundsInRoot
+        val rootBounds = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
+        composeRule.onRoot().performTouchInput {
+            click(androidx.compose.ui.geometry.Offset(centerX, paragraphBounds.center.y - rootBounds.top))
+        }
 
+        composeRule.onNodeWithText("定时关闭").assertDoesNotExist()
         composeRule.onNodeWithContentDescription("沉浸式阅读头部").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("暂停朗读").assertIsDisplayed()
+        composeRule.runOnIdle {
+            assertEquals(com.longerlsx.storyapp.feature.reader.tts.ReaderTtsSessionState.PLAYING, controller.playbackState)
+        }
     }
 
     @Test
@@ -370,7 +559,12 @@ class ReaderTtsFollowTest {
         }
 
         composeRule.onNodeWithContentDescription("沉浸式阅读头部").assertIsDisplayed()
-        composeRule.onNodeWithText("第二段正文。").assertIsDisplayed().performClick()
+        val paragraphBounds = composeRule.onNodeWithText("第二段正文。").assertIsDisplayed()
+            .fetchSemanticsNode().boundsInRoot
+        val rootBounds = composeRule.onRoot().fetchSemanticsNode().boundsInRoot
+        composeRule.onRoot().performTouchInput {
+            click(androidx.compose.ui.geometry.Offset(centerX, paragraphBounds.center.y - rootBounds.top))
+        }
         composeRule.onNodeWithContentDescription("设置").assertIsDisplayed()
     }
 
@@ -733,7 +927,7 @@ class ReaderTtsFollowTest {
             )
         }
 
-        composeRule.onNodeWithText("继续朗读").performClick()
+        composeRule.onNodeWithContentDescription("继续朗读").performClick()
 
         composeRule.runOnIdle {
             assertEquals(1, resumeCommands)
@@ -845,145 +1039,16 @@ class ReaderTtsFollowTest {
             }
         }
 
-        composeRule.onNodeWithText("已停止朗读，重新开始将从当前位置开始").assertIsDisplayed()
+        composeRule.onNodeWithText("已停止朗读，重新开始将从当前位置开始").assertDoesNotExist()
         composeRule.runOnIdle {
+            assertEquals(com.longerlsx.storyapp.feature.reader.tts.ReaderTtsSessionState.STOPPED_BY_NAVIGATION, controller.playbackState)
+            assertEquals("已停止朗读，重新开始将从当前位置开始", controller.localStatusMessage)
             showReader.value = false
         }
 
         composeRule.runOnIdle {
             assertNull(controller.localStatusMessage)
         }
-    }
-
-    @Test
-    fun transientTtsMessageUsesReaderPaletteInsteadOfMaterialSurfaceColors() {
-        val bookId = "book-transient-message-theme"
-        val message = "已停止朗读，重新开始将从当前位置开始"
-        val materialSurfaceTrap = Color(0xFFFF00FF)
-        val materialOnSurfaceTrap = Color(0xFF00FFFF)
-        val repository = createRepository(
-            bookId = bookId,
-            chapterTexts = mapOf(0 to "第一段正文。"),
-        )
-        val settingsStore = createSettingsStore(
-            name = "reader-tts-transient-message-theme",
-            initial = ReaderSettings(readingMode = ReadingMode.SCROLL),
-        )
-        val controller = ReaderTtsController(
-            launchForegroundService = { true },
-            sendStopCommand = {},
-        )
-        controller.start(
-            request = ReaderTtsStartRequest(
-                bookId = bookId,
-                bookTitle = "瞬时消息配色测试",
-                chapterIndex = 0,
-                charOffset = 0,
-                chapterTitleOrSummary = "第一章",
-                activeStateLabel = "朗读中",
-            ),
-            settings = settingsStore.load().ttsSettings,
-        )
-        controller.onPlaybackStarted()
-        controller.stopByNavigation(message)
-
-        composeRule.setContent {
-            MaterialTheme(
-                colorScheme = lightColorScheme(
-                    surface = materialSurfaceTrap,
-                    onSurface = materialOnSurfaceTrap,
-                ),
-            ) {
-                ReaderScreen(
-                    bookId = bookId,
-                    repository = repository,
-                    settingsStore = settingsStore,
-                    ttsController = controller,
-                    onBack = {},
-                )
-            }
-        }
-
-        composeRule.onNodeWithText(message).assertIsDisplayed()
-        val rootPixels = composeRule.onRoot().captureToImage().toPixelMap()
-
-        org.junit.Assert.assertFalse(rootPixels.containsTrapColor(materialSurfaceTrap, channelTolerance = 0.08f))
-        org.junit.Assert.assertFalse(rootPixels.containsTrapColor(materialOnSurfaceTrap, channelTolerance = 0.08f))
-    }
-
-    @Test
-    fun transientTtsMessageWithLongCopyStaysSingleLine() {
-        val longBookId = "book-transient-message-long"
-        val shortBookId = "book-transient-message-short"
-        val longMessage = "已停止朗读，重新开始将从当前位置开始；这条提示用于说明章节切换后会从当前可见正文重新起读"
-        val shortMessage = "已停止朗读"
-        val longRepository = createRepository(
-            bookId = longBookId,
-            chapterTexts = mapOf(0 to "第一段正文。"),
-        )
-        val shortRepository = createRepository(
-            bookId = shortBookId,
-            chapterTexts = mapOf(0 to "第一段正文。"),
-        )
-        val longSettingsStore = createSettingsStore(
-            name = "reader-tts-transient-message-long",
-            initial = ReaderSettings(readingMode = ReadingMode.SCROLL),
-        )
-        val shortSettingsStore = createSettingsStore(
-            name = "reader-tts-transient-message-short",
-            initial = ReaderSettings(readingMode = ReadingMode.SCROLL),
-        )
-        val longController = createStoppedNavigationController(
-            bookId = longBookId,
-            bookTitle = "长提示测试",
-            settings = longSettingsStore.load().ttsSettings,
-            message = longMessage,
-        )
-        val shortController = createStoppedNavigationController(
-            bookId = shortBookId,
-            bookTitle = "短提示测试",
-            settings = shortSettingsStore.load().ttsSettings,
-            message = shortMessage,
-        )
-
-        composeRule.setContent {
-            Column(modifier = androidx.compose.ui.Modifier.width(320.dp)) {
-                Box(modifier = androidx.compose.ui.Modifier.height(220.dp)) {
-                    ReaderScreen(
-                        bookId = longBookId,
-                        repository = longRepository,
-                        settingsStore = longSettingsStore,
-                        ttsController = longController,
-                        onBack = {},
-                    )
-                }
-                Box(modifier = androidx.compose.ui.Modifier.height(220.dp)) {
-                    ReaderScreen(
-                        bookId = shortBookId,
-                        repository = shortRepository,
-                        settingsStore = shortSettingsStore,
-                        ttsController = shortController,
-                        onBack = {},
-                    )
-                }
-            }
-        }
-
-        val longMessageBounds = composeRule
-            .onNodeWithText(longMessage)
-            .assertIsDisplayed()
-            .getUnclippedBoundsInRoot()
-        val longMessageHeight = longMessageBounds.bottom - longMessageBounds.top
-        val shortMessageBounds = composeRule
-            .onNodeWithText(shortMessage)
-            .assertIsDisplayed()
-            .getUnclippedBoundsInRoot()
-        val shortMessageHeight = shortMessageBounds.bottom - shortMessageBounds.top
-
-        assertTrue(
-            "Transient TTS messages should stay single-line; actual height=$longMessageHeight, reference single-line height=$shortMessageHeight",
-            longMessageHeight <= shortMessageHeight + 0.5.dp,
-        )
     }
 
     private fun createRepository(
@@ -1023,29 +1088,12 @@ class ReaderTtsFollowTest {
         return repository
     }
 
-    private fun createStoppedNavigationController(
-        bookId: String,
-        bookTitle: String,
-        settings: com.longerlsx.storyapp.core.model.ReaderTtsSettings,
-        message: String,
-    ): ReaderTtsController {
-        return ReaderTtsController(
-            launchForegroundService = { true },
-            sendStopCommand = {},
-        ).also { controller ->
-            controller.start(
-                request = ReaderTtsStartRequest(
-                    bookId = bookId,
-                    bookTitle = bookTitle,
-                    chapterIndex = 0,
-                    charOffset = 0,
-                    chapterTitleOrSummary = "第一章",
-                    activeStateLabel = "朗读中",
-                ),
-                settings = settings,
+    private fun grantNotificationPermission() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            val instrumentation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+            androidx.test.uiautomator.UiDevice.getInstance(instrumentation).executeShellCommand(
+                "pm grant ${instrumentation.targetContext.packageName} android.permission.POST_NOTIFICATIONS",
             )
-            controller.onPlaybackStarted()
-            controller.stopByNavigation(message)
         }
     }
 

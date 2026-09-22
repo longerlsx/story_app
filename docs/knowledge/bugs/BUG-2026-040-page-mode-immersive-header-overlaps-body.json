@@ -2,11 +2,12 @@
   "id": "BUG-2026-040",
   "title": "Page-mode immersive header overlaps the first body line",
   "symptom": "On a Pixel 8 / Android 14 emulator in page mode, the lightweight immersive header could collide with the first visible body line. A real imported TXT showed the header bottom at y=253 while the first body line started at y=248 before the fix.",
-  "root_cause": "Page mode used a 44dp base top padding for page text. That converted to a text top that sat above the measured bottom of the immersive header on the current device, while scroll mode already reserved a larger 52dp top band.",
+  "root_cause": "Page mode used a 44dp base top padding for page text. That converted to a text top that sat above the measured bottom of the immersive header on the current device, while scroll mode already reserved a larger 52dp top band. During the 2026-09-20 visual revision, expanding the back target to 48dp while retaining a 14dp top offset recreated overlap in the touch region: its bottom reached 62dp even though the body still started at 52dp.",
   "fix": [
     "Raised the page-mode base top padding from 44dp to 52dp so the first page line clears the immersive header band.",
     "Added an instrumented regression that compares the visible bounds of the immersive header and first body text.",
-    "Verified the same real TXT after the fix: the header bottom remained y=253 and the first body line moved to y=269, leaving visible separation."
+    "Verified the same real TXT after the fix: the header bottom remained y=253 and the first body line moved to y=269, leaving visible separation.",
+    "The 2026-09-20 revision keeps the 48dp back target but starts it at 4dp. It does not change the 52dp body inset or repaginate on chrome changes. ReaderTtsControlsTest.continuationTextTouchDoesNotTriggerTheImmersiveBackButton first reproduced an unexpected back callback at (20dp,55dp), then passed with no back callback after the correction."
   ],
   "failed_attempts": [
     "Do not rely on static padding values unless they are checked against the actual header bounds on the target device.",
@@ -25,5 +26,5 @@
   ],
   "confidence": 0.93,
   "created_at": "2026-06-24",
-  "updated_at": "2026-06-24"
+  "updated_at": "2026-09-20"
 }

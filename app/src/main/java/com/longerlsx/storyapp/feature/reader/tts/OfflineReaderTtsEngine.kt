@@ -6,10 +6,13 @@ import android.media.AudioFormat
 import android.media.AudioTrack
 import android.os.SystemClock
 import android.util.Log
+import com.k2fsa.sherpa.onnx.GenerationConfig
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.OfflineTtsConfig
-import com.k2fsa.sherpa.onnx.OfflineTtsKokoroModelConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
+import com.k2fsa.sherpa.onnx.OfflineTtsZipVoiceModelConfig
+import com.k2fsa.sherpa.onnx.WaveData
+import com.k2fsa.sherpa.onnx.WaveReader
 import com.longerlsx.storyapp.core.model.ReaderTtsSettings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -40,6 +43,7 @@ class OfflineReaderTtsEngine(
     private val audioLock = Any()
     @Volatile private var closed = false
     @Volatile private var model: OfflineTts? = null
+    private var referenceVoice: WaveData? = null
     @Volatile private var settings = ReaderTtsSettings()
     private var playbackJob: Job? = null
     private var activeTrack: AudioTrack? = null
@@ -60,30 +64,31 @@ class OfflineReaderTtsEngine(
                         val startedAt = SystemClock.elapsedRealtime()
                         val dataDir = preparePhonemeData()
                         currentCoroutineContext().ensureActive()
+                        val reference = WaveReader.readWave(context.assets, "$MODEL_DIR/leijun-1.wav")
+                        check(reference.sampleRate > 0 && reference.samples.isNotEmpty()) { "内置参考声音无法读取" }
                         val created = OfflineTts(
                             assetManager = context.assets,
                             config = OfflineTtsConfig(
                                 model = OfflineTtsModelConfig(
-                                    kokoro = OfflineTtsKokoroModelConfig(
-                                        model = "$MODEL_DIR/model.onnx",
-                                        voices = "$MODEL_DIR/voices.bin",
+                                    zipvoice = OfflineTtsZipVoiceModelConfig(
+                                        encoder = "$MODEL_DIR/encoder.int8.onnx",
+                                        decoder = "$MODEL_DIR/decoder.int8.onnx",
+                                        vocoder = "$MODEL_DIR/vocos_24khz.onnx",
                                         tokens = "$MODEL_DIR/tokens.txt",
                                         dataDir = dataDir.absolutePath,
-                                        lexicon = "$MODEL_DIR/lexicon-zh.txt,$MODEL_DIR/lexicon-us-en.txt",
-                                        lang = "zh",
+                                        lexicon = "$MODEL_DIR/lexicon.txt",
                                     ),
                                     numThreads = 4,
                                 ),
-                                ruleFsts = listOf("date-zh.fst", "number-zh.fst", "phone-zh.fst")
-                                    .joinToString(",") { "$MODEL_DIR/$it" },
                             ),
                         )
                         if (closed) {
                             created.release()
                             throw CancellationException("Engine closed during initialization")
                         }
+                        referenceVoice = reference
                         model = created
-                        Log.i(TAG, "modelReadyMs=${SystemClock.elapsedRealtime() - startedAt}")
+                        Log.i(TAG, "model=zipvoice-distill-int8 threads=4 steps=4 modelReadyMs=${SystemClock.elapsedRealtime() - startedAt}")
                     }
                 }
             }
@@ -96,10 +101,9 @@ class OfflineReaderTtsEngine(
     }
 
     override fun applySettings(settings: ReaderTtsSettings) {
-        if (this.settings.voiceName != settings.voiceName || this.settings.speechRate != settings.speechRate) {
-            preparation.clear()
-        }
-        this.settings = settings
+        // Old persisted system/Kokoro names still use the one bundled reference voice.
+        // Speed and pitch are applied at playback; prepared natural-rate PCM remains valid.
+        this.settings = settings.copy(voiceName = ReaderTtsSettings.DEFAULT_VOICE_NAME)
     }
 
     override fun prepareNext(segment: ReaderTtsSegment) {
@@ -107,7 +111,7 @@ class OfflineReaderTtsEngine(
     }
 
     override fun prepareUpcoming(segments: List<ReaderTtsSegment>) {
-        if (!closed && model != null) preparation.prepareUpcoming(segments, settings)
+        if (!closed && model != null) preparation.prepareUpcoming(segments, settings.copy(speechRate = 1f))
     }
 
     override fun speak(utteranceId: String, segment: ReaderTtsSegment): Boolean {
@@ -117,9 +121,9 @@ class OfflineReaderTtsEngine(
         val selected = settings
         playbackJob = scope.launch {
             try {
-                val generated = preparation.take(segment, selected)
+                val generated = preparation.take(segment, selected.copy(speechRate = 1f))
                 ensureCurrent(generation)
-                play(generation, utteranceId, segment, generated.samples, generated.sampleRate, selected.pitch)
+                play(generation, utteranceId, segment, generated.samples, generated.sampleRate, selected.speechRate, selected.pitch)
                 notifyWhilePlaying(generation) { callback.onUtteranceCompleted(utteranceId) }
             } catch (_: CancellationException) {
                 // Stopping an old request must neither confirm nor fail a later request.
@@ -138,12 +142,24 @@ class OfflineReaderTtsEngine(
             jobContext.ensureActive()
             if (closed) throw CancellationException("Engine closed")
             val readyModel = checkNotNull(model)
+            val reference = checkNotNull(referenceVoice)
             val startedAt = SystemClock.elapsedRealtime()
             Log.i(TAG, "synthesisStart chapter=${segment.chapterIndex} offset=${segment.startCharOffset} chars=${segment.spokenText.length}")
-            val audio = readyModel.generateWithCallback(
-                text = segment.spokenText,
-                sid = voiceId(selected.voiceName),
-                speed = selected.speechRate.coerceIn(0.5f, 2f),
+            val audio = readyModel.generateWithConfigAndCallback(
+                // sherpa's ZipVoice front end sends raw digit runs to English eSpeak.
+                // Transform only synthesis input; segment offsets and completion stay in source text.
+                text = ReaderTtsChineseNumberNormalizer.normalize(segment.spokenText),
+                config = GenerationConfig(
+                    // The bundled encoder scales prompt+target length before sherpa removes
+                    // the unscaled prompt. Higher synthesis speed can truncate the target.
+                    speed = 1f,
+                    silenceScale = 0.2f,
+                    referenceAudio = reference.samples,
+                    referenceSampleRate = reference.sampleRate,
+                    referenceText = REFERENCE_TEXT,
+                    numSteps = 4,
+                    extra = mapOf("min_char_in_sentence" to "30"),
+                ),
                 // JNI requires invoke(float[]) -> Integer; an indy lambda only exposes invoke(Object).
                 callback = object : (FloatArray) -> Int {
                     override fun invoke(samples: FloatArray): Int = if (!closed && jobContext.isActive) 1 else 0
@@ -152,7 +168,7 @@ class OfflineReaderTtsEngine(
             jobContext.ensureActive()
             if (closed) throw CancellationException("Engine closed")
             check(audio.samples.isNotEmpty()) { "这段文字没有生成声音，请重试或换一处开始" }
-            Log.i(TAG, "synthesisMs=${SystemClock.elapsedRealtime() - startedAt} audioMs=${audio.samples.size.toLong() * 1000 / audio.sampleRate} chars=${segment.spokenText.length}")
+            Log.i(TAG, "synthesisMs=${SystemClock.elapsedRealtime() - startedAt} audioMs=${audio.samples.size.toLong() * 1000 / audio.sampleRate} chars=${segment.spokenText.length} rate=${selected.speechRate}")
             ReaderSpeechAudio(audio.samples, audio.sampleRate)
         }
 
@@ -162,6 +178,7 @@ class OfflineReaderTtsEngine(
         segment: ReaderTtsSegment,
         samples: FloatArray,
         sampleRate: Int,
+        speechRate: Float,
         pitch: Float,
     ) {
         awaitPlaybackAllowed(generation)
@@ -177,7 +194,9 @@ class OfflineReaderTtsEngine(
                 check(track.state == AudioTrack.STATE_INITIALIZED) { "无法打开音频输出，请重试" }
                 activeTrack = track
                 activeTrackUtterance = utteranceId
-                track.playbackParams = track.playbackParams.setPitch(pitch.coerceIn(0.8f, 1.2f)).setSpeed(1f)
+                track.playbackParams = track.playbackParams
+                    .setPitch(pitch.coerceIn(0.8f, 1.2f))
+                    .setSpeed(speechRate.coerceIn(0.5f, 2f))
                 if (focusPauseGate == null) track.play() else track.pause()
             }
             var offset = 0
@@ -345,6 +364,7 @@ class OfflineReaderTtsEngine(
             nativeMutex.withLock {
                 model?.release()
                 model = null
+                referenceVoice = null
             }
             scope.cancel()
         }
@@ -378,7 +398,7 @@ class OfflineReaderTtsEngine(
     private data class ResumeCheckpoint(val utteranceId: String, val sessionId: Int, val frame: Int, val requestedAt: Long)
 
     private fun preparePhonemeData(): File {
-        val directory = File(context.filesDir, "offline-voice/kokoro-v1.1/espeak-ng-data")
+        val directory = File(context.filesDir, "offline-voice/zipvoice-distill-int8-v1/espeak-ng-data")
         val ready = File(directory, ".ready")
         if (ready.isFile) return directory
         fun copy(asset: String, destination: File) {
@@ -392,25 +412,17 @@ class OfflineReaderTtsEngine(
             }
         }
         copy("$MODEL_DIR/espeak-ng-data", directory)
-        ready.writeText("kokoro-v1.1/sherpa-1.13.8")
+        ready.writeText("zipvoice-distill-int8-v1/sherpa-1.13.8")
         return directory
     }
 
     companion object {
         private const val TAG = "OfflineReaderTts"
-        private const val MODEL_DIR = "kokoro-multi-lang-v1_1"
+        private const val MODEL_DIR = "sherpa-onnx-zipvoice-distill-int8-zh-en-emilia"
+        private const val REFERENCE_TEXT = "那还是三十六年前, 一九八七年. 我呢考上了武汉大学的计算机系."
         private val nativeMutex = Mutex()
         val voices = listOf(
-            ReaderTtsVoiceOption("kokoro:59", "中文男声一"),
-            ReaderTtsVoiceOption("kokoro:58", "中文男声二"),
-            ReaderTtsVoiceOption("kokoro:3", "中文女声一"),
-            ReaderTtsVoiceOption("kokoro:4", "中文女声二"),
+            ReaderTtsVoiceOption(ReaderTtsSettings.DEFAULT_VOICE_NAME, "雷军"),
         )
-        private fun voiceId(name: String?) = when (name) {
-            "kokoro:58" -> 58
-            "kokoro:3" -> 3
-            "kokoro:4" -> 4
-            else -> 59
-        }
     }
 }

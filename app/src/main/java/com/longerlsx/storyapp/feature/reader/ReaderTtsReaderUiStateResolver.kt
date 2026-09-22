@@ -28,28 +28,32 @@ object ReaderTtsReaderUiStateResolver {
         }
         val toggleLabel = when {
             runtimeState.isVoicePreviewing -> "停止试听"
-            currentBookSession.isPaused && !remainingTimeLabel.isNullOrBlank() -> "继续朗读 · $remainingTimeLabel"
             currentBookSession.isPaused -> "继续朗读"
-            currentBookSession.isSpeaking && !remainingTimeLabel.isNullOrBlank() -> "暂停朗读 · $remainingTimeLabel"
             currentBookSession.isSpeaking -> "暂停朗读"
             failed -> "重试朗读"
             else -> "朗读"
         }
         val statusText = when {
             runtimeState.isVoicePreviewing -> "正在试听当前音色…"
-            failed -> "朗读失败：${runtimeState.localErrorMessage ?: "请重试"}"
-            isCurrentBook && runtimeState.playbackState == ReaderTtsSessionState.STOPPED_BY_TIMER -> "定时结束，已停止朗读"
-            isCurrentBook && runtimeState.playbackState == ReaderTtsSessionState.STOPPED_AT_BOOK_END -> "已读到全书末尾"
+            failed -> "朗读失败"
+            isCurrentBook && runtimeState.playbackState == ReaderTtsSessionState.STOPPED_BY_TIMER -> "定时结束"
+            isCurrentBook && runtimeState.playbackState == ReaderTtsSessionState.STOPPED_AT_BOOK_END -> "已读完"
             isCurrentBook && runtimeState.playbackState == ReaderTtsSessionState.STARTING -> "正在准备离线声音…"
-            currentBookSession.isPaused -> "当前状态：已暂停"
-            currentBookSession.isSpeaking -> "当前状态：朗读中"
-            else -> "当前状态：未朗读"
+            currentBookSession.isPaused -> "已暂停"
+            currentBookSession.isSpeaking -> "正在朗读"
+            isCurrentBook && runtimeState.playbackState in setOf(
+                ReaderTtsSessionState.STOPPED_BY_USER, ReaderTtsSessionState.STOPPED_BY_NAVIGATION,
+            ) -> "已停止"
+            else -> "未开始"
         }
         return ReaderTtsReaderUiState(
             toggleState = ReaderTtsToggleUiState(
-                actionLabel = toggleLabel,
-                showImmersiveAction = currentBookSession.isOngoing || runtimeState.isVoicePreviewing,
+                actionLabel = if (currentBookSession.isOngoing || failed) "听书" else "朗读",
+                showImmersiveAction = currentBookSession.isOngoing || runtimeState.isVoicePreviewing || failed,
                 immersiveActionLabel = toggleLabel,
+                statusText = statusText,
+                remainingTimeLabel = remainingTimeLabel,
+                speechRate = runtimeState.speechRate,
             ),
             statusText = statusText,
             remainingTimeLabel = remainingTimeLabel,

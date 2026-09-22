@@ -1,0 +1,22 @@
+{
+  "id": "BUG-2026-059",
+  "title": "Daytime bookshelf leaves light system-bar icons unreadable on a light background",
+  "status": "resolved",
+  "symptom": "The initial real bookshelf capture during the visual upgrade shows white status-bar icons against the light page background; the time is effectively invisible.",
+  "root_cause": "BookshelfScreen renders the Material theme background but does not set system-bar colors or icon appearance. The Activity uses transparent system bars, and the existing explicit appearance management belongs only to ReaderScreen. A light bookshelf therefore does not establish the dark icons it needs.",
+  "fix": [
+    "BookshelfScreen now applies a local SideEffect using MaterialTheme.colorScheme.background for both system bars and the background luminance to choose dark or light icons. Navigation-bar contrast enforcement is disabled on Android Q and later so the explicitly chosen appearance remains coordinated.",
+    "The effect skips previews and safely unwraps the view context to an Activity. It runs only while the bookshelf is composed; no global theme effect is added, and ReaderScreen retains its own system-bar ownership."
+  ],
+  "evidence": [
+    "The pre-fix normal day-mode bookshelf screenshot directly exposed the unreadable time and icons; the missing bookshelf system-bar setup was confirmed in source.",
+    "On the final debug APK with SHA256 prefix 901173, actual emulator day and night captures show readable time and status icons, with coordinated navigation bars. Saved images: docs/superpowers/specs/assets/2026-09-20-visual-direction/implemented-bookshelf.png and implemented-bookshelf-night.png.",
+    "The same final-build device check confirms that opening the reader lets its existing system-bar styling take over normally. These observations cover the checked emulator day/night and page transition, not every device skin."
+  ],
+  "failed_attempts": [],
+  "impact": "The covered bookshelf themes now keep the system time and icons readable without overriding reading-page appearance or changing reading layout, settings, or playback.",
+  "tags": ["android", "compose", "bookshelf", "system-bars", "day-night", "visual", "resolved"],
+  "confidence": 0.99,
+  "created_at": "2026-09-20",
+  "updated_at": "2026-09-20"
+}

@@ -1,18 +1,22 @@
 package com.longerlsx.storyapp.feature.reader
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -21,121 +25,33 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.longerlsx.storyapp.core.model.ReaderAppearanceMode
 import com.longerlsx.storyapp.core.model.ReaderSettings
-import com.longerlsx.storyapp.core.model.ReaderTtsSettings
 import com.longerlsx.storyapp.core.model.ReadingMode
-import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsVoiceOption
 import kotlin.math.roundToInt
 
 @Composable
 fun ReaderSettingsSheet(
     settings: ReaderSettings,
     themePalette: ReaderThemePalette,
-    activeTab: ReaderSettingsTab,
-    availableVoices: List<ReaderTtsVoiceOption>,
-    availableVoicesLoaded: Boolean = true,
-    selectedVoiceName: String?,
-    ttsStatusText: String,
-    ttsRemainingTimeLabel: String? = null,
-    ttsSystemDefaultVoiceStatus: String? = null,
-    onSelectTab: (ReaderSettingsTab) -> Unit,
     onUpdateSettings: (ReaderSettings) -> Unit,
-    onUpdateTtsSettings: (ReaderTtsSettings) -> Unit,
-    onStartTtsFromCurrent: (() -> Unit)? = null,
-    onResumeSavedTts: (() -> Unit)? = null,
-    onStopTts: (() -> Unit)? = null,
-    onPreviewVoice: (() -> Unit)? = null,
-    isVoicePreviewing: Boolean = false,
-    savedListeningLabel: String? = null,
 ) {
-    val readingScrollState = rememberScrollState()
-    val ttsScrollState = rememberScrollState()
-    val activeBodyScrollState = when (activeTab) {
-        ReaderSettingsTab.READING -> readingScrollState
-        ReaderSettingsTab.TTS -> ttsScrollState
-    }
     Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        ReaderSettingsTabRow(
-            activeTab = activeTab,
-            themePalette = themePalette,
-            onSelectTab = onSelectTab,
-        )
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(activeBodyScrollState),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            when (activeTab) {
-                ReaderSettingsTab.READING -> ReaderReadingSettingsBody(
-                    settings = settings,
-                    themePalette = themePalette,
-                    onUpdateSettings = onUpdateSettings,
-                )
-
-                ReaderSettingsTab.TTS -> ReaderTtsSettingsSheet(
-                    statusText = ttsStatusText,
-                    settings = settings.ttsSettings,
-                    themePalette = themePalette,
-                    availableVoices = availableVoices,
-                    availableVoicesLoaded = availableVoicesLoaded,
-                    selectedVoiceName = selectedVoiceName,
-                    remainingTimeLabel = ttsRemainingTimeLabel,
-                    systemDefaultVoiceStatus = ttsSystemDefaultVoiceStatus,
-                    onSelectVoice = { voiceName ->
-                        onUpdateTtsSettings(settings.ttsSettings.copy(voiceName = voiceName))
-                    },
-                    onUpdateSpeechRate = { speechRate ->
-                        onUpdateTtsSettings(settings.ttsSettings.copy(speechRate = speechRate))
-                    },
-                    onUpdatePitch = { pitch ->
-                        onUpdateTtsSettings(settings.ttsSettings.copy(pitch = pitch))
-                    },
-                    onUpdateTimerPreset = { timerPreset ->
-                        onUpdateTtsSettings(settings.ttsSettings.copy(timerPreset = timerPreset))
-                    },
-                    onStartFromCurrent = onStartTtsFromCurrent,
-                    onResumeSaved = onResumeSavedTts,
-                    onStop = onStopTts,
-                    onPreviewVoice = onPreviewVoice,
-                    isVoicePreviewing = isVoicePreviewing,
-                    savedListeningLabel = savedListeningLabel,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ReaderSettingsTabRow(
-    activeTab: ReaderSettingsTab,
-    themePalette: ReaderThemePalette,
-    onSelectTab: (ReaderSettingsTab) -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        ReaderSettingsTab.entries.forEach { tab ->
-            ReaderInlinePill(
-                label = tab.label,
-                themePalette = themePalette,
-                modifier = Modifier.weight(1f),
-                selected = tab == activeTab,
-                contentDescription = "设置分页：${tab.label}，${if (tab == activeTab) "已选中" else "未选中"}",
-                onClick = { onSelectTab(tab) },
-            )
-        }
+        ReaderReadingSettingsBody(settings, themePalette, onUpdateSettings)
     }
 }
 
@@ -158,6 +74,7 @@ private fun ReaderReadingSettingsBody(
             )
         },
     )
+    HorizontalDivider(color = themePalette.outline)
 
     ReaderStepperRow(
         title = "字号",
@@ -195,6 +112,7 @@ private fun ReaderReadingSettingsBody(
         },
     )
 
+    HorizontalDivider(color = themePalette.outline)
     ReaderModeRow(
         readingMode = settings.readingMode,
         settings = settings,
@@ -202,6 +120,7 @@ private fun ReaderReadingSettingsBody(
         onUpdateSettings = onUpdateSettings,
     )
 
+    HorizontalDivider(color = themePalette.outline)
     ReaderThemeRow(
         appearanceMode = settings.appearanceMode,
         selectedPreset = ReaderThemeResolver.resolveActivePreset(settings),
@@ -239,13 +158,13 @@ private fun ReaderSliderRow(
         ) {
             Text(
                 text = title,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.titleSmall,
                 color = themePalette.content,
             )
             Text(
                 text = valueText,
-                style = MaterialTheme.typography.bodySmall,
-                color = themePalette.content.copy(alpha = 0.7f),
+                style = MaterialTheme.typography.bodyMedium,
+                color = themePalette.subtleContent,
             )
         }
         Slider(
@@ -253,9 +172,9 @@ private fun ReaderSliderRow(
             onValueChange = onValueChange,
             valueRange = valueRange,
             colors = SliderDefaults.colors(
-                thumbColor = themePalette.content.copy(alpha = 0.78f),
-                activeTrackColor = themePalette.content.copy(alpha = 0.52f),
-                inactiveTrackColor = themePalette.content.copy(alpha = 0.16f),
+                thumbColor = themePalette.accent,
+                activeTrackColor = themePalette.accent,
+                inactiveTrackColor = themePalette.outline,
             ),
         )
     }
@@ -269,40 +188,71 @@ private fun ReaderStepperRow(
     onDecrease: () -> Unit,
     onIncrease: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .semantics {
-                contentDescription = "$title：$valueText"
-            },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth().semantics { contentDescription = "$title：$valueText" }) {
+        val stackControls = maxWidth < (240 * LocalDensity.current.fontScale).dp
+        val controls: @Composable (Modifier) -> Unit = { modifier ->
+            Surface(
+                modifier = modifier,
+                color = Color.Transparent,
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, themePalette.outline),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ReaderStepperButton(
+                        label = if (title == "字号") "A-" else "−",
+                        description = "减小$title",
+                        themePalette = themePalette,
+                        modifier = Modifier.weight(1f),
+                        onClick = onDecrease,
+                    )
+                    Text(
+                        text = valueText,
+                        modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = themePalette.content,
+                    )
+                    ReaderStepperButton(
+                        label = if (title == "字号") "A+" else "+",
+                        description = "增大$title",
+                        themePalette = themePalette,
+                        modifier = Modifier.weight(1f),
+                        onClick = onIncrease,
+                    )
+                }
+            }
+        }
+        if (stackControls) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(title, style = MaterialTheme.typography.titleSmall, color = themePalette.content)
+                controls(Modifier.fillMaxWidth())
+            }
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, color = themePalette.content)
+                controls(Modifier.weight(1.8f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReaderStepperButton(
+    label: String,
+    description: String,
+    themePalette: ReaderThemePalette,
+    modifier: Modifier,
+    onClick: () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.heightIn(min = 48.dp).widthIn(min = 48.dp)
+            .semantics { contentDescription = description },
+        color = Color.Transparent,
     ) {
-        Text(
-            text = title,
-            modifier = Modifier.weight(0.9f),
-            style = MaterialTheme.typography.bodyMedium,
-            color = themePalette.content,
-        )
-        ReaderInlinePill(
-            label = "A-",
-            themePalette = themePalette,
-            modifier = Modifier.weight(0.8f),
-            onClick = onDecrease,
-        )
-        Text(
-            text = valueText,
-            modifier = Modifier.weight(0.6f),
-            textAlign = TextAlign.Center,
-            style = MaterialTheme.typography.bodyMedium,
-            color = themePalette.content,
-        )
-        ReaderInlinePill(
-            label = "A+",
-            themePalette = themePalette,
-            modifier = Modifier.weight(0.8f),
-            onClick = onIncrease,
-        )
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(8.dp)) {
+            Text(label, style = MaterialTheme.typography.bodyLarge, color = themePalette.content)
+        }
     }
 }
 
@@ -330,6 +280,7 @@ private fun ReaderModeRow(
                 themePalette = themePalette,
                 modifier = Modifier.weight(1f),
                 selected = readingMode == ReadingMode.SCROLL,
+                showSelectionIndicator = true,
                 contentDescription = "阅读模式：滚动，${if (readingMode == ReadingMode.SCROLL) "已选中" else "未选中"}",
                 onClick = {
                     onUpdateSettings(settings.copy(readingMode = ReadingMode.SCROLL))
@@ -340,6 +291,7 @@ private fun ReaderModeRow(
                 themePalette = themePalette,
                 modifier = Modifier.weight(1f),
                 selected = readingMode == ReadingMode.PAGE,
+                showSelectionIndicator = true,
                 contentDescription = "阅读模式：翻页，${if (readingMode == ReadingMode.PAGE) "已选中" else "未选中"}",
                 onClick = {
                     onUpdateSettings(settings.copy(readingMode = ReadingMode.PAGE))
@@ -360,7 +312,7 @@ private fun ReaderThemeRow(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
-            text = "颜色",
+            text = "页面颜色",
             style = MaterialTheme.typography.bodyMedium,
             color = themePalette.content,
         )
@@ -374,6 +326,7 @@ private fun ReaderThemeRow(
                     preset = preset,
                     selected = preset == selectedPreset,
                     themePalette = themePalette,
+                    modifier = Modifier.weight(1f),
                     onClick = { onSelectPreset(preset) },
                 )
             }
@@ -386,12 +339,13 @@ private fun ReaderThemeSwatch(
     preset: ReaderThemePreset,
     selected: Boolean,
     themePalette: ReaderThemePalette,
+    modifier: Modifier,
     onClick: () -> Unit,
 ) {
     val palette = preset.palette()
     Surface(
-        modifier = Modifier
-            .size(30.dp)
+        modifier = modifier
+            .heightIn(min = 48.dp)
             .semantics {
                 contentDescription = if (selected) {
                     "当前主题：${preset.label}"
@@ -399,21 +353,27 @@ private fun ReaderThemeSwatch(
                     "切换主题：${preset.label}"
                 }
             },
-        shape = CircleShape,
-        color = palette.background,
-        border = androidx.compose.foundation.BorderStroke(
-            width = if (selected) 2.dp else 1.dp,
-            color = themePalette.content.copy(alpha = if (selected) 0.78f else 0.28f),
-        ),
+        shape = RoundedCornerShape(12.dp),
+        color = Color.Transparent,
         onClick = onClick,
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(30.dp)
-                .clip(CircleShape)
-                .background(palette.background),
-        )
+        Column(
+            modifier = Modifier.padding(vertical = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Surface(
+                modifier = Modifier.size(44.dp),
+                shape = CircleShape,
+                color = palette.background,
+                border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) themePalette.accent else themePalette.outline),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    if (selected) ReaderSelectionCheck(palette.content)
+                }
+            }
+            Text(preset.label, style = MaterialTheme.typography.bodySmall, color = themePalette.content, textAlign = TextAlign.Center)
+        }
     }
 }
 
@@ -425,31 +385,54 @@ internal fun ReaderInlinePill(
     selected: Boolean = false,
     contentDescription: String? = null,
     horizontalPadding: Dp = 0.dp,
+    showSelectionIndicator: Boolean = false,
+    singleLine: Boolean = false,
     onClick: () -> Unit,
 ) {
     Surface(
-        modifier = modifier.then(
+        modifier = modifier.heightIn(min = 48.dp).widthIn(min = 48.dp).semantics { this.selected = selected }.then(
             if (contentDescription != null) {
                 Modifier.semantics { this.contentDescription = contentDescription }
             } else {
                 Modifier
             },
         ),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, if (selected) themePalette.accent else themePalette.outline),
         color = if (selected) {
-            themePalette.content.copy(alpha = 0.14f)
+            themePalette.accent.copy(alpha = 0.1f)
         } else {
-            themePalette.background.copy(alpha = 0.85f)
+            Color.Transparent
         },
         onClick = onClick,
     ) {
-        ReaderSingleLineText(
-            text = label,
-            modifier = Modifier.padding(horizontal = horizontalPadding, vertical = 10.dp),
-            textAlign = TextAlign.Center,
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (selected) themePalette.content else themePalette.content.copy(alpha = 0.85f),
-        )
+        Row(
+            modifier = Modifier.padding(horizontal = horizontalPadding.coerceAtLeast(8.dp), vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (singleLine) {
+                ReaderSingleLineText(label, MaterialTheme.typography.bodyMedium, if (selected) themePalette.accent else themePalette.content,
+                    modifier = Modifier.weight(1f, fill = false), textAlign = TextAlign.Center)
+            } else {
+                Text(label, style = MaterialTheme.typography.bodyMedium, color = if (selected) themePalette.accent else themePalette.content,
+                    fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+                    modifier = Modifier.weight(1f, fill = false), textAlign = TextAlign.Center)
+            }
+            if (showSelectionIndicator) {
+                if (selected) ReaderSelectionCheck(themePalette.accent)
+                else Box(Modifier.size(16.dp))
+            }
+        }
+    }
+}
+
+@Composable
+internal fun ReaderSelectionCheck(color: Color) {
+    Canvas(modifier = Modifier.size(16.dp)) {
+        val stroke = 2.dp.toPx()
+        drawLine(color, Offset(size.width * 0.16f, size.height * 0.5f), Offset(size.width * 0.41f, size.height * 0.75f), stroke, StrokeCap.Round)
+        drawLine(color, Offset(size.width * 0.41f, size.height * 0.75f), Offset(size.width * 0.86f, size.height * 0.24f), stroke, StrokeCap.Round)
     }
 }
 

@@ -1,11 +1,15 @@
 package com.longerlsx.storyapp.core.model
 
 data class ReaderTtsSettings(
-    val voiceName: String? = null,
+    val voiceName: String? = DEFAULT_VOICE_NAME,
     val speechRate: Float = 1.0f,
     val pitch: Float = 1.0f,
     val timerPreset: ReaderTtsTimerPreset = ReaderTtsTimerPreset.NoTimer,
-)
+) {
+    companion object {
+        const val DEFAULT_VOICE_NAME = "zipvoice:leijun"
+    }
+}
 
 sealed interface ReaderTtsTimerPreset {
     val storedValue: String

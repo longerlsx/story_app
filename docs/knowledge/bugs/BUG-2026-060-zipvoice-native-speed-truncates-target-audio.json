@@ -1,0 +1,26 @@
+{
+  "id": "BUG-2026-060",
+  "title": "ZipVoice native speed scaling truncates the generated target instead of producing normal double-speed speech",
+  "status": "resolved",
+  "symptom": "With the bundled ZipVoice-Distill INT8 model, sherpa-onnx Android 1.13.8 and leijun-1 reference voice, the same 34-character Chinese test input generates 6688 ms of natural-rate audio but only 309 ms with native speed=2. The actual-playback duration assertion fails; this is truncated output, not normal double-speed narration.",
+  "root_cause": "The exported ZipVoice encoder scales the combined reference-plus-target duration by speed. The sherpa 1.13.8 wrapper then subtracts the unscaled reference duration. Target duration is therefore approximately (reference duration + natural target duration) / speed - reference duration. With the fixed 6.057-second reference, native speed=2 consumes almost the entire target duration in the subtraction. This diagnosis is specific to the bundled model/export and wrapper combination; it is not a claim about every ZipVoice version.",
+  "fix": [
+    "OfflineReaderTtsEngine fixes GenerationConfig.speed at 1 so synthesis retains the full target. AudioTrack PlaybackParams applies the user's playback speed, including 2x, independently of pitch.",
+    "Prepared and consumed audio use natural-rate synthesis keys. Changing playback speed can reuse the same PCM rather than regenerating or consuming a stale synthesis-speed result. The current utterance keeps its accepted parameter snapshot; the next utterance takes the latest playback speed and pitch.",
+    "Existing cancellation, playback-head completion and audio-focus handling remain in the actual output path. The fix does not change the chosen reference voice, shorten the reference, pad the novel text or silently lower the requested playback speed."
+  ],
+  "evidence": [
+    "ReaderOfflineVoiceTest.bundledVoiceGeneratesAndPlaysNewChineseText uses the shipped engine and AudioTrack. Before the fix, 1x produces 6688 ms of PCM while native speed=2 produces 309 ms and fails the actual-playback duration assertion.",
+    "The duration calculation was confirmed against ZipVoice's ONNX export and sherpa-onnx v1.13.8 offline-tts-zipvoice-model.cc. Source links and pinned resource identities are maintained in docs/knowledge/offline-voice-dependencies.md.",
+    "After natural-rate synthesis plus AudioTrack speed adjustment, the corresponding 2x playback lasts 3320 ms. Captured actual App output, independently transcribed with SenseVoice, contains the same 30 body characters in both the 1x and 2x recordings.",
+    "These results were obtained on the task's Android 14 / API 34 ARM64 emulator. The implementation and associated acceptance record are maintained in docs/superpowers/plans/2026-09-22-zipvoice-listening-upgrade.md."
+  ],
+  "failed_attempts": [
+    "Passing the user's speed directly to GenerationConfig reproduced severe target truncation at 2x. A nonempty PCM buffer or successful native return is insufficient evidence that the requested text was fully spoken."
+  ],
+  "impact": "The covered fixed-model 2x path now plays the complete checked short input at the expected approximately halved duration. This record resolves native-speed truncation only; it does not establish sustained synthesis supply, general pronunciation or naturalness, all short-text cases, or Xiaomi performance. Thread-count and continuous-playback measurements remain separate acceptance evidence.",
+  "tags": ["android", "tts", "offline", "zipvoice", "speech-rate", "audio-integrity", "resolved"],
+  "confidence": 0.99,
+  "created_at": "2026-09-22",
+  "updated_at": "2026-09-22"
+}

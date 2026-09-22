@@ -5,4 +5,5 @@ enum class ReaderChromeMode {
     CHROME_VISIBLE,
     DIRECTORY_OPEN,
     SETTINGS_EXPANDED,
+    LISTENING_EXPANDED,
 }

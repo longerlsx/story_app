@@ -91,9 +91,9 @@ internal fun UiDevice.tapPrimaryAction(slot: ReaderPrimaryActionSlot): Boolean {
         ReaderPrimaryActionSlot.APPEARANCE -> if (hasObject(By.text("夜间"))) "夜间" else "日间"
         ReaderPrimaryActionSlot.SETTINGS -> "设置"
         ReaderPrimaryActionSlot.TTS -> when {
-            hasObject(By.textContains("暂停朗读")) -> "暂停朗读"
-            hasObject(By.textContains("停止朗读")) -> "停止朗读"
-            hasObject(By.textContains("继续朗读")) -> "继续朗读"
+            // The toolbar opens listening while a session exists. Playback icons are
+            // independent actions in the panel/compact bar and must not be substituted.
+            hasObject(By.desc("听书")) -> "听书"
             else -> "朗读"
         }
     }

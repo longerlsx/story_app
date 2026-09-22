@@ -133,7 +133,7 @@ class ReaderTtsAudioPreparationTest {
     fun differentVoiceOrRateCancelsOldPreparationAndReturnsTheRequestedSound() = runTest {
         for ((selected, expected) in listOf(
             settings.copy(voiceName = "male-b") to 0.75f,
-            settings.copy(speechRate = 1.5f) to 0.125f,
+            settings.copy(speechRate = 2f) to 0.125f,
         )) {
             var oldCancelled = false
             val obsoleteStarted = mutableListOf<String>()
@@ -170,6 +170,26 @@ class ReaderTtsAudioPreparationTest {
         val audio = preparation.take(next.copy(spokenText = "另一句话"), settings)
 
         assertArrayEquals(floatArrayOf(0.5f), audio.samples, 0f)
+    }
+
+    @Test
+    fun doubleSpeedNeverUsesReadyNormalSpeedAudioAcrossTheChapterBoundary() = runTest {
+        val nextChapter = ReaderTtsSegment(3, 0, 4, "新的章节")
+        val generated = mutableListOf<Pair<Int, Float>>()
+        val preparation = ReaderTtsAudioPreparation(backgroundScope) { segment, selected ->
+            generated += segment.chapterIndex to selected.speechRate
+            ReaderSpeechAudio(floatArrayOf(selected.speechRate / 4f), 24_000)
+        }
+        preparation.prepareUpcoming(listOf(next, nextChapter), settings)
+        runCurrent()
+        assertEquals(listOf(2 to 1f, 3 to 1f), generated)
+
+        val faster = settings.copy(speechRate = 2f)
+        assertArrayEquals(floatArrayOf(0.5f), preparation.take(next, faster).samples, 0f)
+        preparation.prepareUpcoming(listOf(nextChapter), faster)
+        runCurrent()
+        assertArrayEquals(floatArrayOf(0.5f), preparation.take(nextChapter, faster).samples, 0f)
+        assertEquals(listOf(2 to 1f, 3 to 1f, 2 to 2f, 3 to 2f), generated)
     }
 
     @Test

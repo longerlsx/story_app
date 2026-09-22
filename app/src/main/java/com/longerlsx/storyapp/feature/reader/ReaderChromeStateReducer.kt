@@ -7,6 +7,7 @@ object ReaderChromeStateReducer {
             ReaderChromeMode.CHROME_VISIBLE,
             ReaderChromeMode.DIRECTORY_OPEN,
             ReaderChromeMode.SETTINGS_EXPANDED,
+            ReaderChromeMode.LISTENING_EXPANDED,
             -> ReaderChromeMode.READING_ONLY
         }
     }

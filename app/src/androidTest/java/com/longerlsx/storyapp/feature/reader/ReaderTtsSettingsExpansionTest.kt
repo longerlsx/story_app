@@ -45,62 +45,59 @@ class ReaderTtsSettingsExpansionTest {
     }
 
     @Test
-    fun settingsOpensUnifiedTabsAndRemembersLastSelectedTab() {
-        ActivityScenario.launch<MainActivity>(buildImportIntent("reader-tts-settings-expand")).use {
+    fun readingSettingsRemainIndependentWhileListeningCanOpenDirectly() {
+        ActivityScenario.launch<MainActivity>(buildImportIntent("reader-listening-independent")).use {
             assertTrue(device.wait(Until.hasObject(By.textContains("第一章正文")), 8_000))
             assertTrue(device.revealReaderChrome("设置"))
             assertTrue(device.tapPrimaryAction(ReaderPrimaryActionSlot.SETTINGS))
-
-            assertTrue(device.wait(Until.hasObject(By.text("阅读")), 3_000))
-            assertTrue(device.wait(Until.hasObject(By.text("朗读")), 3_000))
             assertTrue(device.wait(Until.hasObject(By.text("亮度")), 3_000))
-            assertFalse(device.hasObject(By.text("朗读设置")))
-            assertFalse(device.hasObject(By.text("常规设置")))
-            assertFalse(device.hasObject(By.text("关闭")))
+            assertFalse(device.hasObject(By.descContains("设置分页：")))
+            assertFalse(device.hasObject(By.text("定时关闭")))
 
-            val ttsTab = device.wait(Until.findObject(By.text("朗读")), 3_000)
-            assertTrue(ttsTab != null)
-            assertTrue(device.clickObjectCenter(ttsTab!!))
-
-            assertTrue(device.wait(Until.hasObject(By.text("测试语音")), 3_000))
-            assertTrue(device.tapPrimaryAction(ReaderPrimaryActionSlot.SETTINGS))
-            assertTrue(device.wait(Until.gone(By.text("测试语音")), 3_000))
-
-            assertTrue(device.tapPrimaryAction(ReaderPrimaryActionSlot.SETTINGS))
-            assertTrue(device.wait(Until.hasObject(By.text("测试语音")), 3_000))
+            val read = device.wait(Until.findObject(By.desc("朗读")), 3_000)
+            assertTrue(read != null && device.clickObjectCenter(read))
+            assertTrue(device.wait(Until.hasObject(By.text("定时关闭")), 3_000))
+            assertTrue(device.wait(Until.hasObject(By.desc("暂停朗读")), 3_000))
+            assertTrue(device.hasObject(By.text("雷军 · 合成音色")))
+            assertFalse(device.hasObject(By.text("亮度")))
+            assertFalse(device.hasObject(By.text("从当前文字开始")))
+            assertFalse(device.hasObject(By.text("从章节开头开始")))
         }
     }
 
     @Test
-    fun firstOpenDefaultsToTtsTabWhenPlaybackIsActive() {
-        ActivityScenario.launch<MainActivity>(buildImportIntent("reader-tts-settings-active-default")).use {
+    fun collapseAndOpenListeningPanelPreservePlaybackAndExposeReadingNavigation() {
+        ActivityScenario.launch<MainActivity>(buildImportIntent("reader-listening-collapse")).use {
             assertTrue(device.wait(Until.hasObject(By.textContains("第一章正文")), 8_000))
             assertTrue(device.revealReaderChrome("朗读"))
             assertTrue(device.tapPrimaryAction(ReaderPrimaryActionSlot.TTS))
-            assertTrue(device.wait(Until.hasObject(By.textContains("暂停朗读")), 3_000))
+            assertTrue(device.wait(Until.hasObject(By.desc("暂停朗读")), 3_000))
+            val collapse = device.wait(Until.findObject(By.desc("收起听书面板")), 3_000)
+            assertTrue(collapse != null && device.clickObjectCenter(collapse))
+            assertTrue(device.wait(Until.gone(By.text("定时关闭")), 3_000))
+            assertTrue(device.hasObject(By.desc("暂停朗读")))
+            assertTrue(device.hasObject(By.desc("停止朗读")))
 
-            assertTrue(device.tapPrimaryAction(ReaderPrimaryActionSlot.SETTINGS))
-            assertTrue(device.wait(Until.hasObject(By.text("测试语音")), 3_000))
-            assertFalse(device.hasObject(By.text("亮度")))
+            val information = device.wait(Until.findObject(By.desc("展开听书面板")), 3_000)
+            assertTrue(information != null && device.clickObjectCenter(information))
+            assertTrue(device.wait(Until.hasObject(By.text("定时关闭")), 3_000))
+            assertTrue(device.hasObject(By.desc("暂停朗读")))
+            assertTrue(device.tapPrimaryAction(ReaderPrimaryActionSlot.DIRECTORY))
+            assertTrue(device.wait(Until.hasObject(By.text("第1章 开始")), 3_000))
+            assertFalse(device.hasObject(By.text("定时关闭")))
         }
     }
 
     @Test
-    fun longTtsSettingsStillKeepsPrimaryActionBarUsable() {
-        ActivityScenario.launch<MainActivity>(buildImportIntent("reader-tts-settings-bottom-bar")).use {
+    fun longPressOpensListeningSettingsWithoutStartingOnRelease() {
+        ActivityScenario.launch<MainActivity>(buildImportIntent("reader-listening-long-press")).use {
             assertTrue(device.wait(Until.hasObject(By.textContains("第一章正文")), 8_000))
-            assertTrue(device.revealReaderChrome("设置"))
-            assertTrue(device.tapPrimaryAction(ReaderPrimaryActionSlot.SETTINGS))
-            assertTrue(device.wait(Until.hasObject(By.text("阅读")), 3_000))
-
-            val ttsTab = device.wait(Until.findObject(By.text("朗读")), 3_000)
-            assertTrue(ttsTab != null)
-            assertTrue(device.clickObjectCenter(ttsTab!!))
-
-            assertTrue(device.wait(Until.hasObject(By.text("测试语音")), 3_000))
-            assertTrue(device.tapPrimaryAction(ReaderPrimaryActionSlot.DIRECTORY))
-            assertTrue(device.wait(Until.hasObject(By.text("第1章 开始")), 3_000))
-            assertFalse(device.hasObject(By.text("测试语音")))
+            assertTrue(device.revealReaderChrome("朗读"))
+            assertTrue(device.longPressActionLabel("朗读"))
+            assertTrue(device.wait(Until.hasObject(By.text("定时关闭")), 3_000))
+            assertTrue(device.hasObject(By.desc("开始朗读")))
+            assertFalse(device.hasObject(By.desc("暂停朗读")))
+            assertFalse(device.hasObject(By.descContains("设置分页：")))
         }
     }
 
@@ -143,42 +140,7 @@ private class VoiceListOnlyReaderTtsEngine(
     private val callback: ReaderTtsEngine.Callback,
 ) : ReaderTtsEngine {
     override suspend fun initialize(): Result<List<ReaderTtsVoiceOption>> {
-        return Result.success(
-            listOf(
-                ReaderTtsVoiceOption(
-                    name = "cmn-cn-x-test-local",
-                    displayName = "测试语音",
-                ),
-                ReaderTtsVoiceOption(
-                    name = "cmn-cn-x-voice-b-local",
-                    displayName = "测试语音 B",
-                ),
-                ReaderTtsVoiceOption(
-                    name = "cmn-cn-x-voice-c-local",
-                    displayName = "测试语音 C",
-                ),
-                ReaderTtsVoiceOption(
-                    name = "cmn-cn-x-voice-d-local",
-                    displayName = "测试语音 D",
-                ),
-                ReaderTtsVoiceOption(
-                    name = "cmn-cn-x-voice-e-local",
-                    displayName = "测试语音 E",
-                ),
-                ReaderTtsVoiceOption(
-                    name = "cmn-cn-x-voice-f-local",
-                    displayName = "测试语音 F",
-                ),
-                ReaderTtsVoiceOption(
-                    name = "cmn-cn-x-voice-g-local",
-                    displayName = "测试语音 G",
-                ),
-                ReaderTtsVoiceOption(
-                    name = "cmn-cn-x-voice-h-local",
-                    displayName = "测试语音 H",
-                ),
-            ),
-        )
+        return Result.success(listOf(ReaderTtsVoiceOption("test-voice", "测试语音")))
     }
 
     override fun applySettings(settings: ReaderTtsSettings) = Unit

@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>大脸猫阅读 · 真实界面前后对比</title>
+  <style>
+    :root { color-scheme: light; --paper: #f6f2e8; --surface: #fffcf7; --ink: #292e2a; --muted: #5e665a; --green: #355a4b; --line: #c9cec0; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.7 -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans CJK SC", sans-serif; }
+    main { max-width: 1080px; margin: auto; padding: 40px 28px 56px; }
+    .eyebrow { margin: 0; color: var(--green); font-size: 14px; font-weight: 650; }
+    h1 { margin: 8px 0 16px; font-size: clamp(26px, 4vw, 38px); line-height: 1.35; }
+    h2 { margin: 0; font-size: 24px; line-height: 1.4; }
+    p { margin: 0; }
+    .intro { max-width: 850px; color: var(--muted); }
+    .notice { margin-top: 16px; padding: 14px 18px; background: var(--surface); border-left: 3px solid var(--green); color: var(--muted); font-size: 14px; }
+    nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 24px 0 36px; }
+    a { color: var(--green); text-underline-offset: 4px; touch-action: manipulation; }
+    nav a { display: inline-flex; align-items: center; min-height: 48px; padding: 8px 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); text-decoration: none; }
+    nav a:hover { background: #e4ece1; }
+    a:focus-visible, summary:focus-visible { outline: 3px solid var(--green); outline-offset: 4px; }
+    .comparison { margin-bottom: 48px; scroll-margin-top: 24px; }
+    .section-heading { display: flex; align-items: baseline; gap: 12px; padding-top: 24px; border-top: 1px solid var(--line); }
+    .number { color: var(--green); font-size: 14px; font-weight: 650; }
+    .description { margin: 8px 0 20px; color: var(--muted); font-size: 15px; }
+    .pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+    figure { min-width: 0; margin: 0; }
+    figcaption { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; margin-bottom: 12px; font-weight: 650; }
+    figcaption span { color: var(--muted); font-size: 13px; font-weight: 400; }
+    .screen { display: block; width: 100%; max-width: 340px; margin: auto; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+    .screen img { display: block; width: 100%; height: auto; }
+    .screen:hover { outline: 2px solid var(--green); outline-offset: 2px; }
+    details { padding: 20px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); scroll-margin-top: 24px; }
+    summary { min-height: 48px; cursor: pointer; color: var(--green); font-size: 20px; font-weight: 650; }
+    .night-intro { margin: 4px 0 24px; color: var(--muted); font-size: 14px; }
+    .night-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px 24px; }
+    footer { margin-top: 32px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+    footer p + p { margin-top: 8px; }
+    @media (max-width: 600px) {
+      main { padding: 24px 16px 40px; }
+      nav { margin-bottom: 24px; }
+      nav a { padding-inline: 12px; }
+      .pair, .night-grid { grid-template-columns: 1fr; gap: 28px; }
+      .comparison { margin-bottom: 36px; }
+      .screen { max-width: 380px; }
+      details { padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <p class="eyebrow">大脸猫阅读 · 2026.09.20</p>
+    <h1>四个页面，真实界面前后对比</h1>
+    <p class="intro">旧版 v3 与本轮新版均为 App 实际运行截图，本页不使用概念稿。新版以暖纸、墨字和松绿色组织界面，重点呈现书籍、阅读操作和听书控制。点击截图可打开原图。</p>
+    <p class="notice">两版截图中的书籍内容、数量、阅读位置和播放状态可能不同；请比较配色、信息层级与操作布局，不据此推断正文容量或功能数量。夜间区域展示新版真实截图。</p>
+  </header>
+  <nav aria-label="跳转到页面对比">
+    <a href="#bookshelf">01 书架</a><a href="#reader">02 阅读控制</a><a href="#settings">03 阅读设置</a><a href="#listening">04 听书</a><a href="#night">夜间实拍</a>
+  </nav>
+
+  <section class="comparison" id="bookshelf" aria-labelledby="bookshelf-title">
+    <div class="section-heading"><span class="number">01</span><h2 id="bookshelf-title">书架</h2></div>
+    <p class="description">本地文字封面与书名层级，清晰的导入入口。</p>
+    <div class="pair">
+      <figure><figcaption>旧版 v3<span>真实截图 · 日间</span></figcaption><a class="screen" href="current-bookshelf.png" target="_blank" rel="noopener"><img src="current-bookshelf.png" alt="旧版书架实际界面"></a></figure>
+      <figure><figcaption>新版 · 大脸猫阅读<span>真实截图 · 日间</span></figcaption><a class="screen" href="implemented-bookshelf.png" target="_blank" rel="noopener"><img src="implemented-bookshelf.png" alt="新版书架实际界面"></a></figure>
+    </div>
+  </section>
+
+  <section class="comparison" id="reader" aria-labelledby="reader-title">
+    <div class="section-heading"><span class="number">02</span><h2 id="reader-title">阅读控制</h2></div>
+    <p class="description">图标配合中文标签，减轻容器和阴影。</p>
+    <div class="pair">
+      <figure><figcaption>旧版 v3<span>真实截图 · 日间</span></figcaption><a class="screen" href="current-reader.png" target="_blank" rel="noopener"><img src="current-reader.png" alt="旧版阅读控制栏实际界面" loading="lazy"></a></figure>
+      <figure><figcaption>新版 · 大脸猫阅读<span>真实截图 · 日间</span></figcaption><a class="screen" href="implemented-reader.png" target="_blank" rel="noopener"><img src="implemented-reader.png" alt="新版阅读控制栏实际界面" loading="lazy"></a></figure>
+    </div>
+  </section>
+
+  <section class="comparison" id="settings" aria-labelledby="settings-title">
+    <div class="section-heading"><span class="number">03</span><h2 id="settings-title">阅读设置</h2></div>
+    <p class="description">对齐参数与调节操作，主题和阅读模式显示明确选中状态。</p>
+    <div class="pair">
+      <figure><figcaption>旧版 v3<span>真实截图 · 日间</span></figcaption><a class="screen" href="current-settings.png" target="_blank" rel="noopener"><img src="current-settings.png" alt="旧版阅读设置实际界面" loading="lazy"></a></figure>
+      <figure><figcaption>新版 · 大脸猫阅读<span>真实截图 · 日间</span></figcaption><a class="screen" href="implemented-settings.png" target="_blank" rel="noopener"><img src="implemented-settings.png" alt="新版阅读设置实际界面" loading="lazy"></a></figure>
+    </div>
+  </section>
+
+  <section class="comparison" id="listening" aria-labelledby="listening-title">
+    <div class="section-heading"><span class="number">04</span><h2 id="listening-title">听书</h2></div>
+    <p class="description">突出当前播放动作，音色、语速和定时优先展示，音高可展开调节。</p>
+    <div class="pair">
+      <figure><figcaption>旧版 v3<span>真实截图 · 日间</span></figcaption><a class="screen" href="current-listening.png" target="_blank" rel="noopener"><img src="current-listening.png" alt="旧版听书设置实际界面" loading="lazy"></a></figure>
+      <figure><figcaption>新版 · 大脸猫阅读<span>真实截图 · 日间</span></figcaption><a class="screen" href="implemented-listening.png" target="_blank" rel="noopener"><img src="implemented-listening.png" alt="新版听书设置实际界面" loading="lazy"></a></figure>
+    </div>
+  </section>
+
+  <details id="night" open>
+    <summary>新版夜间实拍</summary>
+    <p class="night-intro">四个页面采用相同的信息层级，按夜间背景调整面板、文字和操作强调色。</p>
+    <div class="night-grid">
+      <figure><figcaption>书架<span>新版 · 夜间</span></figcaption><a class="screen" href="implemented-bookshelf-night.png" target="_blank" rel="noopener"><img src="implemented-bookshelf-night.png" alt="新版书架夜间实际界面" loading="lazy"></a></figure>
+      <figure><figcaption>阅读控制<span>新版 · 夜间</span></figcaption><a class="screen" href="implemented-reader-night.png" target="_blank" rel="noopener"><img src="implemented-reader-night.png" alt="新版阅读控制栏夜间实际界面" loading="lazy"></a></figure>
+      <figure><figcaption>阅读设置<span>新版 · 夜间</span></figcaption><a class="screen" href="implemented-settings-night.png" target="_blank" rel="noopener"><img src="implemented-settings-night.png" alt="新版阅读设置夜间实际界面" loading="lazy"></a></figure>
+      <figure><figcaption>听书<span>新版 · 夜间</span></figcaption><a class="screen" href="implemented-listening-night.png" target="_blank" rel="noopener"><img src="implemented-listening-night.png" alt="新版听书设置夜间实际界面" loading="lazy"></a></figure>
+    </div>
+  </details>
+
+  <footer>
+    <p>本页用于视觉核对。交互、保存与恢复、连续听书和真实音频的验证范围，见<a href="../../../plans/2026-09-20-visual-listening-upgrade.md">实施与验证记录</a>。</p>
+    <p><a href="compare.html">查看先前的视觉方向讨论稿</a> · <a href="icon-source.md">猫脸图标素材来源</a></p>
+  </footer>
+</main>
+</body>
+</html>

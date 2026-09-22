@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Story App · 视觉方向对比</title>
+<style>
+:root{color-scheme:light;--paper:#f6f2e8;--surface:#fffcf7;--ink:#292e2a;--muted:#646b61;--green:#355a4b;--line:#d9ded5}
+*{box-sizing:border-box}body{margin:0;background:#f2f3ee;color:var(--ink);font:15px/1.65 -apple-system,BlinkMacSystemFont,"PingFang SC","Noto Sans CJK SC",sans-serif}
+main{max-width:1160px;margin:auto;padding:32px 28px 48px}.eyebrow{font-size:12px;letter-spacing:.13em;color:var(--green);font-weight:650}h1{margin:7px 0 10px;font-size:30px;letter-spacing:-.03em}p{margin:0;color:var(--muted)}.intro{max-width:820px}.status{display:inline-block;font-size:12px;color:var(--green);background:#e3ece4;border-radius:5px;padding:3px 8px;margin-left:10px;vertical-align:middle}
+nav{display:flex;flex-wrap:wrap;gap:8px;margin:24px 0 18px}button,a{touch-action:manipulation}nav button{border:1px solid var(--line);background:var(--surface);color:var(--muted);padding:12px 22px;min-height:48px;border-radius:10px;font:inherit;cursor:pointer}nav button[aria-pressed=true]{background:var(--green);border-color:var(--green);color:white}button:focus-visible,a:focus-visible{outline:3px solid #7b9e89;outline-offset:3px}
+.insight{display:grid;grid-template-columns:1fr 1fr;gap:24px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px 22px;margin-bottom:24px}.insight b{display:block;font-size:13px;margin-bottom:4px;color:var(--green)}.insight p{font-size:14px}
+.comparison{display:grid;grid-template-columns:1fr 1fr;gap:32px}.frame{margin:0;text-align:center}.label{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--line);font-weight:600;text-align:left}.label small{font-weight:400;font-size:12px;color:var(--muted)}.screen{display:block;background:var(--paper);border:1px solid #dedfd8;border-radius:14px;overflow:hidden;width:100%;max-width:360px;margin:auto;line-height:0;box-shadow:0 8px 26px #1422190a}.screen img{display:block;width:100%;height:auto}.screen:hover{outline:2px solid #a8b7aa}.note{font-size:12px;margin:12px auto 0;max-width:410px;text-align:left;color:var(--muted)}footer{margin-top:28px;padding-top:20px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:20px;font-size:12px;color:var(--muted)}a{color:var(--green)}.palette{display:flex;gap:6px;align-items:center;white-space:nowrap}.swatch{display:inline-block;width:15px;height:15px;border-radius:50%;border:1px solid #0002}
+@media(max-width:640px){main{padding:22px 16px}h1{font-size:24px}.comparison{gap:12px}.insight{grid-template-columns:1fr;gap:10px;padding:14px}.label{display:block;font-size:13px}.label small{display:block;font-size:11px}nav button{padding:10px 15px}.note{font-size:11px}footer{display:block}.palette{margin-top:10px}}
+</style>
+<main>
+  <div class="eyebrow">STORY APP · VISUAL STUDY · 2026.09.20</div>
+  <h1>安静看书，清楚操作<span class="status">方向讨论稿 · 未实施</span></h1>
+  <p class="intro">左边是交付 v3 的真实模拟器截图，右边是 AI 生成的视觉概念稿。先看配色、信息层级和控件组织；示例内容、播放状态与屏幕比例并非完全相同，不用于比较正文容量或验证功能。点击图片可查看原图。</p>
+  <nav aria-label="切换页面对比">
+    <button data-page="bookshelf" aria-pressed="true">01 书架</button>
+    <button data-page="reader" aria-pressed="false">02 阅读控制</button>
+    <button data-page="listening" aria-pressed="false">03 听书</button>
+    <button data-page="settings" aria-pressed="false">04 阅读设置</button>
+  </nav>
+  <section class="insight" aria-live="polite">
+    <div><b>当前观察</b><p id="observation"></p></div>
+    <div><b>建议变化</b><p id="proposal"></p></div>
+  </section>
+  <section class="comparison" aria-label="当前与建议的页面图片">
+    <figure class="frame">
+      <figcaption class="label"><span>当前界面</span><small>真实 v3 · Android 14</small></figcaption>
+      <a class="screen" id="before-link" target="_blank" rel="noopener"><img id="before" alt="当前界面真实截图"></a>
+      <p class="note" id="before-note"></p>
+    </figure>
+    <figure class="frame">
+      <figcaption class="label"><span>建议方向</span><small>暖纸 · 墨字 · 松绿色强调</small></figcaption>
+      <a class="screen" id="after-link" target="_blank" rel="noopener"><img id="after" alt="建议界面概念稿"></a>
+      <p class="note" id="after-note"></p>
+    </figure>
+  </section>
+  <footer><span>仅设计探索，未修改 App。具体字号、换行、触控区和动效需在 Compose 中落实。<br><a href="../../2026-09-20-visual-direction.md">设计说明与实现边界</a> · <a href="prompts.json">图片生成提示词</a></span><span class="palette"><i class="swatch" style="background:#f6f2e8"></i><i class="swatch" style="background:#fffcf7"></i><i class="swatch" style="background:#292e2a"></i><i class="swatch" style="background:#355a4b"></i>统一视觉语言</span></footer>
+</main>
+<script>
+const pages={
+bookshelf:{name:'书架',observation:'棕色主按钮、淡紫色书卡和米色背景不够统一；占位的在线书源与导入同样醒目，书名容易退到次要位置。',proposal:'导入保留为清晰主入口。书名、作者、章节与字数分层显示，用本地文字封面帮助识别，不需要接入封面服务。',before:'正常导入自写《山间来信》后的真实单本书架；截图未改画。',after:'四本虚构示例用于展示列表节奏，数量变化不代表新增功能。封面为建议的本地占位设计；在线书源占位入口建议暂时收起。'},
+reader:{name:'阅读控制',observation:'上一章、下一章和四个主动作都使用近似胶囊形状，控件面积和视觉重量偏大。',proposal:'保留原有操作，用统一线性图标与中文标签识别功能，减轻圆角容器和阴影，让正文仍是主角。',before:'点击正文中间唤出控制栏，默认字号和排版。',after:'与左图相同的自写正文，但 AI 换行和标题字号只是示意；不能据此判断实际每页字数。展开面板不应改变正文排版区域。'},
+listening:{name:'听书',observation:'开始、试听与参数选项视觉权重接近；定时在面板下方，首屏需要滚动才能找到。',proposal:'先显示状态、听书位置和主要播放动作；音色、真实语速档位与定时集中展示，音高进入次级展开项。',before:'尚未朗读的真实面板，不为了截图启动声音；部分参数需要向下滚动。',after:'暂停且已有听书点的情境示意，所以主按钮是继续上次听书。播放中应换为暂停，首次使用应换为从当前文字开始。无虚构音频时间轴。'},
+settings:{name:'阅读设置',observation:'字号、行距和段落距都使用 A−／A+，多层大胶囊占面积；选中态较弱。',proposal:'用对齐调节行表达同类参数，字号保留 A−／A+，间距改为减／加。模式用分段选项，颜色用有名字和勾选的色点。',before:'当前设置面板展开，仍保留底部主操作栏。',after:'建议单层面板并提供关闭入口；本稿把阅读和听书分开呈现，不代表已决定移除现有页签。保持即时保存，不增加保存按钮。'}
+};
+function selectPage(key){
+ const page=pages[key]||pages.bookshelf;
+ document.querySelectorAll('nav button').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.page===key)));
+ document.getElementById('observation').textContent=page.observation;document.getElementById('proposal').textContent=page.proposal;
+ document.getElementById('before-note').textContent=page.before;document.getElementById('after-note').textContent=page.after;
+ for(const [side,prefix]of[['before','current'],['after','proposed']]){
+  const src=prefix+'-'+key+'.png';document.getElementById(side).src=src;document.getElementById(side).alt=page.name+(side==='before'?'：真实当前截图':'：建议视觉概念稿');document.getElementById(side+'-link').href=src;
+ }
+ history.replaceState(null,'','#'+key);
+}
+document.querySelectorAll('nav button').forEach(button=>button.addEventListener('click',()=>selectPage(button.dataset.page)));
+selectPage(pages[location.hash.slice(1)]?location.hash.slice(1):'bookshelf');
+</script>
+</html>

@@ -1,5 +1,6 @@
 package com.longerlsx.storyapp.feature.reader
 
+import android.app.ActivityManager
 import android.app.Notification
 import android.app.NotificationManager
 import android.content.Intent
@@ -17,7 +18,6 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
-import androidx.test.uiautomator.Direction
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
 import com.longerlsx.storyapp.MainActivity
@@ -28,6 +28,7 @@ import com.longerlsx.storyapp.core.model.ImportSourceType
 import com.longerlsx.storyapp.core.model.ListeningProgress
 import com.longerlsx.storyapp.core.model.ReaderTtsTimerPreset
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsNotificationFactory
+import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsService
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsSessionState
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -118,6 +119,100 @@ class ReaderOfflineListeningTest {
     }
 
     @Test
+    fun doubleSpeedReaderPauseResumeStopAndPageTopRestartKeepTimerChoice() {
+        val firstChapter = "清晨，他推开窗，沿着河岸慢慢前行。路旁的树叶带着露水，远处有人打开木门。商量前面的路线。"
+        val book = seedBook("offline-double-speed-controls", listOf(firstChapter, chapterBody(2), chapterBody(3)))
+        fun phase(name: String) = Log.i(TAG, "doubleSpeedFlow=$name elapsedRealtime=${SystemClock.elapsedRealtime()}")
+        @Suppress("DEPRECATION")
+        fun serviceRunning() = application.getSystemService(ActivityManager::class.java)
+            .getRunningServices(Int.MAX_VALUE).any { it.service.className == ReaderTtsService::class.java.name }
+        ActivityScenario.launch<MainActivity>(mainIntent()).use {
+            awaitReader(book)
+            openListeningSettingsWithoutStarting()
+            tapListeningControl("2×")
+            tapListeningControl("30 分钟")
+            awaitCondition("2× and thirty-minute choices are saved", 3_000) {
+                application.readerSettingsStore.load().ttsSettings.let {
+                    it.speechRate == 2f && it.timerPreset == ReaderTtsTimerPreset.Countdown(30)
+                }
+            }
+            phase("startRequested")
+            tapListeningControl("开始朗读")
+            awaitCondition("2× actual output begins", 60_000) {
+                controller.playbackState == ReaderTtsSessionState.PLAYING && audioManager.isMusicActive
+            }
+            assertEquals(2f, controller.runtimeState.value.speechRate)
+            phase("firstAudio")
+            awaitCondition("2× multi-segment audio crosses the first chapter", 60_000) {
+                progress(book.id)?.chapterIndex == 1 && audioManager.isMusicActive
+            }
+            phase("crossedChapter")
+            tapListeningControl("收起听书面板")
+            assertTrue(device.wait(Until.hasObject(By.desc("展开听书面板")), 3_000))
+            tapListeningControl("暂停朗读")
+            awaitCondition("compact-bar pause stops actual output", 5_000) {
+                controller.playbackState == ReaderTtsSessionState.PAUSED_BY_USER && !audioManager.isMusicActive
+            }
+            val pausedBudget = requireNotNull(controller.runtimeState.value.remainingTimerMillis)
+            val pausedPosition = requireNotNull(progress(book.id)).position()
+            assertTrue(pausedBudget in 1 until 30 * 60_000L)
+            phase("paused")
+            Thread.sleep(1_200)
+            assertEquals(pausedBudget, controller.runtimeState.value.remainingTimerMillis)
+            assertEquals(pausedPosition, progress(book.id)?.position())
+            tapListeningControl("展开听书面板")
+            assertEquals("Opening the panel must not resume playback", ReaderTtsSessionState.PAUSED_BY_USER, controller.playbackState)
+            tapListeningControl("继续朗读")
+            awaitCondition("panel resume emits real audio", 60_000) {
+                controller.playbackState == ReaderTtsSessionState.PLAYING && audioManager.isMusicActive
+            }
+            assertTrue(requireNotNull(controller.runtimeState.value.remainingTimerMillis) <= pausedBudget)
+            phase("resumedAudio")
+            tapListeningControl("停止朗读")
+            awaitCondition("direct stop removes service, notification and actual output", 5_000) {
+                controller.playbackState == ReaderTtsSessionState.STOPPED_BY_USER &&
+                    !audioManager.isMusicActive && ttsNotificationOrNull() == null && !serviceRunning()
+            }
+            val stoppedPosition = requireNotNull(progress(book.id)).position()
+            phase("stopped")
+            repeat(30) {
+                Thread.sleep(100)
+                assertEquals(ReaderTtsSessionState.STOPPED_BY_USER, controller.playbackState)
+                assertFalse(audioManager.isMusicActive)
+                assertTrue(ttsNotificationOrNull() == null && !serviceRunning())
+            }
+            assertEquals(null, controller.runtimeState.value.remainingTimerMillis)
+            assertEquals(stoppedPosition, progress(book.id)?.position())
+            assertEquals(2f, application.readerSettingsStore.load().ttsSettings.speechRate)
+            assertEquals(ReaderTtsTimerPreset.Countdown(30), application.readerSettingsStore.load().ttsSettings.timerPreset)
+            // Choose another visible page through the normal directory. New listening
+            // must begin at this page top, never at the old session's saved position.
+            tapListeningControl("收起听书面板")
+            assertTrue(device.revealReaderChrome("目录"))
+            assertTrue(device.tapPrimaryAction(ReaderPrimaryActionSlot.DIRECTORY))
+            assertTrue(device.clickObjectCenter(requireNotNull(device.wait(Until.findObject(By.text("第3章 清晨")), 3_000))))
+            awaitCondition("the requested third-chapter first page is visible", 8_000) {
+                device.hasObject(By.desc("沉浸式章节：第3章 清晨")) ||
+                    device.hasObject(By.desc("顶部栏标题：${book.title} 第3章 清晨"))
+            }
+            phase("pageTopRestartRequested")
+            assertTrue(device.revealReaderChrome("朗读"))
+            assertTrue(device.tapPrimaryAction(ReaderPrimaryActionSlot.TTS))
+            awaitCondition("page-top restart emits real audio again", 60_000) {
+                controller.playbackState == ReaderTtsSessionState.PLAYING && audioManager.isMusicActive
+            }
+            val restartedSegment = requireNotNull(controller.playbackSnapshot.currentSegment)
+            assertEquals(2 to 0, restartedSegment.chapterIndex to restartedSegment.startCharOffset)
+            assertTrue("停止后重新使用所选30分钟", requireNotNull(controller.runtimeState.value.remainingTimerMillis) > pausedBudget)
+            phase("pageTopRestartAudio")
+            awaitCondition("page-top restart actually completes new text", 60_000) {
+                progress(book.id)?.let { it.chapterIndex == 2 && it.charOffset > 0 } == true
+            }
+            phase("passed")
+        }
+    }
+
+    @Test
     fun notificationDuckResumesTheSameAudioWithoutGeneratingOrReplayingTheSentence() {
         val firstText = "清晨，他推开窗，看见远处的青山。河边的人慢慢走过小桥，准备开始新的一天。"
         val book = seedBook("offline-notification-duck", listOf(firstText, "他放下书，安静地等待。"))
@@ -132,7 +227,7 @@ class ReaderOfflineListeningTest {
             ActivityScenario.launch<MainActivity>(mainIntent()).use {
                 Log.i(TAG, marker)
                 awaitReader(book)
-                selectThirtyMinuteTimerThroughSettings()
+                selectThirtyMinuteTimerWithoutStarting()
                 startFromReader(book)
                 awaitCondition("real speech before notification duck", 60_000) {
                     controller.playbackState == ReaderTtsSessionState.PLAYING && audioManager.isMusicActive
@@ -334,7 +429,7 @@ class ReaderOfflineListeningTest {
         val book = seedBook("offline-thirty-minutes", List(40) { chapterBody(it + 1) })
         ActivityScenario.launch<MainActivity>(mainIntent()).use {
             awaitReader(book)
-            selectThirtyMinuteTimerThroughSettings()
+            selectThirtyMinuteTimerWithoutStarting()
             startFromReader(book)
             awaitCondition("first real speech starts", 60_000) {
                 controller.playbackState == ReaderTtsSessionState.PLAYING && audioManager.isMusicActive
@@ -406,30 +501,32 @@ class ReaderOfflineListeningTest {
         awaitReader(book)
         assertTrue(device.revealReaderChrome("朗读"))
         assertTrue(device.tapPrimaryAction(ReaderPrimaryActionSlot.TTS))
-        device.wait(Until.findObject(By.text("从当前文字开始")), 300)?.let { device.clickObjectCenter(it) }
+        assertTrue("Direct start also opens the listening panel", device.wait(Until.hasObject(By.desc("听书面板")), 3_000))
     }
 
-    private fun selectThirtyMinuteTimerThroughSettings() {
-        assertTrue(device.revealReaderChrome("设置"))
-        assertTrue(device.tapPrimaryAction(ReaderPrimaryActionSlot.SETTINGS))
-        val tab = device.wait(Until.findObject(By.descStartsWith("设置分页：朗读，")), 3_000)
-        assertTrue("Settings must expose its reading-aloud tab", tab != null)
-        assertTrue(device.clickObjectCenter(requireNotNull(tab)))
-        var timer = device.findObject(By.text("30 分钟"))
-        repeat(5) {
-            if (timer == null) {
-                val settingsScroll = device.findObjects(By.scrollable(true)).maxByOrNull { it.visibleBounds.top }
-                checkNotNull(settingsScroll) { "Scrollable voice settings were not visible" }
-                settingsScroll.scroll(Direction.DOWN, 0.7f)
-                timer = device.wait(Until.findObject(By.text("30 分钟")), 500)
-            }
+    private fun openListeningSettingsWithoutStarting() {
+        assertTrue(device.revealReaderChrome("朗读"))
+        assertTrue(device.longPressActionLabel("朗读"))
+        assertTrue(device.wait(Until.hasObject(By.desc("听书面板")), 3_000))
+        assertEquals("Opening settings must not start an audio session", ReaderTtsSessionState.OFF, controller.playbackState)
+        assertFalse(audioManager.isMusicActive)
+    }
+
+    private fun tapListeningControl(description: String) {
+        repeat(3) {
+            val control = device.wait(Until.findObject(By.desc(description)), 1_000)
+            if (control != null && device.clickObjectCenter(control)) return
         }
-        assertTrue("The 30-minute option must be reachable through real settings", timer != null)
-        assertTrue(device.clickObjectCenter(requireNotNull(timer)))
+        throw AssertionError("听书面板操作不可达：$description")
+    }
+
+    private fun selectThirtyMinuteTimerWithoutStarting() {
+        openListeningSettingsWithoutStarting()
+        tapListeningControl("30 分钟")
         awaitCondition("timer choice is saved", 3_000) {
             application.readerSettingsStore.load().ttsSettings.timerPreset == ReaderTtsTimerPreset.Countdown(30)
         }
-        device.pressBack()
+        tapListeningControl("收起听书面板")
     }
 
     private fun sendNotificationAction(label: String) {

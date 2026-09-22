@@ -12,15 +12,15 @@ class ReaderTtsReaderUiStateResolverTest {
     @Test
     fun finishedListeningExplainsWhyItStoppedWithoutClaimingAnActiveSession() {
         for ((terminal, message) in listOf(
-            ReaderTtsSessionState.STOPPED_BY_TIMER to "定时结束，已停止朗读",
-            ReaderTtsSessionState.STOPPED_AT_BOOK_END to "已读到全书末尾",
+            ReaderTtsSessionState.STOPPED_BY_TIMER to "定时结束",
+            ReaderTtsSessionState.STOPPED_AT_BOOK_END to "已读完",
         )) {
             val runtime = ReaderTtsRuntimeState(playbackState = terminal, currentBookId = "book-1")
             val state = ReaderTtsReaderUiStateResolver.resolve("book-1", runtime)
             assertEquals(message, state.statusText)
             assertEquals("朗读", state.toggleState.actionLabel)
             assertFalse(state.toggleState.showImmersiveAction)
-            assertEquals("当前状态：未朗读", ReaderTtsReaderUiStateResolver.resolve("book-2", runtime).statusText)
+            assertEquals("未开始", ReaderTtsReaderUiStateResolver.resolve("book-2", runtime).statusText)
         }
     }
 
@@ -35,10 +35,10 @@ class ReaderTtsReaderUiStateResolverTest {
             ),
         )
 
-        assertEquals("暂停朗读 · 28m", state.toggleState.actionLabel)
-        assertEquals("暂停朗读 · 28m", state.toggleState.immersiveActionLabel)
+        assertEquals("听书", state.toggleState.actionLabel)
+        assertEquals("暂停朗读", state.toggleState.immersiveActionLabel)
         assertTrue(state.toggleState.showImmersiveAction)
-        assertEquals("当前状态：朗读中", state.statusText)
+        assertEquals("正在朗读", state.statusText)
         assertEquals("28m", state.remainingTimeLabel)
     }
 
@@ -53,9 +53,9 @@ class ReaderTtsReaderUiStateResolverTest {
             ),
         )
 
-        assertEquals("继续朗读 · 1h 30m", state.toggleState.actionLabel)
+        assertEquals("听书", state.toggleState.actionLabel)
         assertTrue(state.toggleState.showImmersiveAction)
-        assertEquals("当前状态：已暂停", state.statusText)
+        assertEquals("已暂停", state.statusText)
         assertEquals("1h 30m", state.remainingTimeLabel)
     }
 
@@ -70,10 +70,10 @@ class ReaderTtsReaderUiStateResolverTest {
             ),
         )
 
-        assertEquals("暂停朗读", state.toggleState.actionLabel)
+        assertEquals("听书", state.toggleState.actionLabel)
         assertEquals("暂停朗读", state.toggleState.immersiveActionLabel)
         assertTrue(state.toggleState.showImmersiveAction)
-        assertEquals("当前状态：朗读中", state.statusText)
+        assertEquals("正在朗读", state.statusText)
         assertEquals(null, state.remainingTimeLabel)
     }
 
@@ -88,10 +88,10 @@ class ReaderTtsReaderUiStateResolverTest {
             ),
         )
 
-        assertEquals("继续朗读", state.toggleState.actionLabel)
+        assertEquals("听书", state.toggleState.actionLabel)
         assertEquals("继续朗读", state.toggleState.immersiveActionLabel)
         assertTrue(state.toggleState.showImmersiveAction)
-        assertEquals("当前状态：已暂停", state.statusText)
+        assertEquals("已暂停", state.statusText)
         assertEquals(null, state.remainingTimeLabel)
     }
 
@@ -108,7 +108,7 @@ class ReaderTtsReaderUiStateResolverTest {
 
         assertEquals("朗读", state.toggleState.actionLabel)
         assertFalse(state.toggleState.showImmersiveAction)
-        assertEquals("当前状态：未朗读", state.statusText)
+        assertEquals("未开始", state.statusText)
         assertEquals(null, state.remainingTimeLabel)
     }
 
@@ -120,7 +120,7 @@ class ReaderTtsReaderUiStateResolverTest {
         )
 
         assertEquals("正在准备离线声音…", state.statusText)
-        assertEquals("暂停朗读", state.toggleState.actionLabel)
+        assertEquals("听书", state.toggleState.actionLabel)
     }
 
     @Test
@@ -134,7 +134,7 @@ class ReaderTtsReaderUiStateResolverTest {
             ),
         )
 
-        assertEquals("重试朗读", state.toggleState.actionLabel)
-        assertEquals("朗读失败：无法读取声音文件", state.statusText)
+        assertEquals("重试朗读", state.toggleState.immersiveActionLabel)
+        assertEquals("朗读失败", state.statusText)
     }
 }

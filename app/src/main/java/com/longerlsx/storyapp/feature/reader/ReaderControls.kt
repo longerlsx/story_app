@@ -1,5 +1,6 @@
 package com.longerlsx.storyapp.feature.reader
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -27,16 +29,21 @@ import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.longerlsx.storyapp.core.model.ReaderAppearanceMode
+import com.longerlsx.storyapp.core.model.ReaderTtsSpeechRates
 import kotlin.math.roundToInt
 
 data class ReaderTtsToggleUiState(
     val actionLabel: String = "朗读",
     val showImmersiveAction: Boolean = false,
     val immersiveActionLabel: String = actionLabel,
+    val statusText: String = "",
+    val remainingTimeLabel: String? = null,
+    val speechRate: Float = 1f,
 )
 
 @Composable
@@ -56,93 +63,124 @@ fun ReaderControls(
     onOpenSettings: () -> Unit,
     onToggleTts: () -> Unit = {},
     onImmersiveTtsAction: () -> Unit = {},
+    onOpenListening: () -> Unit = {},
+    onOpenListeningSettings: () -> Unit = {},
+    onStopTts: (() -> Unit)? = null,
+    onCloseExpanded: (() -> Unit)? = null,
     expandedContent: (@Composable () -> Unit)? = null,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = themePalette.surface.copy(alpha = 0.96f),
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        tonalElevation = 10.dp,
-        shadowElevation = 10.dp,
+        color = themePalette.surface,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+        shadowElevation = 3.dp,
     ) {
-        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-            // Keep the bottom action bar visible even when settings/directory content grows tall.
-            val expandedPanelMaxHeight = maxOf(
-                220.dp,
-                minOf(maxHeight * 0.68f, maxHeight - 92.dp),
-            )
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            // This is an overlay. Its height never contributes to the text viewport.
+            val expandedPanelMaxHeight = (maxHeight - 144.dp).coerceIn(48.dp, 620.dp)
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 18.dp, vertical = 14.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
+                if (ttsToggleState?.showImmersiveAction == true &&
+                    (chromeMode == ReaderChromeMode.READING_ONLY || chromeMode == ReaderChromeMode.CHROME_VISIBLE)) {
+                    ReaderTtsCompactBar(ttsToggleState, themePalette, onOpenListening, onImmersiveTtsAction, onStopTts)
+                }
                 when (chromeMode) {
-                    ReaderChromeMode.CHROME_VISIBLE -> {
-                        if (showChapterNavigationRow) {
-                            ReaderChapterNavigationRow(
-                                progressSummary = progressSummary,
-                                themePalette = themePalette,
-                                canOpenPreviousChapter = canOpenPreviousChapter,
-                                canOpenNextChapter = canOpenNextChapter,
-                                onOpenPreviousChapter = onOpenPreviousChapter,
-                                onOpenNextChapter = onOpenNextChapter,
-                            )
-                        }
+                    ReaderChromeMode.CHROME_VISIBLE -> if (showChapterNavigationRow) {
+                        ReaderChapterNavigationRow(progressSummary, themePalette,
+                            canOpenPreviousChapter, canOpenNextChapter,
+                            onOpenPreviousChapter, onOpenNextChapter)
                     }
-
-                    ReaderChromeMode.SETTINGS_EXPANDED,
-                    ReaderChromeMode.DIRECTORY_OPEN,
-                    -> {
-                        if (expandedContent != null) {
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .heightIn(max = expandedPanelMaxHeight),
-                                color = themePalette.surface.copy(alpha = 0.98f),
-                                shape = RoundedCornerShape(24.dp),
-                                tonalElevation = 2.dp,
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 14.dp, vertical = 14.dp),
-                                ) {
-                                    expandedContent()
-                                }
+                    ReaderChromeMode.SETTINGS_EXPANDED, ReaderChromeMode.DIRECTORY_OPEN -> {
+                        if (onCloseExpanded != null) {
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Text(if (chromeMode == ReaderChromeMode.DIRECTORY_OPEN) "目录" else "阅读设置",
+                                    modifier = Modifier.weight(1f).padding(start = 4.dp),
+                                    style = MaterialTheme.typography.titleSmall, color = themePalette.subtleContent)
+                                ReaderTopBarGlyphButton("×", "关闭面板", themePalette.content, onCloseExpanded)
                             }
                         }
+                        Box(Modifier.fillMaxWidth().heightIn(max = expandedPanelMaxHeight)
+                            .padding(horizontal = 4.dp, vertical = 8.dp)) { expandedContent?.invoke() }
                     }
-
-                    ReaderChromeMode.READING_ONLY -> {
-                        if (ttsToggleState?.showImmersiveAction == true) {
-                            ReaderImmersiveTtsStopRow(
-                                themePalette = themePalette,
-                                label = ttsToggleState.immersiveActionLabel,
-                                onActionClick = onImmersiveTtsAction,
-                            )
-                        }
+                    ReaderChromeMode.LISTENING_EXPANDED -> {
+                        Box(Modifier.fillMaxWidth().heightIn(max = expandedPanelMaxHeight)
+                            .padding(horizontal = 4.dp, vertical = 8.dp)) { expandedContent?.invoke() }
                     }
-                }
-
-                when (chromeMode) {
-                    ReaderChromeMode.CHROME_VISIBLE,
-                    ReaderChromeMode.SETTINGS_EXPANDED,
-                    ReaderChromeMode.DIRECTORY_OPEN,
-                    -> ReaderPrimaryActionBar(
-                        appearanceMode = appearanceMode,
-                        themePalette = themePalette,
-                        ttsToggleState = ttsToggleState,
-                        onOpenToc = onOpenToc,
-                        onToggleAppearanceMode = onToggleAppearanceMode,
-                        onOpenSettings = onOpenSettings,
-                        onToggleTts = onToggleTts,
-                    )
-
                     ReaderChromeMode.READING_ONLY -> Unit
+                }
+                if (chromeMode != ReaderChromeMode.READING_ONLY) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        ReaderBarAction("目录", themePalette, Modifier.weight(1f), icon = true, onClick = onOpenToc)
+                        ReaderBarAction(if (appearanceMode == ReaderAppearanceMode.DAY) "夜间" else "日间",
+                            themePalette, Modifier.weight(1f), icon = true, onClick = onToggleAppearanceMode)
+                        ReaderBarAction("设置", themePalette, Modifier.weight(1f), icon = true, onClick = onOpenSettings)
+                        if (ttsToggleState != null) ReaderBarAction(ttsToggleState.actionLabel, themePalette,
+                            Modifier.weight(1f), icon = true,
+                            onLongClick = onOpenListeningSettings,
+                            onClick = onToggleTts)
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ReaderTtsCompactBar(
+    state: ReaderTtsToggleUiState,
+    themePalette: ReaderThemePalette,
+    onOpenListening: () -> Unit,
+    onPlaybackAction: () -> Unit,
+    onStop: (() -> Unit)?,
+) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            Modifier.weight(1f).heightIn(min = 56.dp).clip(RoundedCornerShape(12.dp))
+                .clickable(role = Role.Button, onClick = onOpenListening)
+                .semantics(mergeDescendants = true) { contentDescription = "展开听书面板" }
+                .padding(horizontal = 4.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(state.statusText, style = MaterialTheme.typography.bodyMedium,
+                    color = themePalette.content, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(listOfNotNull(state.remainingTimeLabel?.let { "剩余 $it" },
+                    ReaderTtsSpeechRates.label(state.speechRate)).joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall, color = themePalette.subtleContent,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            ReaderActionIcon("向上", themePalette.subtleContent, Modifier.size(20.dp))
+        }
+        ReaderTtsIconButton(state.immersiveActionLabel, themePalette, onPlaybackAction, primary = true)
+        ReaderTtsIconButton("停止朗读", themePalette, onStop, outlined = true)
+    }
+}
+
+/** A stable 48dp target shared by the full listening panel and its compact bar. */
+@Composable
+internal fun ReaderTtsIconButton(
+    label: String,
+    themePalette: ReaderThemePalette,
+    onClick: (() -> Unit)?,
+    primary: Boolean = false,
+    outlined: Boolean = false,
+) {
+    val enabled = onClick != null
+    val tint = (if (primary) themePalette.onAccent else themePalette.content)
+        .copy(alpha = if (enabled) 1f else 0.38f)
+    Surface(
+        onClick = onClick ?: {},
+        enabled = enabled,
+        modifier = Modifier.size(48.dp).semantics { contentDescription = label; role = Role.Button },
+        shape = if (primary) CircleShape else RoundedCornerShape(16.dp),
+        color = if (primary) themePalette.accent else androidx.compose.ui.graphics.Color.Transparent,
+        border = if (outlined) BorderStroke(1.dp, themePalette.outline) else null,
+    ) {
+        Box(contentAlignment = Alignment.Center) { ReaderActionIcon(label, tint, Modifier.size(24.dp)) }
     }
 }
 
@@ -156,7 +194,8 @@ fun BoxScope.ReaderImmersiveHeader(
     Row(
         modifier = Modifier
             .align(Alignment.TopStart)
-            .padding(start = 14.dp, top = 14.dp, end = 18.dp)
+            // 4 + 48 = the existing 52dp body start. Do not steal the first line's touches.
+            .padding(start = 14.dp, top = 4.dp, end = 18.dp)
             .onGloballyPositioned { coordinates ->
                 onBottomMeasured(coordinates.positionInParent().y.plus(coordinates.size.height).roundToInt())
             }
@@ -194,7 +233,7 @@ fun BoxScope.ReaderTopBar(
         modifier = Modifier
             .align(Alignment.TopCenter)
             .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 12.dp)
+            .padding(horizontal = 14.dp, vertical = 4.dp)
             .onGloballyPositioned { coordinates ->
                 onBottomMeasured(coordinates.positionInParent().y.plus(coordinates.size.height).roundToInt())
             }
@@ -246,7 +285,7 @@ private fun ReaderTopBarGlyphButton(
 ) {
     Box(
         modifier = Modifier
-            .size(32.dp)
+            .size(48.dp)
             .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
             .semantics { this.contentDescription = contentDescription },
@@ -270,77 +309,14 @@ private fun ReaderChapterNavigationRow(
     onOpenPreviousChapter: () -> Unit,
     onOpenNextChapter: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        ReaderBarAction(
-            label = "上一章",
-            enabled = canOpenPreviousChapter,
-            themePalette = themePalette,
-            onClick = onOpenPreviousChapter,
-            modifier = Modifier.weight(1f),
-        )
-        Text(
-            text = progressSummary,
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-            color = themePalette.content.copy(alpha = 0.8f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            softWrap = false,
-        )
-        ReaderBarAction(
-            label = "下一章",
-            enabled = canOpenNextChapter,
-            themePalette = themePalette,
-            onClick = onOpenNextChapter,
-            modifier = Modifier.weight(1f),
-        )
-    }
-}
-
-@Composable
-private fun ReaderPrimaryActionBar(
-    appearanceMode: ReaderAppearanceMode,
-    themePalette: ReaderThemePalette,
-    ttsToggleState: ReaderTtsToggleUiState?,
-    onOpenToc: () -> Unit,
-    onToggleAppearanceMode: () -> Unit,
-    onOpenSettings: () -> Unit,
-    onToggleTts: () -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        ReaderBarAction(
-            label = "目录",
-            themePalette = themePalette,
-            onClick = onOpenToc,
-            modifier = Modifier.weight(1f),
-        )
-        ReaderBarAction(
-            label = if (appearanceMode == ReaderAppearanceMode.DAY) "夜间" else "日间",
-            themePalette = themePalette,
-            onClick = onToggleAppearanceMode,
-            modifier = Modifier.weight(1f),
-        )
-        ReaderBarAction(
-            label = "设置",
-            themePalette = themePalette,
-            onClick = onOpenSettings,
-            modifier = Modifier.weight(1f),
-        )
-        if (ttsToggleState != null) {
-            ReaderTtsToggleAction(
-                state = ttsToggleState,
-                themePalette = themePalette,
-                onClick = onToggleTts,
-                modifier = Modifier.weight(1f),
-            )
-        }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        ReaderBarAction("上一章", themePalette, Modifier.weight(1f), canOpenPreviousChapter,
+            onClick = onOpenPreviousChapter)
+        Text(progressSummary, modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.labelMedium, textAlign = TextAlign.Center,
+            color = themePalette.subtleContent, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        ReaderBarAction("下一章", themePalette, Modifier.weight(1f), canOpenNextChapter,
+            onClick = onOpenNextChapter)
     }
 }
 
@@ -350,105 +326,26 @@ private fun ReaderBarAction(
     themePalette: ReaderThemePalette,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    icon: Boolean = false,
+    displayLabel: String = label,
+    onLongClick: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
-    Box(
-        modifier = modifier
-            .padding(horizontal = 4.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .background(
-                if (enabled) {
-                    themePalette.background.copy(alpha = 0.9f)
-                } else {
-                    themePalette.background.copy(alpha = 0.45f)
-                },
-            )
-            .combinedClickable(
-                enabled = enabled,
-                role = Role.Button,
-                onClick = onClick,
-                onLongClick = null,
-            )
-            .semantics { contentDescription = label },
+    val tint = if (enabled) themePalette.content else themePalette.content.copy(alpha = 0.38f)
+    Column(
+        modifier = modifier.clip(RoundedCornerShape(12.dp))
+            .combinedClickable(enabled = enabled, role = Role.Button, onLongClick = onLongClick, onClick = onClick)
+            .semantics(mergeDescendants = true) { contentDescription = label }
+            .heightIn(min = if (icon) 64.dp else 48.dp)
+            .padding(horizontal = 2.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
     ) {
-        ReaderActionLabelText(
-            label = label,
-            color = if (enabled) {
-                themePalette.content
-            } else {
-                themePalette.content.copy(alpha = 0.35f)
-            },
-        )
-    }
-}
-
-@Composable
-private fun ReaderTtsToggleAction(
-    state: ReaderTtsToggleUiState,
-    themePalette: ReaderThemePalette,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-) {
-    Box(
-        modifier = modifier
-            .padding(horizontal = 4.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .background(themePalette.background.copy(alpha = 0.9f))
-            .combinedClickable(
-                role = Role.Button,
-                onClick = onClick,
-                onLongClick = null,
-            )
-            .semantics { contentDescription = state.actionLabel },
-    ) {
-        ReaderActionLabelText(
-            label = state.actionLabel,
-            color = themePalette.content,
-        )
-    }
-}
-
-@Composable
-private fun ReaderActionLabelText(
-    label: String,
-    color: androidx.compose.ui.graphics.Color,
-) {
-    Text(
-        text = label,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 10.dp),
-        style = if (label.length >= 7) {
-            MaterialTheme.typography.labelMedium
-        } else {
-            MaterialTheme.typography.bodyMedium
-        },
-        textAlign = TextAlign.Center,
-        color = color,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        softWrap = false,
-    )
-}
-
-@Composable
-private fun ReaderImmersiveTtsStopRow(
-    themePalette: ReaderThemePalette,
-    label: String,
-    onActionClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp)
-            .height(40.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        ReaderBarAction(
-            label = label,
-            themePalette = themePalette,
-            onClick = onActionClick,
-            modifier = Modifier.weight(1f),
-        )
+        if (icon) ReaderActionIcon(label, tint, Modifier.size(24.dp))
+        Text(displayLabel, color = tint,
+            modifier = Modifier.padding(top = if (icon) 4.dp else 0.dp),
+            style = if (icon) MaterialTheme.typography.labelMedium else MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center, maxLines = if (icon && displayLabel.length <= 4) 2 else 1,
+            overflow = TextOverflow.Ellipsis)
     }
 }
