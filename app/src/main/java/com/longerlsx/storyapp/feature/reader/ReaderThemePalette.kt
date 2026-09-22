@@ -1,12 +1,21 @@
 package com.longerlsx.storyapp.feature.reader
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 
 data class ReaderThemePalette(
     val background: Color,
     val surface: Color,
     val content: Color,
 )
+
+// Control colors do not participate in the reader's text/layout identity.
+val ReaderThemePalette.accent: Color
+    get() = if (background.luminance() < 0.3f) Color(0xFFB0D0BA) else Color(0xFF355A4B)
+val ReaderThemePalette.onAccent: Color
+    get() = if (background.luminance() < 0.3f) Color(0xFF183B2C) else Color.White
+val ReaderThemePalette.subtleContent: Color get() = content.copy(alpha = 0.76f)
+val ReaderThemePalette.outline: Color get() = content.copy(alpha = 0.22f)
 
 fun ReaderThemePreset.palette(): ReaderThemePalette {
     return when (this) {

@@ -18,6 +18,9 @@ class ReaderTtsNotificationFactory(
     fun ensureChannel() {
         val existing = notificationManager.getNotificationChannel(CHANNEL_ID)
         if (existing != null) {
+            // Refresh branding on upgrade without replacing the channel or user preferences.
+            existing.name = context.getString(R.string.reader_tts_notification_channel_name)
+            notificationManager.createNotificationChannel(existing)
             return
         }
         notificationManager.createNotificationChannel(
