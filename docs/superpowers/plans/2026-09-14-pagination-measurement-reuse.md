@@ -293,7 +293,7 @@ S1/S2主要入口是 `StablePageReaderContent` / `ReaderPositionState`，S3/S4�
 
 | 产物 | SHA256 |
 | --- | --- |
-| [debug APK](/Users/longshengxi/proj/story_app/app/build/outputs/apk/debug/app-debug.apk) | `e988f60daa8027e44134bcee1f07f3141e099f6d415ed5beca509dfa49b63520` |
+| 历史debug APK：`/Users/longshengxi/proj/story_app/app/build/outputs/apk/debug/app-debug.apk`（输出路径后续已复用，2026-09-23清理本地产物） | `e988f60daa8027e44134bcee1f07f3141e099f6d415ed5beca509dfa49b63520` |
 | [本地签名release APK](/Users/longshengxi/proj/story_app/app/build/outputs/apk/release/app-release.apk) | `f916fd9a5159fb29de2c3d6f84b997349601cedefb27466c19f0684323ef5f5c` |
 
 函数性能证据对应修复可见性之前的release `5e9b3ccfd45bdb5fe485f46da39899d3ceed44e5baeeab6974fe110f0e7ddbfe`；之后仅修改ReaderScreen的模式可见性及关联测试，`ReaderPageTextLayout`、`ReaderPagePagination`和行分页器均未变化，故继承函数对照，不重测或冒称使用最终APK重新计时。最后的模式6项及缓存1项在最终debug产品上补验，其他证据按明确未受影响范围继承。没有可信的上屏比例、性能分位数或小米真机结果，第二阶段音源及队列未改。

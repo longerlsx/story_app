@@ -168,7 +168,7 @@
 
 最终产物：
 
-- [debug APK](/Users/longshengxi/proj/story_app/app/build/outputs/apk/debug/app-debug.apk)，SHA-256 `a6fdf9b2887ca4d005d9b4a6859dc3d9b7d145d8b2a0d803fc2f75ba57431212`。
+- 历史debug APK路径：`/Users/longshengxi/proj/story_app/app/build/outputs/apk/debug/app-debug.apk`，SHA-256 `a6fdf9b2887ca4d005d9b4a6859dc3d9b7d145d8b2a0d803fc2f75ba57431212`。该输出路径后续已被新构建复用，2026-09-23清理本地产物；此处仅保留历史身份。
 - [本地签名 release APK](/Users/longshengxi/proj/story_app/app/build/outputs/apk/release/app-release.apk)，SHA-256 `1e26f66378cae8776184bbde09e4dcf23957ba875869f07c62b280e06b142928`，签名验证通过。
 - 2026-09-11 交付时未提交或推送；2026-09-14 用户授权 Git 交付，代码和长期回归分为 `c639941`（存储与导入）及 `e9b9498`（阅读定位与交互），本计划与治理文档随同交付。未进行合并；此前已有的两份无关历史计划继续保留为未跟踪文件，不混入本次提交。
 
