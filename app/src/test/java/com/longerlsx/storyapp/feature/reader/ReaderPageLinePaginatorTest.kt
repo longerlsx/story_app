@@ -9,6 +9,22 @@ import kotlinx.coroutines.Job
 class ReaderPageLinePaginatorTest {
 
     @Test
+    fun distinguishesContinuationPagesFromIndentedNaturalParagraphStartsWithoutChangingSource() {
+        val content = "　　甲乙丙丁\n\t戊己"
+        val lines = listOf(
+            ReaderPageLine(2, 4, 0f, 24f),
+            ReaderPageLine(4, 6, 24f, 48f),
+            ReaderPageLine(8, 10, 48f, 72f),
+        )
+
+        val pages = ReaderPageLinePaginator.paginate(content, lines, availableHeightPx = 24f)
+
+        assertEquals(listOf(false, true, false), pages.map { it.firstParagraphContinues })
+        assertEquals(listOf(2, 4, 8), pages.map { it.startCharOffset })
+        assertEquals(listOf("甲乙", "丙丁", "戊己"), pages.map { it.rawText })
+    }
+
+    @Test
     fun cancellationDuringPageFitStopsBeforeComputingTheRemainingPages() {
         val job = Job()
         val content = "甲乙丙丁戊己庚辛"

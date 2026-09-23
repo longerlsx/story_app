@@ -1457,6 +1457,7 @@ private fun ReaderPageParagraphContent(
     ReaderParagraphContent(
         text = page.rawText,
         baseCharOffset = page.startCharOffset,
+        firstParagraphContinues = page.firstParagraphContinues,
         themePalette = themePalette,
         fontSize = fontSize,
         lineHeight = lineHeight,
@@ -1472,6 +1473,7 @@ private fun ReaderPageParagraphContent(
 private fun ReaderParagraphContent(
     text: String,
     baseCharOffset: Int = 0,
+    firstParagraphContinues: Boolean = false,
     themePalette: ReaderThemePalette,
     fontSize: TextUnit,
     lineHeight: TextUnit,
@@ -1491,7 +1493,7 @@ private fun ReaderParagraphContent(
             platformStyle = PlatformTextStyle(includeFontPadding = includeFontPadding),
         )
     }
-    val measuredLines = remember(text, fontSize, lineHeight, paragraphSpacing, LocalDensity.current) {
+    val measuredLines = remember(text, firstParagraphContinues, fontSize, lineHeight, paragraphSpacing, LocalDensity.current) {
         mutableStateMapOf<Int, List<ReaderPageLine>>()
     }
     if (onLinesChanged != null && paragraphs.all { measuredLines.containsKey(it.startCharOffset) }) {
@@ -1501,8 +1503,11 @@ private fun ReaderParagraphContent(
     Column(
         verticalArrangement = Arrangement.spacedBy(paragraphSpacing),
     ) {
-        paragraphs.forEach { paragraph ->
-            var textLayoutResult by remember(paragraph, fontSize, lineHeight, paragraphSpacing, LocalDensity.current) {
+        paragraphs.forEachIndexed { paragraphIndex, paragraph ->
+            val indentedStyle = paragraphTextStyle.withReaderParagraphIndent(
+                indentFirstLine = paragraphIndex > 0 || !firstParagraphContinues,
+            )
+            var textLayoutResult by remember(paragraph, indentedStyle, paragraphSpacing, LocalDensity.current) {
                 mutableStateOf<TextLayoutResult?>(null)
             }
             var topPx by remember(paragraph, fontSize, lineHeight, paragraphSpacing, LocalDensity.current) { mutableStateOf<Float?>(null) }
@@ -1552,7 +1557,7 @@ private fun ReaderParagraphContent(
                     Modifier
                 }).then(if (onLinesChanged != null) Modifier.onGloballyPositioned { topPx = it.positionInParent().y } else Modifier),
                 color = themePalette.content,
-                style = paragraphTextStyle,
+                style = indentedStyle,
                 onTextLayout = { textLayoutResult = it },
             )
         }

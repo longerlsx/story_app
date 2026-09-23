@@ -8,6 +8,12 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextIndent
+import androidx.compose.ui.unit.em
+
+internal fun TextStyle.withReaderParagraphIndent(indentFirstLine: Boolean = true): TextStyle = copy(
+    textIndent = TextIndent(firstLine = if (indentFirstLine) 2.em else 0.em),
+)
 
 @Composable
 internal fun ReaderSingleLineText(

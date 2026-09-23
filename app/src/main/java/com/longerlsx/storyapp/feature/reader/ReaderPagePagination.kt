@@ -74,6 +74,7 @@ internal class ReaderMeasuredPageFit(
                 textMeasurer = textMeasurer,
                 textStyle = textStyle,
                 cancellationContext = cancellationContext,
+                indentFirstLine = index > 0 || !page.firstParagraphContinues,
             ).also {
                 // Only the leading fragment can stay unchanged while the candidate's tail backs off.
                 // A single-paragraph candidate changes its end on every backoff and is never retained.

@@ -21,8 +21,10 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextIndent
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.longerlsx.storyapp.core.model.ReaderSettings
@@ -39,6 +41,17 @@ class ReaderPageContentIntegrityTest {
 
     @get:Rule
     val composeRule = createComposeRule()
+
+    @Test
+    fun paragraphStartsIndentTwoCharactersButPageContinuationsStayFlush() {
+        val content = buildString {
+            append("　　原文已有空格的自然段。")
+            repeat(50) { append("同一段跨页后不应再次缩进，正文也不能少字。") }
+            append("\n\t第二自然段开头。\n没有原始空格的第三段。\n章尾唯一终点。")
+        }
+
+        assertEveryPagePreservesAndDisplaysContent(content, fontSizeSp = 18, paragraphSpacingEm = 0.9f)
+    }
 
     @Test
     fun mixedParagraphsAndBlankLinesKeepChapterTailAtLargestFont() {
@@ -124,7 +137,7 @@ class ReaderPageContentIntegrityTest {
                 val expected = ReaderPageLinePaginator.paginate(
                     content, chapterLines, height.toFloat(),
                     pageFitsViewport = { page ->
-                        standalonePageBottom(page.rawText, width, spacing, measurer, style) <= height
+                        standalonePageBottom(page, content, width, spacing, measurer, style) <= height
                     },
                 )
                 val actual = paginatePageSlices(content, width, height, spacing, measurer, style)
@@ -134,7 +147,7 @@ class ReaderPageContentIntegrityTest {
                 actual.forEachIndexed { index, page ->
                     assertTrue(
                         "Standalone page $index no longer fits at width=$width",
-                        standalonePageBottom(page.rawText, width, spacing, measurer, style) <= height,
+                        standalonePageBottom(page, content, width, spacing, measurer, style) <= height,
                     )
                 }
             }
@@ -169,7 +182,7 @@ class ReaderPageContentIntegrityTest {
             val expected = ReaderPageLinePaginator.paginate(
                 content, lines, height.toFloat(),
                 pageFitsViewport = { page ->
-                    (standalonePageBottom(page.rawText, width, spacing, measurer, style) <= height)
+                    (standalonePageBottom(page, content, width, spacing, measurer, style) <= height)
                         .also { if (!it) rejectedCandidates += 1 }
                 },
             )
@@ -178,24 +191,28 @@ class ReaderPageContentIntegrityTest {
             assertEquals("Page-fit backoff must survive measurement reuse", expected, actual)
             assertPageRangesPreserveSource(content, actual)
             actual.forEach { page ->
-                assertTrue(standalonePageBottom(page.rawText, width, spacing, measurer, style) <= height)
+                assertTrue(standalonePageBottom(page, content, width, spacing, measurer, style) <= height)
             }
         }
     }
 
     private fun standalonePageBottom(
-        text: String,
+        page: ReaderPageSlice,
+        content: String,
         width: Int,
         spacing: Float,
         measurer: TextMeasurer,
         style: TextStyle,
     ): Float {
-        val paragraphs = text.lineSequence().map(String::trim).filter(String::isNotEmpty).toList()
+        val paragraphs = page.rawText.lineSequence().map(String::trim).filter(String::isNotEmpty).toList()
+        val continuesParagraph = content.substring(0, page.startCharOffset).substringAfterLast('\n').isNotBlank()
         var top = 0f
         var bottom = 0f
         paragraphs.forEachIndexed { index, paragraph ->
             val layout = measurer.measure(
-                AnnotatedString(paragraph), style, overflow = TextOverflow.Clip, softWrap = true,
+                AnnotatedString(paragraph),
+                style.copy(textIndent = TextIndent(firstLine = if (index == 0 && continuesParagraph) 0.em else 2.em)),
+                overflow = TextOverflow.Clip, softWrap = true,
                 constraints = Constraints(maxWidth = width),
             )
             bottom = top + layout.getLineBottom(layout.lineCount - 1)
@@ -217,6 +234,7 @@ class ReaderPageContentIntegrityTest {
         var horizontalPaddingPx = 0f
         var topPaddingPx = 0f
         var bottomPaddingPx = 0f
+        var expectedIndentPx = 0f
 
         composeRule.setContent {
             val density = LocalDensity.current
@@ -243,6 +261,7 @@ class ReaderPageContentIntegrityTest {
                 horizontalPaddingPx = with(density) { HorizontalPadding.toPx() }
                 topPaddingPx = with(density) { TopPadding.toPx() }
                 bottomPaddingPx = with(density) { BottomPadding.toPx() }
+                expectedIndentPx = with(density) { fontSize.toPx() * 2 }
             }
             Box(Modifier.requiredSize(PageWidth, PageHeight).testTag(PageViewportTag)) {
                 ReaderPageSurface(
@@ -274,6 +293,7 @@ class ReaderPageContentIntegrityTest {
             ).fetchSemanticsNodes().sortedBy { it.positionInRoot.y }
             assertTrue("Page $pageIndex must render actual text nodes", textNodes.isNotEmpty())
             val pageCharacters = StringBuilder()
+            var paragraphSearchOffset = 0
             composeRule.runOnIdle {
                 textNodes.forEach { node ->
                     val layouts = mutableListOf<TextLayoutResult>()
@@ -282,9 +302,23 @@ class ReaderPageContentIntegrityTest {
                     assertEquals(1, layouts.size)
                     val layout = layouts.single()
                     val text = layout.layoutInput.text.text
+                    val localParagraphStart = page.rawText.indexOf(text, paragraphSearchOffset)
+                    assertTrue("Rendered paragraph must retain its exact source text", localParagraphStart >= 0)
+                    val rawParagraphStart = page.startCharOffset + localParagraphStart
+                    val sourceBefore = content.substring(0, rawParagraphStart).substringAfterLast('\n')
+                    val expectedFirstLineLeft = if (sourceBefore.isBlank()) expectedIndentPx else 0f
+                    assertEquals(
+                        "Only a natural paragraph's first line should have a two-character indent on page $pageIndex",
+                        expectedFirstLineLeft, layout.getBoundingBox(0).left, 1f,
+                    )
+                    paragraphSearchOffset = localParagraphStart + text.length
                     assertFalse("Page $pageIndex text must not overflow its own layout", layout.hasVisualOverflow)
                     assertEquals(text.length, layout.getLineEnd(layout.lineCount - 1, visibleEnd = false))
                     repeat(layout.lineCount) { line ->
+                        if (line > 0) assertEquals(
+                            "Wrapped lines must stay flush", 0f,
+                            layout.getBoundingBox(layout.getLineStart(line)).left, 1f,
+                        )
                         val top = node.positionInRoot.y + layout.getLineTop(line)
                         val bottom = node.positionInRoot.y + layout.getLineBottom(line)
                         val left = node.positionInRoot.x + layout.getLineLeft(line)

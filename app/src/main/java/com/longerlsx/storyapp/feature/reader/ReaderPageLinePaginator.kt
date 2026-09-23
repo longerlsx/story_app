@@ -88,6 +88,15 @@ object ReaderPageLinePaginator {
             startCharOffset = startCharOffset,
             endCharOffset = endCharOffset,
             rawText = rawText,
+            firstParagraphContinues = continuesParagraph(content, startCharOffset),
         )
+    }
+
+    private fun continuesParagraph(content: String, startCharOffset: Int): Boolean {
+        for (index in startCharOffset - 1 downTo 0) {
+            if (content[index] == '\n') return false
+            if (!content[index].isWhitespace()) return true
+        }
+        return false
     }
 }

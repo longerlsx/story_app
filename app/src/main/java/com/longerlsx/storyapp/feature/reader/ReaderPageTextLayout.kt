@@ -57,9 +57,10 @@ object ReaderPageTextLayout {
         textMeasurer: TextMeasurer,
         textStyle: TextStyle,
         cancellationContext: CoroutineContext,
+        indentFirstLine: Boolean = true,
     ): ReaderParagraphMeasurement = measurement(
         paragraph,
-        measureText(paragraph.text, availableWidthPx, textMeasurer, textStyle, cancellationContext),
+        measureText(paragraph.text, availableWidthPx, textMeasurer, textStyle, cancellationContext, indentFirstLine),
     )
 
     private fun measure(
@@ -123,11 +124,12 @@ object ReaderPageTextLayout {
         textMeasurer: TextMeasurer,
         textStyle: TextStyle,
         cancellationContext: CoroutineContext,
+        indentFirstLine: Boolean = true,
     ): TextLayoutResult {
         cancellationContext.ensureActive()
         val layout = textMeasurer.measure(
             text = AnnotatedString(text),
-            style = textStyle,
+            style = textStyle.withReaderParagraphIndent(indentFirstLine),
             overflow = TextOverflow.Clip,
             softWrap = true,
             constraints = Constraints(maxWidth = availableWidthPx.coerceAtLeast(1)),

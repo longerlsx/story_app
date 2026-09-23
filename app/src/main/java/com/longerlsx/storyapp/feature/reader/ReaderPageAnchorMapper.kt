@@ -7,12 +7,14 @@ data class ReaderPageSlice(
     val rawText: String = text,
     val visibleStartCharOffset: Int = startCharOffset,
     val visibleEndCharOffset: Int = endCharOffset,
+    val firstParagraphContinues: Boolean = false,
 )
 
 internal fun readerPageSliceFromRawText(
     startCharOffset: Int,
     endCharOffset: Int,
     rawText: String,
+    firstParagraphContinues: Boolean = false,
 ): ReaderPageSlice {
     val trimmedPrefixLength = rawText.takeWhile { it == '\n' }.length
     val trimmedSuffixLength = rawText.takeLastWhile { it == '\n' }.length
@@ -25,6 +27,7 @@ internal fun readerPageSliceFromRawText(
         rawText = rawText,
         visibleStartCharOffset = visibleStartCharOffset,
         visibleEndCharOffset = visibleEndCharOffset,
+        firstParagraphContinues = firstParagraphContinues,
     )
 }
 

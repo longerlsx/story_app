@@ -9,6 +9,11 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.unit.sp
 import com.longerlsx.storyapp.core.model.Book
 import com.longerlsx.storyapp.core.model.Chapter
 import com.longerlsx.storyapp.core.model.ImportSourceType
@@ -30,6 +35,44 @@ class ReaderPageParagraphSpacingTest {
 
     @get:Rule
     val composeRule = createComposeRule()
+
+    @Test
+    fun scrollModeIndentsNaturalParagraphsButNotWrappedLinesOrChapterTitle() {
+        val bookId = "book-scroll-paragraph-indent"
+        val firstParagraph = "首段正文，" + "换行后仍应顶格显示。".repeat(8)
+        val secondParagraph = "第二自然段正文。"
+        val repository = createRepository(bookId, mapOf(0 to "　　$firstParagraph\n\t$secondParagraph"))
+        val settingsStore = createSettingsStore(
+            "reader-scroll-paragraph-indent", ReaderSettings(readingMode = ReadingMode.SCROLL),
+        )
+        val controller = ReaderTtsController(launchForegroundService = { true }, sendStopCommand = {})
+        var expectedIndentPx = 0f
+        composeRule.setContent {
+            val density = LocalDensity.current
+            SideEffect { expectedIndentPx = with(density) { ReaderSettings().fontSizeSp.sp.toPx() * 2 } }
+            ReaderScreen(bookId, repository, settingsStore, controller, onBack = {})
+        }
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            composeRule.onAllNodesWithText(secondParagraph).fetchSemanticsNodes().isNotEmpty()
+        }
+        listOf(firstParagraph, secondParagraph, "第1章").forEach { text ->
+            val nodes = composeRule.onAllNodesWithText(text, useUnmergedTree = true).fetchSemanticsNodes()
+            assertTrue(nodes.isNotEmpty())
+            composeRule.runOnIdle {
+                nodes.forEach { node ->
+                    val layouts = mutableListOf<TextLayoutResult>()
+                    assertTrue(node.config[SemanticsActions.GetTextLayoutResult].action?.invoke(layouts) == true)
+                    val layout = layouts.single()
+                    assertEquals(text, layout.layoutInput.text.text)
+                    assertEquals(if (text == "第1章") 0f else expectedIndentPx, layout.getBoundingBox(0).left, 1f)
+                    if (text == firstParagraph) assertTrue(layout.lineCount > 1)
+                    for (line in 1 until layout.lineCount) {
+                        assertEquals(0f, layout.getBoundingBox(layout.getLineStart(line)).left, 1f)
+                    }
+                }
+            }
+        }
+    }
 
     @Test
     fun pageModeParagraphSpacingChangesFirstPageVisibleParagraphs() {
