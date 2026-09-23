@@ -4,7 +4,9 @@
 
 15 Ultra同书、1.45×、亮屏、不充电20分钟：D电池服务33.9→40.4°C（终点实时HAL40.9°C），末5分钟skin均值43.341°C；旧基线分别31.6→42.7°C、45.853°C。首轮温度门槛通过，用户反馈“温热，较上次明显减轻”。实录首声后至主动暂停没有≥0.6秒内部静音，首声约5秒，热态短暂熄屏恢复及暂停／停止正常。D电荷计20分钟表面减少349mAh，但暂停约1分钟后补更新46mAh，累计395mAh；不能据349mAh虚报约23%节电，预定至少15%的耗电改善仍未可靠证明。初温、SOC和未测室温差异继续保留，下一步另约冷却后的同条件复测。
 
-手机暂留[候选D APK](/Users/longshengxi/proj/story_app/app/build/outputs/thermal-investigation/daliamao-reader-thermal-candidate-d-20260923.apk)，原设置和最新阅读／听书进度已逐文件核对恢复，无线调试关闭并交还。录音工具已固定安装，可离线复用，见[环境操作说明](knowledge/gradle-android-environment-troubleshooting.md)。用户允许2×暂不支持，以1.45×验收；其他语速、热态2×和原反馈设备17 Pro尚未通过本轮验收。完整对照、身份与限制由[发热改善计划](superpowers/plans/2026-09-23-offline-listening-thermal.md)维护；代码预算约799／800行，停止新增一次性验收代码。
+手机暂留[候选D APK](/Users/longshengxi/proj/story_app/app/build/outputs/thermal-investigation/daliamao-reader-thermal-candidate-d-20260923.apk)，原设置和最新阅读／听书进度已逐文件核对恢复，无线调试关闭并交还。录音工具已固定安装，可离线复用，见[环境操作说明](knowledge/gradle-android-environment-troubleshooting.md)。用户允许2×暂不支持，以1.45×验收；其他语速、热态2×和原反馈设备17 Pro尚未通过本轮验收。完整对照、身份与限制由[发热改善计划](superpowers/plans/2026-09-23-offline-listening-thermal.md)维护。
+
+用户进一步允许轻微听感损失换取较低生成成本，并要求有价值的路线先在电脑试验。已完成保持四线程／完整参考的三步→两步同文小样本：累计生成CPU再少32.85%，各段最终时长相同，已展示1.45×声音等待用户判断。没有因此改手机版本，也不把电脑CPU降幅当作节电比例。短参考、线程和分段沿用已有结论；当前不扩展电脑同步、云端生成或任意裁层。用户另允许过期一次性验收代码删除后释放额度，当前预算及回收明细见计划，不修改跨任务稳定规则。
 
 **9月22日ZipVoice与听书交互已完成当轮模拟器验收：** 只保留雷军合成音色，实现页顶直接起读、独立听书面板、图标暂停／停止与紧凑播放条。[问题版本debug APK](/Users/longshengxi/proj/story_app/app/build/outputs/zipvoice-upgrade/daliamao-reader-debug-20260922.apk)约215MiB、仅ARM64，完全离线，不打包旧音色。真实小说1×／2×连续播放、后台与焦点恢复、数字读法、旧版覆盖升级及进程终止恢复均有直接证据。APK完整身份、实现关系和验证范围由[9月22日实施计划](superpowers/plans/2026-09-22-zipvoice-listening-upgrade.md)维护；当轮只验收模拟器，不声称新音源的小米性能通过。以下9月22日“不安排真机”的表述均为历史范围，不覆盖当前长听任务。
 
