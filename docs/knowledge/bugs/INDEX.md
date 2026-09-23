@@ -125,7 +125,7 @@ This is mandatory for both:
 
 ## Retrieval Hints For Future Threads
 
-- If sustained ZipVoice listening causes heat, fast battery drain or hot-state supply gaps, start with `BUG-2026-062` and its linked thermal plan. The 15 Ultra baseline is reproduced, but ORT compute versus waiting costs and candidate thermal benefits remain unproven. Respect the user's new-window confirmation and fresh-data-backup boundary before any further phone use.
+- If sustained ZipVoice listening causes heat, fast battery drain or hot-state supply gaps, start with `BUG-2026-062` and the [stage handoff](../2026-09-23-offline-tts-thermal-handoff.md). Three-step/full-reference D has one favorable 15 Ultra temperature run; repeatability and reliable energy improvement remain unproven. The user closed this stage with a three-step/short-reference trial release, not a resolved thermal claim. Respect the user's new-window confirmation and fresh-data-backup boundary before further phone use.
 
 - If bundled ZipVoice speaks only a fragment after increasing speed, compare `BUG-2026-060`; the fixed model and sherpa wrapper scale reference-plus-target duration inconsistently. The current fix synthesizes natural-rate PCM and applies user speed in AudioTrack; successful generation alone does not prove complete spoken text.
 - If Arabic numbers in Chinese narration sound English or clock times lose their intended reading, compare `BUG-2026-061`; current sherpa ZipVoice does not apply the Python Chinese normalizer or configured FST rules. The app now normalizes bounded Chinese numeric forms before synthesis; keep that conversion separate from novel text and source offsets. The record distinguishes rule coverage and actual emulator audio from unsupported numeric syntax.

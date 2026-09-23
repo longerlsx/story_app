@@ -13,6 +13,7 @@
 | 导入/标题/章节切分 | 当前状态中的解析说明 → `ImportCoordinator` / `ChapterParser` 及其测试 |
 | 翻页/滚动/目录/设置 | 当前状态中的交互表 → `ReaderScreen` 及对应组件、定位和分页逻辑 |
 | 听书/音色 | 当前状态中的离线听书 → `ReaderTtsService` / `OfflineReaderTtsEngine`；资源准备见[离线声音依赖](knowledge/offline-voice-dependencies.md) |
+| 接续9月23日发热优化 | [阶段调查与交接](knowledge/2026-09-23-offline-tts-thermal-handoff.md)：全部已试路线、真实温耗边界、四步基线与三步短参考试用交付；详细过程再读其链接计划 |
 | 构建、设备、语料与验证工具 | [项目 README](../README.md)、[环境与验证操作说明](knowledge/gradle-android-environment-troubleshooting.md) |
 | 查询历史决定 | [开发历史](knowledge/2026-04-android-reader-development-cycle.md)，需要时再读 `superpowers/specs` / `superpowers/plans` |
 
