@@ -246,6 +246,24 @@ Local video tools previously available:
 - `/opt/homebrew/bin/ffmpeg`
 - `/opt/homebrew/bin/ffprobe`
 
+Reusable scrcpy 4.1 is installed at
+`/Users/longshengxi/.local/share/story-app-tools/scrcpy-4.1/bin/scrcpy`.
+Set `ADB=/Users/longshengxi/Library/Android/sdk/platform-tools/adb` for this
+command. The installation keeps its source archive, license and `BUILD.txt`;
+it is a development dependency, not temporary test evidence. Recording needs
+no Internet. Keep it when deleting one-off scripts, backups and recordings.
+
+This Mac uses an unmodified upstream v4.1 client built against its existing
+FFmpeg 8.1.2 and SDL 3.4.10, plus libusb 1.0.30. The current Homebrew 4.1_1
+bottle requires FFmpeg 9 and did not start here; that unusable client was
+removed. TUNA's Homebrew mirror supplied the verified official server, whose
+SHA256 is `deacb991ed2509715160ffdc7907e47b4160eb30d1566217e9047fd5b8850cae`.
+Use command-local mirror settings from the [TUNA instructions](https://mirrors.tuna.tsinghua.edu.cn/help/homebrew-bottles/)
+when needed; do not change the user's global sources or upgrade unrelated
+dependencies just to obtain this tool. After a tool or dependency change,
+verify a short actual recording on the task emulator before reserving a phone
+window; `--version` alone does not establish recording readiness.
+
 For silent-phone audio checks, distinguish capture paths. On the tested Xiaomi,
 scrcpy 4.1 `--audio-source=output` yielded silence at media volume zero, while
 `--audio-source=playback --no-playback --no-video --no-control --no-window
