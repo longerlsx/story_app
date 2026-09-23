@@ -64,8 +64,11 @@ class OfflineReaderTtsEngine(
                         val startedAt = SystemClock.elapsedRealtime()
                         val dataDir = preparePhonemeData()
                         currentCoroutineContext().ensureActive()
-                        val reference = WaveReader.readWave(context.assets, "$MODEL_DIR/leijun-1.wav")
-                        check(reference.sampleRate > 0 && reference.samples.isNotEmpty()) { "内置参考声音无法读取" }
+                        val fullReference = WaveReader.readWave(context.assets, "$MODEL_DIR/leijun-1.wav")
+                        val referenceFrames = (fullReference.sampleRate.toLong() * REFERENCE_DURATION_MS / 1_000).toInt()
+                        check(referenceFrames > 0 && fullReference.samples.size >= referenceFrames) { "内置参考声音无法读取" }
+                        // Keep the original asset; use its complete first phrase, matching REFERENCE_TEXT.
+                        val reference = fullReference.copy(samples = fullReference.samples.copyOf(referenceFrames))
                         val created = OfflineTts(
                             assetManager = context.assets,
                             config = OfflineTtsConfig(
@@ -88,7 +91,7 @@ class OfflineReaderTtsEngine(
                         }
                         referenceVoice = reference
                         model = created
-                        Log.i(TAG, "model=zipvoice-distill-int8 threads=4 steps=3 modelReadyMs=${SystemClock.elapsedRealtime() - startedAt}")
+                        Log.i(TAG, "model=zipvoice-distill-int8 threads=4 steps=3 referenceMs=${reference.samples.size * 1_000L / reference.sampleRate} modelReadyMs=${SystemClock.elapsedRealtime() - startedAt}")
                     }
                 }
             }
@@ -419,7 +422,8 @@ class OfflineReaderTtsEngine(
     companion object {
         private const val TAG = "OfflineReaderTts"
         private const val MODEL_DIR = "sherpa-onnx-zipvoice-distill-int8-zh-en-emilia"
-        private const val REFERENCE_TEXT = "那还是三十六年前, 一九八七年. 我呢考上了武汉大学的计算机系."
+        private const val REFERENCE_DURATION_MS = 1_930
+        private const val REFERENCE_TEXT = "那还是三十六年前,"
         private val nativeMutex = Mutex()
         val voices = listOf(
             ReaderTtsVoiceOption(ReaderTtsSettings.DEFAULT_VOICE_NAME, "雷军"),
