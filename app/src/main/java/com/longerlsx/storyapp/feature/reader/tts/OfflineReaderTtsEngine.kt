@@ -78,7 +78,7 @@ class OfflineReaderTtsEngine(
                                         dataDir = dataDir.absolutePath,
                                         lexicon = "$MODEL_DIR/lexicon.txt",
                                     ),
-                                    numThreads = 3,
+                                    numThreads = 4,
                                 ),
                             ),
                         )
@@ -88,7 +88,7 @@ class OfflineReaderTtsEngine(
                         }
                         referenceVoice = reference
                         model = created
-                        Log.i(TAG, "model=zipvoice-distill-int8 threads=3 steps=4 modelReadyMs=${SystemClock.elapsedRealtime() - startedAt}")
+                        Log.i(TAG, "model=zipvoice-distill-int8 threads=4 steps=4 modelReadyMs=${SystemClock.elapsedRealtime() - startedAt}")
                     }
                 }
             }
