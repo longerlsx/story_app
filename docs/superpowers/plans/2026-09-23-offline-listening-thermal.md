@@ -1,6 +1,6 @@
 # ZipVoice 长听发热诊断与改善
 
-日期：2026-09-23。状态：15 Ultra已复现，电脑侧候选筛选中；主要CPU成本在ORT，必要计算与等待占比尚未分开，未证明降温或节电。[调查记录](../../knowledge/bugs/BUG-2026-062-zipvoice-long-listening-thermal.json)。
+日期：2026-09-23。状态：首轮候选已准备，按用户要求等待约定真机窗口；主要CPU成本在ORT，必要计算与等待占比尚未分开，未证明降温或节电。[调查记录](../../knowledge/bugs/BUG-2026-062-zipvoice-long-listening-thermal.json)。
 
 ## 范围与证据门槛
 
@@ -82,7 +82,7 @@
 - 候选B只设置 `SessionConfig.session.force_spinning_stop=1`，保留四线程／四步、完整雷军参考音频及现有正文分段。该项使会话最后一个并发 `Run()` 返回时立即停止内部线程池自旋，下次 `Run()` 重新启用其原有等待策略；不完整关闭运行期间自旋。同三文本累计进程CPU两轮分别为原版33811／39717ms、候选38728／32079ms，方向相反，未显示稳定省CPU，不进入真机长测。模拟器CPU及声音仅用于筛选，不能证明手机温升或耗电改善。
 - 迁移依据：[sherpa v1.13.8 session.cc](https://github.com/k2-fsa/sherpa-onnx/blob/v1.13.8/sherpa-onnx/csrc/session.cc)支持 `cpu:配置文件` 并转发 `SessionConfig.` 键；[ZipVoice模型](https://github.com/k2-fsa/sherpa-onnx/blob/v1.13.8/sherpa-onnx/csrc/offline-tts-zipvoice-model.cc)及[生成实现](https://github.com/k2-fsa/sherpa-onnx/blob/v1.13.8/sherpa-onnx/csrc/offline-tts-zipvoice-impl.h)分阶段调用Encoder、Decoder和Vocos，同一配置可传至这些会话。[ORT配置说明](https://github.com/microsoft/onnxruntime/blob/v1.28.2/include/onnxruntime/core/session/onnxruntime_session_options_config_keys.h#L251-L256)给出 `force_spinning_stop` 的语义；这支持测试会话间等待成本，不证明其实际占比或收益。
 - 保留完整参考的长段微样本：同文34字＋36字分段两轮累计CPU为19167／21919ms，合并为70字后为20580／25817ms；合并首声5736／7538ms，原首小段2757／2856ms。保持正常标点和 `min_char_in_sentence=30`，未证明固定成本摊薄收益，不改产品分段；不能仅按字数宣称合并更省电。
-- 下一步仅筛选三线程对四线程，固定完整参考、四步、默认自旋及正文，不展开参数网格；三线程和缩短参考音频均无验证结论，不预设省电。完成电脑侧首轮候选准备及相关回归后按用户要求暂停，等待约定真机窗口。
+- 候选C仅将四线程改为三线程，保持完整参考、四步、默认自旋、40字上限及两段预备。同三文本两轮累计进程CPU为27221／24584ms，均低于四线程33811／39717ms；六样本合成墙钟总时间18.135秒，对照21.057秒，生成自然音频总长41.233秒／41.407秒。结果支持保留C作为待真机验收候选，不代表手机节电约30%或温升改善。短音频和控制回归结果见下方收口记录，不遍历更多线程数。
 
 ## 有边界横向研究
 
@@ -92,3 +92,17 @@
 | wallabag Android：[TtsService](https://github.com/wallabag/android-app/blob/master/app/src/main/java/fr/gaulupeau/apps/Poche/tts/TtsService.java) | 调用默认或所选Android TTS引擎；当前项加后两项，完成回调再补充，代次ID忽略旧回调。暂停保存位置并stop，恢复重建队列；前台通知、媒体会话与焦点管理后台朗读，服务层未实现音频文件缓存。 | 有界预备及旧回调失效可借鉴，本App已有相应机制；仅为换框架而重写没有证据支持。 |
 
 两者均未提供此处可用的同机同音色功耗对照，实际系统TTS是否离线取决于外部引擎；都不能直接满足本App内置雷军克隆、无需额外安装／下载的约束。云端供音把计算移出手机，不能作为公平热量对照。值得保留的机制仅为有界预备与可复用已完成音频；本App前者已具备，后者只有实际重复请求时才可能节省生成，不能据此盲目扩大缓存，也不能降低首次连续长听的必要计算成本。
+
+官方ZipVoice另建议参考录音短于3秒以加快推理（[使用建议](https://github.com/k2-fsa/ZipVoice#3-guidance-for-better-usage)）；当前6.057秒参考会进入每步Decoder，裁短有计算依据，但声学条件随之改变，不能只保留雷军标签就认定听感相同。本轮不裁参考、不改模型或步数。长段方案还会扩大暂停重播与跟读粒度，首个短段未必能供给下一长段；独立方案检查和无收益微样本均支持暂不改分段。系统TTS、HTTP供音、GPU及重编推理库没有满足当前全部约束且已验证的收益，暂不扩展。
+
+累计CPU来自既有 `ReaderOfflineVoiceTest` 增加的 `Process.getElapsedCpuTime()` 日志：初始化完成后、提交朗读前至实际播放完成，含App内测试轮询、回调等所有线程，不含初始化／shutdown及其他进程；线程累计时间可大于墙钟。三段样本为现有默认34字叙述加36字对话、37字叙述，每版本各两轮，2×播放；样本少且模拟器受宿主调度影响，只用于筛选。
+
+## 候选C收口与暂停位置
+
+- 产品改动仅为 `OfflineReaderTtsEngine` 的线程数4→3及对应诊断日志；不保留自旋配置试验，不改资源、四步、自然合成／播放器倍速、分段、队列和生命周期。既有实声测试入口补累计进程CPU日志。独立实现检查未发现代码正确性或生命周期问题，并明确CPU读数不是功率、供给仍须测。
+- 最终相关构建 `assembleDebug` 成功；测试APK增加CPU日志后的 `assembleDebugAndroidTest` 成功，未再修改测试。三线程六个单段实引擎测试通过；同一候选三项 `ReaderOfflineListeningTest` 共121.1秒通过：2×暂停／继续／停止／页顶重开并保留定时选择，熄屏跨章与通知控制，合成中失焦保留已生成音频且归还焦点才播放。没有为纯线程配置重复跑未受影响的30分钟定时、导入或分页套件，继承旧证据。
+- scrcpy实际播放录音中，2×从首声至主动暂停约9.15秒，没有≥0.6秒静音；完整读出首章及随后已播放正文，独立本地ASR与测试正文对应。其余长静音对应主动暂停、停止、测试切换或等待归还焦点，不算供给停顿。范围很短，不能外推任意正文、热2×或长听。该次UI点击至首声9.206秒，对照原APK一次7.618秒，存在约1.59秒差异；同文单段多次样本并未整体变慢，但不能将这一次首声差异忽略，真机须按原先≤1秒退化门槛重验。
+- [候选APK](/Users/longshengxi/proj/story_app/app/build/outputs/thermal-investigation/daliamao-reader-thermal-candidate-20260923.apk)：224,987,376字节，SHA256 `0981cda1fdc1204d4484cf9368616408dd7932e79958af2f7e8eb1645dba3c5b`，仅ARM64、debug、包名与版本号沿用。签名校验通过，证书SHA256与问题包同为 `cba64d3b44548055d79ff4e677e64d7f464cdf59fbaf538cf41a377dfc1912eb`；366项assets／原生库的大小与CRC均相同。仅模拟器已覆盖安装，手机仍保留问题包，未清数据。
+- 为续接比较，原始基线音轨、必要温度／电荷／生成日志及候选筛选证据保存在本机已有忽略规则覆盖的 `app/build/outputs/thermal-investigation/evidence/`，不入Git。9月22日问题APK原位保留。本轮 `/private/tmp/story-thermal-20260923` 已清理，包含临时脚本、下载工具／ASR模型、原书备份及中间输出；任务模拟器已关闭。临时脚本实际64行，连同已执行的内联采样解析等保守估计不超过220行，超过最初预计但低于全任务800行硬上限；续接仍累计计算，不重新获得预算。
+
+按用户要求此处暂停目标。当前只能交付待验候选，不能报告“发烫已解决”或节电百分比。下一次必须先由用户确认测试时长并明确开始；建议一次约30分钟窗口（初温恢复另计，包含20分钟同条件长听、热2×和相关操作；若首声／供给明显退化先停止）。达到标准后另约一次有效重复；既定温度、电荷和播放门槛不放宽。手机可能已换Wi-Fi，不预设仍可连接；下一窗口首先备份当时最新书籍、设置和进度，严禁用本轮旧备份覆盖用户后续进度。上次手机侧 `/data/local/tmp/story-thermal-20s.data` 等profiling临时文件和无线ADB模式的收尾留到该授权窗口，不为清理重新占用手机。

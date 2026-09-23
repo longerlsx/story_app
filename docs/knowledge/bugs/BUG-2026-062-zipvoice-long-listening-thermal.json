@@ -5,14 +5,14 @@
   "symptom": "The user reported fast heating and battery drain on Xiaomi 17 Pro at 1.45x with the screen on and no charging. A controlled 20-minute screen-on, unplugged 1.45x baseline on Xiaomi 15 Ultra also produced clear heating confirmed by the user's touch, substantial charge-counter loss and a supply gap. Subsequent hot-state 2x audio had repeated pauses. The two devices must not be treated as interchangeable acceptance evidence.",
   "root_cause": "Not established. A bounded simpleperf sample placed over 98% of sampled user-mode CPU in libonnxruntime.so, making native inference the main observed CPU cost. Missing internal symbols prevent separating necessary model computation from thread-pool waiting or spinning. App-level investigation found bounded preparation and no sustained work after pause/stop settled; these observations do not prove that all native work is necessary or that spinning causes the heating.",
   "fix": [
-    "No accepted thermal fix yet. Candidate B retained four CPU threads, four generation steps, the full Leijun reference and existing segmentation, and used SessionConfig.session.force_spinning_stop=1. Two matched cumulative-CPU rounds moved in opposite directions, so it has no established stable CPU benefit and will not enter real-device long testing. The longer-text micro-sample also showed no benefit, so product segmentation stays unchanged. Next screening is limited to three versus four threads with the same reference, four steps, default spinning and text; no parameter grid or energy claim.",
+    "No accepted thermal fix yet. Spinning-policy and longer-request trials lacked stable benefit. Candidate C only changes four threads to three; two emulator CPU screening rounds decreased cumulative app CPU with the original voice, model, steps and segmentation retained. Three related emulator playback/control regressions and bounded implementation review passed. First-audio timing fluctuated and real-device thermal, battery and hot 2x evidence are still required; see the plan for measurements and decisions.",
     "Real-device temperature, charge-loss and playback criteria were frozen before candidate measurements. Follow the linked plan for conditions, tolerances and results instead of deriving acceptance from thread count, instantaneous CPU or single-segment latency.",
     "The user requires desktop candidate preparation and related regressions first, then Goal pause. The phone has been returned. Do not use a phone again until the user agrees to the test duration and confirms starting; take a fresh backup then and never restore this round's old backup over newer books, settings or progress."
   ],
   "evidence": [
     "Conditions, original APK identity, sensor distinctions, the baseline table, frozen acceptance criteria, candidate decisions and primary-source comparisons are maintained in docs/superpowers/plans/2026-09-23-offline-listening-thermal.md.",
     "Actual cold and hot 35-second recordings were independently transcribed and checked against source text without whole-sentence omission or repetition; proper-name homophones do not establish a speech defect. This bounded result does not establish arbitrary-text correctness.",
-    "Legado and wallabag use external Android TTS engines or HTTP audio rather than this app's bundled voice-cloning path. Their bounded queues, stale-callback rejection and audio reuse inform mechanisms, not a comparable power claim. Shorter reference audio and three threads have no validation conclusion."
+    "Legado and wallabag use external Android TTS engines or HTTP audio rather than this app's bundled voice-cloning path. Their bounded queues, stale-callback rejection and audio reuse inform mechanisms, not a comparable power claim. Shorter reference audio remains untested; three-thread screening is emulator-only."
   ],
   "failed_attempts": [
     "Completely disabling intra/inter-op spinning is not the preferred candidate: emulator audio contained a 1.886-second supply gap, while the matched original APK also paused for 0.909 and 3.333 seconds and had a 6954ms generation outlier. These samples expose supply risk and environmental variation, not proof that disabling spinning caused a performance regression or improved energy use. Do not select this configuration from either isolated sample.",
@@ -20,7 +20,15 @@
     "Combining the same 34-character and 36-character text into one 70-character request did not reduce cumulative CPU in either micro-sample round and increased first-audio latency. Normal punctuation and min_char_in_sentence=30 were preserved. Do not change product segmentation on an assumed fixed-cost saving; this bounded result does not reject every possible segmentation policy."
   ],
   "impact": "Long-listening heat, battery loss and hot-state 2x continuity remain unresolved. The baseline supports prioritizing ORT costs over unrelated UI work, but only a valid future real-device comparison can establish practical improvement. Offline packaging, voice, selected speed and user data remain mandatory constraints.",
-  "tags": ["android", "tts", "zipvoice", "thermal", "battery", "performance", "investigating"],
+  "tags": [
+    "android",
+    "tts",
+    "zipvoice",
+    "thermal",
+    "battery",
+    "performance",
+    "investigating"
+  ],
   "confidence": 0.9,
   "created_at": "2026-09-23",
   "updated_at": "2026-09-23"

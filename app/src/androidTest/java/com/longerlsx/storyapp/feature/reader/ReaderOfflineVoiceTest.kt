@@ -159,6 +159,7 @@ class ReaderOfflineVoiceTest {
             val text = InstrumentationRegistry.getArguments().getString("text")
                 ?: "他推开窗，看见远处的山林。今天是九月二十日，约好的时间是下午三点半。"
             val acceptedAt = SystemClock.elapsedRealtime()
+            val processCpuStartedAt = android.os.Process.getElapsedCpuTime()
             withContext(Dispatchers.Main) {
                 engine.applySettings(ReaderTtsSettings(voiceName = voiceName, speechRate = speechRate))
                 assertTrue(engine.speak("offline-real-output", ReaderTtsSegment(0, 0, text.length, text)))
@@ -172,7 +173,8 @@ class ReaderOfflineVoiceTest {
             }
             assertTrue("Real audio route must become active", wasAudioActive)
             assertTrue("Completion must follow actual playback, not just generation", playbackStartedAt > 0 && SystemClock.elapsedRealtime() - playbackStartedAt > 1_000)
-            Log.i("ReaderOfflineVoiceTest", "rate=$speechRate voice=$voiceName firstPlaybackMs=${playbackStartedAt - acceptedAt} playbackMs=${SystemClock.elapsedRealtime() - playbackStartedAt} totalMs=${SystemClock.elapsedRealtime() - acceptedAt}")
+            // Includes all app threads during synthesis and playback; not a power measurement.
+            Log.i("ReaderOfflineVoiceTest", "rate=$speechRate voice=$voiceName firstPlaybackMs=${playbackStartedAt - acceptedAt} playbackMs=${SystemClock.elapsedRealtime() - playbackStartedAt} totalMs=${SystemClock.elapsedRealtime() - acceptedAt} processCpuMs=${android.os.Process.getElapsedCpuTime() - processCpuStartedAt}")
             Unit
         } finally {
             withContext(Dispatchers.Main) { engine.shutdown() }

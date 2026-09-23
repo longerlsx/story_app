@@ -1,6 +1,6 @@
 # 离线声音依赖与资源准备
 
-本页维护生产语音资源、固定版本和可复现准备入口。产品状态与验收结论见[当前状态](../current-state.md)，本轮过程见[ZipVoice实施计划](../superpowers/plans/2026-09-22-zipvoice-listening-upgrade.md)。
+本页维护生产语音资源、固定版本和可复现准备入口。产品状态与验收结论见[当前状态](../current-state.md)，接入历史见[ZipVoice实施计划](../superpowers/plans/2026-09-22-zipvoice-listening-upgrade.md)，当前性能候选见[发热改善计划](../superpowers/plans/2026-09-23-offline-listening-thermal.md)。
 
 ## 当前接入选择
 
@@ -10,7 +10,7 @@ APK只包含这一套模型与一个参考音色。旧 `kokoro:*` 音色设置�
 
 | 参数 | 固定配置 |
 | --- | --- |
-| 推理运行库 | sherpa-onnx Android 1.13.8，CPU，`numThreads=4` |
+| 推理运行库 | sherpa-onnx Android 1.13.8，CPU；9月23日待真机验收候选`numThreads=3`，9月22日问题包为4 |
 | 主模型 | `sherpa-onnx-zipvoice-distill-int8-zh-en-emilia` 的 encoder／decoder INT8 |
 | 声码器 | `vocos_24khz.onnx` |
 | 参考声音 | 官方 `test_wavs/leijun-1.wav`，PCM16／24kHz／单声道／6.057秒 |
