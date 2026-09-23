@@ -88,7 +88,7 @@ class OfflineReaderTtsEngine(
                         }
                         referenceVoice = reference
                         model = created
-                        Log.i(TAG, "model=zipvoice-distill-int8 threads=4 steps=3 modelReadyMs=${SystemClock.elapsedRealtime() - startedAt}")
+                        Log.i(TAG, "model=zipvoice-distill-int8 threads=4 steps=2 modelReadyMs=${SystemClock.elapsedRealtime() - startedAt}")
                     }
                 }
             }
@@ -157,7 +157,7 @@ class OfflineReaderTtsEngine(
                     referenceAudio = reference.samples,
                     referenceSampleRate = reference.sampleRate,
                     referenceText = REFERENCE_TEXT,
-                    numSteps = 3,
+                    numSteps = 2,
                     extra = mapOf("min_char_in_sentence" to "30"),
                 ),
                 // JNI requires invoke(float[]) -> Integer; an indy lambda only exposes invoke(Object).
