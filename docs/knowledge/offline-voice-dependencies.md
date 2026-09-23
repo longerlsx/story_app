@@ -4,7 +4,7 @@
 
 ## 当前接入选择
 
-2026-09-22按用户确认改接 **ZipVoice-Distill INT8／4步＋官方 `leijun-1` 参考声音**，音色标识为 `zipvoice:leijun`，界面显示“雷军”。这是参考录音条件下的合成声音，不是原讲话录音；不训练、不联网、不使用系统TTS。用户已认可同文电脑试听的听感，运行及连续播放结论由实施计划维护，不由本资源说明推断。
+2026-09-22按用户确认改接 **ZipVoice-Distill INT8／4步＋官方 `leijun-1` 参考声音**，音色标识为 `zipvoice:leijun`，界面显示“雷军”。9月23日发热任务的**候选D暂用3步**，用户已听同文短样本并认为基本相当，允许继续验证；这低于官方所列4步配置，尚未获得真机温度／耗电验收，原问题APK仍是4步。声音仍为参考录音条件下的合成声音，不是原讲话录音；不训练、不联网、不使用系统TTS。运行、听感范围及连续播放结论由[发热改善计划](../superpowers/plans/2026-09-23-offline-listening-thermal.md)维护，不由本资源说明推断。
 
 APK只包含这一套模型与一个参考音色。旧 `kokoro:*` 音色设置在读取时迁移到唯一音色，引擎也不再按旧值选择不同说话人。书籍、进度和其他设置不因换音源清除。此前Kokoro FP32／INT8选择和设备记录保留在[上一轮计划](../superpowers/plans/2026-09-20-offline-listening.md)；它们不是新版包内备用音源。
 
@@ -15,7 +15,7 @@ APK只包含这一套模型与一个参考音色。旧 `kokoro:*` 音色设置�
 | 声码器 | `vocos_24khz.onnx` |
 | 参考声音 | 官方 `test_wavs/leijun-1.wav`，PCM16／24kHz／单声道／6.057秒 |
 | 参考文字 | `那还是三十六年前, 一九八七年. 我呢考上了武汉大学的计算机系.` |
-| 生成参数 | `numSteps=4`、`silenceScale=0.2`、`min_char_in_sentence=30`；模型固定自然语速1×，播放时应用用户语速与独立音调 |
+| 生成参数 | 候选D `numSteps=3`（原问题包为4）、`silenceScale=0.2`、`min_char_in_sentence=30`；模型固定自然语速1×，播放时应用用户语速与独立音调 |
 
 现有AAR提供 `OfflineTtsZipVoiceModelConfig`、`GenerationConfig`、`generateWithConfigAndCallback` 及 `WaveReader.readWave(AssetManager, path)`，不需自写WAV解码或升级运行库。[固定版本Kotlin接口](https://github.com/k2-fsa/sherpa-onnx/blob/v1.13.8/sherpa-onnx/kotlin-api/Tts.kt)
 
