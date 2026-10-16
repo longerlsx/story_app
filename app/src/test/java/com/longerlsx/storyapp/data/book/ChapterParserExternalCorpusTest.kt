@@ -43,13 +43,10 @@ class ChapterParserExternalCorpusTest {
             if (file.name.contains("玩家救世指南")) {
                 checkedPlayersGuide = true
                 val titles = result.chapters.map { it.title }
-                assertTrue(
-                    "${file.name} should preserve the main 200 chapter headings",
-                    result.chapters.size >= 200,
-                )
                 assertTrue(titles.contains("第2章 独行者2:穿越者？玩家？神？"))
                 assertTrue(titles.contains("第84章 幸福玛丽孤儿院1:“我愿意在你的胞宫中沉睡，直到世界的纱幕再一次掀起……”"))
                 assertFalse(titles.contains("第十三回 ……"))
+                assertTrue(result.chapters.single { it.title.startsWith("第26章 ") }.content.contains("第十三回 ……"))
             }
             if (file.name.contains("咸鱼和反派错绑对方系统后")) {
                 checkedXianyuSystem = true
@@ -69,6 +66,8 @@ class ChapterParserExternalCorpusTest {
                 assertTrue(titles.contains("第110章 110 讨好我！"))
                 assertTrue(titles.contains("第141章 番外一"))
                 assertTrue(titles.contains("第142章 番外二"))
+                assertTrue(result.chapters.single { it.title == "第141章 番外一" }.content.startsWith("N年以后。"))
+                assertTrue(result.chapters.single { it.title == "第142章 番外二" }.content.startsWith("谢钊很迅速地起了床"))
             }
             if (file.name.contains("我在古代搞建设")) {
                 checkedAncientConstruction = true
@@ -83,20 +82,14 @@ class ChapterParserExternalCorpusTest {
             if (file.name.contains("末世反派是我的工作搭子")) {
                 checkedDoomsdayPartner = true
                 val titles = result.chapters.map { it.title }
-                assertTrue(
-                    "${file.name} should keep bare numbered chapter headings",
-                    result.chapters.size >= 80,
-                )
                 assertTrue(titles.contains("第1章"))
                 assertTrue(titles.contains("第80章"))
+                assertEquals("番外", result.chapters.last().title)
+                assertTrue(result.chapters.last().content.startsWith("职场系统被收拾了后"))
             }
             if (file.name.contains("小猫咪在星际监狱")) {
                 checkedSpaceCat = true
                 val titles = result.chapters.map { it.title }
-                assertTrue(
-                    "${file.name} should keep the main bare-numbered chapter sequence",
-                    result.chapters.size >= 60,
-                )
                 assertTrue(titles.contains("第1章"))
                 assertTrue(titles.contains("第66章"))
             }
@@ -112,10 +105,6 @@ class ChapterParserExternalCorpusTest {
             if (file.name.contains("这座仙宫叫医院")) {
                 checkedHospitalPalace = true
                 val titles = result.chapters.map { it.title }
-                assertTrue(
-                    "${file.name} should keep the long bare-numbered chapter sequence",
-                    result.chapters.size >= 120,
-                )
                 assertTrue(titles.contains("第1章"))
                 assertTrue(titles.contains("第120章"))
             }
@@ -167,11 +156,7 @@ class ChapterParserExternalCorpusTest {
                 val normalized = loaded.normalizedText
                 val parsed = ChapterParser.parseDetailed(normalized)
                 assertTrue("${file.name} should parse at least one chapter", parsed.chapters.isNotEmpty())
-                assertTrue(
-                    "${file.name} should preserve chapter-like headings; diagnostics=${parsed.diagnostics}",
-                    parsed.chapters.size >= (simpleChapterHeadingCount(normalized) * 0.8f)
-                        .toInt().coerceAtLeast(1),
-                )
+                assertReviewedChapterCatalog(file, normalized, parsed)
                 var previousEnd = 0
                 parsed.chapters.forEach { chapter ->
                     assertTrue("${file.name}: ${chapter.title} invalid start", chapter.startOffset in 0..normalized.length)
@@ -265,15 +250,42 @@ class ChapterParserExternalCorpusTest {
         val progress: ReadingProgress,
     )
 
-    private fun simpleChapterHeadingCount(content: String): Int {
-        return content
-            .lineSequence()
-            .count { line ->
-                SimpleChapterHeadingRegex.matches(line.trim())
-            }
+    private fun assertReviewedChapterCatalog(file: File, content: String, parsed: ChapterParseResult) {
+        // These sequences were checked against these nine source books. In particular,
+        // 咸鱼 jumps from chapter 1 to 3 in the TXT itself; it is not a parser omission.
+        val expectedNumbers = when {
+            file.name.contains("玩家救世指南") -> (1..200).toList()
+            file.name.contains("咸鱼和反派错绑对方系统后") -> listOf(1) + (3..131)
+            file.name.contains("星际第一种瓜王") -> (1..142).toList()
+            file.name.contains("我在古代搞建设") -> (1..179).toList()
+            file.name.contains("末世反派是我的工作搭子") -> (1..106).toList()
+            file.name.contains("小猫咪在星际监狱") -> (1..66).toList()
+            file.name.contains("这该死的修罗场") -> (1..77).toList()
+            file.name.contains("这座仙宫叫医院") -> (1..357).toList()
+            file.name.contains("半夜想吃前任做的红烧肉怎么办") -> (1..68).toList()
+            else -> return
+        }
+        // This only extracts the known compact Arabic headings in this reviewed corpus.
+        // Do not broaden it into a second chapter detector or treat every 第N回 as a title.
+        val sourceHeadings = content.lineSequence()
+            .map(String::trim)
+            .mapNotNull(ReviewedSourceHeadingRegex::matchEntire)
+            .toList()
+        assertEquals(
+            "${file.name}: source chapter sequence changed; review the source before updating expectations",
+            expectedNumbers,
+            sourceHeadings.map { it.groupValues[1].toInt() },
+        )
+        val expectedTitles = listOf("前言") + sourceHeadings.map { it.value } +
+            if (file.name.contains("末世反派是我的工作搭子")) listOf("番外") else emptyList()
+        assertEquals(
+            "${file.name}: complete ordered chapter catalog; diagnostics=${parsed.diagnostics}",
+            expectedTitles,
+            parsed.chapters.map { it.title },
+        )
     }
 
     private companion object {
-        val SimpleChapterHeadingRegex = Regex("^第[ 　]*[0-9一二三四五六七八九十百千万零〇两]+[ 　]*章(\\s+.*)?$")
+        val ReviewedSourceHeadingRegex = Regex("^第([0-9]+)章(?:\\s+.*)?$")
     }
 }

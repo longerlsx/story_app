@@ -1,28 +1,33 @@
 {
   "id": "BUG-2026-013",
-  "title": "TXT chapter parser misses spaced numeric headings and leaks double-title lines into chapter bodies",
-  "symptom": "TXT novels whose chapter heading is split across two adjacent lines, such as `第 1 章` followed by `第一章`, are parsed at the second line only. The first heading line is kept in the previous body or preface, and restored chapter text can regain heading lines after catalog hydration.",
-  "root_cause": "The original parser used one narrow line regex and dropped only the first matched heading line from each section. It did not run a rule-selection pass, did not scan with compatible title forms for double headings, did not filter front table-of-contents duplicates, and persisted offsets at heading boundaries instead of body boundaries.",
+  "title": "TXT chapter parser misses spacing variants in numbered headings and leaks double-title lines into chapter bodies",
+  "symptom": "Originally, adjacent titles such as `第 1 章` followed by `第一章` were parsed only at the second line, leaking the first title into the preceding body or preface; restored text could also regain heading lines. On 2026-10-16, regression tests confirmed a remaining spacing gap: `第2 章`, `第２　章`, and `第二 章` were not recognized, so a real chapter using one of these forms stayed inside the preceding chapter. This format was not found in the nine local novels, and has not been established as the cause of the user's unspecified occasional chapter-splitting report.",
+  "root_cause": "The original single-regex parser lacked rule selection, compatible forms, TOC filtering, double-title merging, and body-range persistence. That pipeline was introduced in May. The remaining October gap was narrower: the compact numbered rule required the number to touch the chapter suffix, while the spaced rule required whitespace immediately after 第; neither accepted whitespace only between the number and suffix.",
   "fix": [
     "Replaced the single-regex splitter with a clean-room, Legado-inspired pipeline: line indexing, built-in rule trial, primary/auxiliary rule selection, full-text candidate scan, TOC filtering, double-title merging, and chapter assembly.",
     "Added support for compact and spaced Chinese numbered headings, common chapter suffixes, special markers, numeric titles, and volume markers without copying Legado GPL source or rule data.",
     "Changed parsed and persisted chapter offsets to body ranges so `normalized.substring(startOffset, endOffset)` exactly matches `ParsedChapter.content` and hydration restores the same text.",
-    "Added no-title long-text fallback splitting on paragraph boundaries."
+    "Added no-title long-text fallback splitting on paragraph boundaries.",
+    "2026-10-16: Allow ordinary or full-width whitespace between the number and chapter suffix in the compact numbered rule. Keep rule selection, heading length, punctuation, dialogue/round-marker guards, normalization, and stored offsets unchanged.",
+    "Add regressions for Arabic, full-width Arabic, and Chinese numbers with suffix whitespace, mixed heading forms, exact normalized body slices, and chapter-like body lines that must not split.",
+    "Tighten the existing nine-novel import/restore test to compare each reviewed complete chapter sequence and title order, including the source's own 1-to-3 jump in 咸鱼, merged repeated subtitles in 瓜王, the independent 番外 in 末世, and the in-body round marker in 玩家. Execution evidence is recorded in docs/superpowers/plans/2026-10-16-app-experience-stability.md."
   ],
   "failed_attempts": [
     "Do not fix this by only widening the old regex; broad regexes over-match body lines and do not solve double-title or TOC duplication.",
-    "Do not copy Legado `txtTocRule.json` or source code directly; keep this implementation clean-room because Legado is GPL-3.0."
+    "Do not copy Legado `txtTocRule.json` or source code directly; keep this implementation clean-room because Legado is GPL-3.0.",
+    "Do not use an 80% heading-count threshold or every chapter-like line as semantic ground truth. Review source-specific sequence gaps and special boundaries before fixing corpus expectations."
   ],
-  "impact": "New imports of common Chinese TXT novels get more stable chapter boundaries, fewer skipped or leaked title lines, safer front-TOC handling, and consistent restored chapter body text.",
+  "impact": "New imports recognize the additional suffix-whitespace forms without loosening body-text guards. Existing books still use their stored catalogs, including when the same source hash is imported again; no automatic reparsing or migration was introduced. There is no confirmed old-catalog evidence requiring migration in this investigation, and the user's occasional chapter report is not claimed to be fully diagnosed.",
   "tags": [
     "android",
     "reader",
     "txt",
     "toc",
     "chapter-parser",
+    "heading-spacing",
     "resolved"
   ],
-  "confidence": 0.86,
+  "confidence": 0.95,
   "created_at": "2026-05-22",
-  "updated_at": "2026-05-22"
+  "updated_at": "2026-10-16"
 }

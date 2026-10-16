@@ -52,6 +52,57 @@ class ChapterParserTest {
     }
 
     @Test
+    fun parserPreservesMixedSpacingHeadingsAndExactBodyRanges() {
+        listOf("第2 章 继续", "第２　章 继续", "第二 章 继续").forEach { middleTitle ->
+            val content = listOf(
+                "第1章 开始",
+                "正文一。",
+                "",
+                middleTitle,
+                "　　正文二。",
+                "",
+                "第 3 章 结束",
+                "正文三。",
+            ).joinToString(separator = "\r\n", prefix = "\uFEFF")
+
+            val chapters = ChapterParser.parse(content)
+
+            assertEquals(
+                "Mixed heading formats must preserve $middleTitle",
+                listOf("第1章 开始", middleTitle, "第 3 章 结束"),
+                chapters.map { it.title },
+            )
+            assertEquals(listOf("正文一。", "正文二。", "正文三。"), chapters.map { it.content })
+            val normalized = TxtNormalizer.normalize(content)
+            chapters.forEach { chapter ->
+                assertEquals(normalized.indexOf(chapter.content), chapter.startOffset)
+            }
+            assertOffsetsExactAndMonotonic(content, chapters)
+        }
+    }
+
+    @Test
+    fun parserKeepsSpacedChapterLikeProseInsideBody() {
+        val firstBody = """
+            正文前。
+            第2 章 开始了。
+            第２　章 开始了。
+            第二 章 她想：开始了吗？
+            第十三 回合：还要继续吗？
+            第十三 回 ……
+            正文后。
+        """.trimIndent()
+        val content = "第1章 开始\n$firstBody\n\n第2 章 继续\n第二章正文。"
+
+        val chapters = ChapterParser.parse(content)
+
+        assertEquals(listOf("第1章 开始", "第2 章 继续"), chapters.map { it.title })
+        assertEquals(firstBody, chapters[0].content)
+        assertEquals("第二章正文。", chapters[1].content)
+        assertOffsetsExactAndMonotonic(content, chapters)
+    }
+
+    @Test
     fun parserMergesRepeatedSpecialSubtitleAfterNumberedChapterTitle() {
         val content = """
             第141章 番外一

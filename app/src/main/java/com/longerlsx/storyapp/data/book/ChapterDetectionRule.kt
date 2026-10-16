@@ -26,7 +26,7 @@ data class ChapterDetectionRule(
 
 object ChapterDetectionRules {
     private val numberToken = """([0-9０-９一二三四五六七八九十百千零〇两]+)"""
-    private val compactChapterRegex = Regex("""^第$numberToken([章节回话集])\s*(.*)$""")
+    private val compactChapterRegex = Regex("""^第$numberToken[\s　]*([章节回话集])\s*(.*)$""")
     private val spacedChapterRegex = Regex("""^第[\s　]+$numberToken[\s　]*([章节回话集])\s*(.*)$""")
     private val specialRegex = Regex("""^(序章|楔子|后记|尾声|番外[0-9０-９一二三四五六七八九十百千零〇两]*\s*.*)$""")
     private val numericArabicRegex = Regex("""^([0-9０-９]{1,4})(?:[.、]\s*|\s+)(\S.*)$""")

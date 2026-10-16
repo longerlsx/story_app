@@ -29,6 +29,31 @@ class ChapterDetectionRuleTest {
     }
 
     @Test
+    fun matchesChapterHeadingsWithSpaceOnlyBeforeSuffix() {
+        listOf("第2 章", "第２　章", "第二 章").forEach { title ->
+            val candidate = match(title)
+
+            assertNotNull("Should recognize $title", candidate)
+            assertEquals(title, candidate?.title)
+            assertEquals(ChapterTitleKind.CHAPTER, candidate?.kind)
+            assertEquals(2, candidate?.number?.value)
+        }
+    }
+
+    @Test
+    fun rejectsBodyLinesWithSpaceBeforeChapterSuffix() {
+        listOf(
+            "第2 章 开始了。",
+            "第２　章 开始了。",
+            "第二 章 她想：开始了吗？",
+            "第十三 回合：还要继续吗？",
+            "第十三 回 ……",
+        ).forEach { line ->
+            assertNull("Should keep body text: $line", match(line))
+        }
+    }
+
+    @Test
     fun rejectsBodyLinesThatLookSimilarToHeadings() {
         assertNull(match("第一章正文。"))
         assertNull(match("第1章 开始了。"))
