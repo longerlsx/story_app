@@ -1,0 +1,34 @@
+{
+  "id": "BUG-2026-064",
+  "title": "Reading progress can return to an older position after the system clock moves backward",
+  "status": "resolved",
+  "symptom": "A successful page turn can be lost when leaving the reader and reopening the book if the previously saved reading progress has a timestamp ahead of the current wall clock. The visible page advances, but the saved anchor remains at the older position.",
+  "root_cause": "ReaderScreen captured each ReadingProgress.updatedAt directly from System.currentTimeMillis. InMemoryBookRepository correctly rejects a request whose updatedAt is older than the stored progress to prevent late requests from overwriting newer positions. A system clock rollback breaks the assumption that wall-clock time represents capture order, so a genuinely later page turn is rejected as stale. The same condition can persist after process restart when the disk checkpoint is ahead of the corrected clock. Awaiting the save job on reader exit does not make that rejected update succeed.",
+  "evidence": [
+    "On 2026-10-16, ReadingPositionRestoreTest.pageTurnAfterClockRollbackSavesAndRestoresNewPosition reproduced the issue through the normal MainActivity flow: import a two-chapter TXT, retain the first legitimate position with a timestamp one minute in the future, turn to the second chapter, return to the bookshelf, and reopen the book. The test confirms the second chapter was visible before leaving; it does not change the device clock.",
+    "The device RED run executed one test and failed once after 5.228 seconds with expected ReadingAnchor(chapterIndex=1, charOffset=0), actual ReadingAnchor(chapterIndex=0, charOffset=0), at the saved-on-return assertion. The task log was clock-rollback-red.txt under /private/tmp/story-app-experience-20261016; the temporary log is not a permanent repository artifact.",
+    "After the fix on 2026-10-16, the root agent ran the full JVM suite: 347 tests passed, with zero failures and zero skips. The device group passed all 30 tests in 156.588 seconds, including all three ReadingPositionRestoreTest cases and all five ExternalImportFlowTest cases. The original pageTurnAfterClockRollbackSavesAndRestoresNewPosition RED case passed in this device group.",
+    "The reproduced failure and timestamp comparison establish this specific loss of a later position. They do not establish that clock rollback explains every reported or possible reading-restoration issue."
+  ],
+  "fix": [
+    "Add ReadingProgressClock to allocate strictly increasing timestamps at progress capture while using wall-clock time whenever it advances beyond the previous capture. ReaderScreen.captureProgress obtains its timestamp through StoryApplication.nextReadingProgressTimestamp.",
+    "During StoryApplication startup, observe all restored progress timestamps before hydrating the repository and publishing readiness, so a newly captured position can supersede a future-dated checkpoint loaded from disk.",
+    "Observe an explicitly submitted progress timestamp synchronously before queuing its persistence job, without rewriting that request's updatedAt. This keeps later captures ordered while allowing the repository to reject an old request that arrives late.",
+    "Keep InMemoryBookRepository's stale-write rejection, FileAnchorStore's format, existing anchors and last-opened-book persistence unchanged. No migration or catalog reparsing is introduced."
+  ],
+  "validation": {
+    "red": "Confirmed: the targeted device regression failed once with the older saved anchor despite a successful visible page turn.",
+    "green": "Confirmed on 2026-10-16: full JVM suite 347 passed, zero failures and zero skips; device group 30 passed in 156.588 seconds, including the original clock-rollback regression, all three ReadingPositionRestoreTest cases and all five ExternalImportFlowTest cases.",
+    "regressions": [
+      "ReadingProgressClockTest.newCapturesRemainOrderedAcrossBackwardAndForwardClockChanges covers backward correction, multiple captures within one millisecond, and a later forward correction.",
+      "ReadingProgressClockTest.restoredFutureCheckpointAllowsNewPositionWithoutAcceptingLateOldWrite uses FileAnchorStore and a fresh InMemoryBookRepository to restore future-dated progress, save a new position, reject a late old request, and check the disk position and last-opened book.",
+      "ReadingPositionRestoreTest.pageTurnAfterClockRollbackSavesAndRestoresNewPosition changed from the observed RED anchor mismatch to GREEN through the normal UI. Existing ExternalImportFlowTest protections and the repository and anchor-store unit tests also passed in the verified suites."
+    ]
+  },
+  "failed_attempts": [],
+  "impact": "The verified implementation separates progress-capture order from backward wall-clock movement without changing the persisted schema or allowing stale requests to overwrite newer progress. The covered device flow now saves and restores the later page-turn position despite an older checkpoint dated in the future. This record covers the confirmed clock-ordering defect, not all reading-position restoration behavior.",
+  "tags": ["android", "reader", "reading-progress", "anchor-restore", "persistence", "clock-rollback", "resolved"],
+  "confidence": 0.99,
+  "created_at": "2026-10-16",
+  "updated_at": "2026-10-16"
+}

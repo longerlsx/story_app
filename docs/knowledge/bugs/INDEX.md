@@ -122,6 +122,7 @@ This is mandatory for both:
 | BUG-2026-060 | ZipVoice native speed scaling truncates the generated target instead of producing normal double-speed speech | resolved | `tts`, `zipvoice`, `speech-rate`, `audio-integrity` | [BUG-2026-060-zipvoice-native-speed-truncates-target-audio.json](BUG-2026-060-zipvoice-native-speed-truncates-target-audio.json) |
 | BUG-2026-061 | ZipVoice sends unnormalized Arabic numbers in Chinese narration to its English front end | resolved | `tts`, `zipvoice`, `text-normalization`, `chinese-numbers` | [BUG-2026-061-zipvoice-chinese-numbers-use-english-front-end.json](BUG-2026-061-zipvoice-chinese-numbers-use-english-front-end.json) |
 | BUG-2026-062 | ZipVoice long listening heats Xiaomi phones and drains battery quickly | investigating | `tts`, `zipvoice`, `thermal`, `battery`, `performance` | [BUG-2026-062-zipvoice-long-listening-thermal.json](BUG-2026-062-zipvoice-long-listening-thermal.json) |
+| BUG-2026-064 | Reading progress is rejected after the wall clock moves backward | resolved | `reader`, `reading-progress`, `clock-rollback` | [BUG-2026-064-reading-progress-clock-rollback.json](BUG-2026-064-reading-progress-clock-rollback.json) |
 
 ## Retrieval Hints For Future Threads
 

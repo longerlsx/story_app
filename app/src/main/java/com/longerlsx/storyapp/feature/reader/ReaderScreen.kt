@@ -442,7 +442,7 @@ private fun ReaderReadyContent(
                 if (position.recordViewport(anchor)) rememberScrollViewport(anchor)
             }
         }
-        return ReadingProgress(state.book.id, position.confirmedAnchor, confirmedMode, System.currentTimeMillis())
+        return ReadingProgress(state.book.id, position.confirmedAnchor, confirmedMode, storyApplication.nextReadingProgressTimestamp())
     }
 
     fun queueCurrentProgress() = captureProgress()?.let { storyApplication.persistReadingProgress(it, repository) }

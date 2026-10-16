@@ -24,6 +24,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
 import com.longerlsx.storyapp.MainActivity
 import com.longerlsx.storyapp.StoryApplication
+import com.longerlsx.storyapp.core.model.ReadingAnchor
 import com.longerlsx.storyapp.core.model.ReadingMode
 import com.longerlsx.storyapp.core.model.ReadingProgress
 import com.longerlsx.storyapp.data.book.FileAnchorStore
@@ -43,6 +44,65 @@ import org.junit.runner.RunWith
 class ReadingPositionRestoreTest {
     @get:Rule
     val composeRule = createEmptyComposeRule()
+
+    @Test
+    fun pageTurnAfterClockRollbackSavesAndRestoresNewPosition() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        resetStoryAppState(context)
+        val application = context.applicationContext as StoryApplication
+        val firstText = "系统校时前的旧阅读位置。"
+        val nextText = "系统校时后实际翻到的新阅读位置。"
+        val importFile = File(context.cacheDir, "时钟回拨位置恢复.txt").apply {
+            writeText("第1章 开始\n$firstText\n第2章 继续\n$nextText\n")
+        }
+        val importIntent = Intent(Intent.ACTION_VIEW).apply {
+            setClass(context, MainActivity::class.java)
+            setDataAndType(
+                FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", importFile),
+                "text/plain",
+            )
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val diskAnchors = FileAnchorStore(context.filesDir)
+        val device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
+        try {
+            ActivityScenario.launch<MainActivity>(importIntent).use {
+                composeRule.waitUntil(timeoutMillis = 8_000) { hasVisibleNode(hasText(firstText)) }
+                composeRule.waitUntil(timeoutMillis = 5_000) { diskAnchors.loadAll().size == 1 }
+                val initial = diskAnchors.loadAll().single()
+                assertEquals(ReadingAnchor(0, 0), initial.anchor)
+                assertEquals(ReadingMode.PAGE, initial.readingMode)
+                val book = runBlocking { checkNotNull(application.bookRepository.getBook(initial.bookId)) }
+
+                // A valid checkpoint from before a backward clock correction can now be
+                // in the future. Seed only that input; the following saves come from the UI.
+                val futureCheckpoint = initial.copy(updatedAt = System.currentTimeMillis() + 60_000)
+                runBlocking { application.persistReadingProgress(futureCheckpoint).join() }
+                assertEquals(futureCheckpoint, diskAnchors.load(book.id))
+
+                composeRule.onRoot().performTouchInput {
+                    click(Offset(width * 0.88f, height * 0.5f))
+                }
+                composeRule.waitUntil(timeoutMillis = 8_000) { hasVisibleNode(hasText(nextText)) }
+                device.pressBack()
+                composeRule.waitUntil(timeoutMillis = 5_000) { hasVisibleNode(hasText("导入 TXT")) }
+                val savedOnReturn = checkNotNull(diskAnchors.load(book.id))
+
+                composeRule.onAllNodesWithText(book.title)[0].performTouchInput { click(center) }
+                composeRule.waitUntil(timeoutMillis = 8_000) {
+                    hasVisibleNode(hasText(firstText)) || hasVisibleNode(hasText(nextText))
+                }
+                composeRule.waitForIdle()
+
+                assertEquals("系统时间回拨不能丢弃随后实际翻页保存的位置", ReadingAnchor(1, 0), savedOnReturn.anchor)
+                assertTrue("重开书籍应恢复实际翻到的新正文", hasVisibleNode(hasText(nextText)))
+                assertFalse("不能退回校时前的旧正文", hasVisibleNode(hasText(firstText)))
+                assertEquals(savedOnReturn.anchor, diskAnchors.load(book.id)?.anchor)
+            }
+        } finally {
+            importFile.delete()
+        }
+    }
 
     @Test
     fun consumedListeningNotificationDoesNotReplayAfterActivityRecreation() {

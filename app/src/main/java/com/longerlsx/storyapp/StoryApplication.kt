@@ -12,6 +12,7 @@ import com.longerlsx.storyapp.data.book.InMemoryBookRepository
 import com.longerlsx.storyapp.data.book.TextContentLoader
 import com.longerlsx.storyapp.data.reader.ReaderSettingsStore
 import com.longerlsx.storyapp.data.reader.ListeningProgressStore
+import com.longerlsx.storyapp.data.reader.ReadingProgressClock
 import com.longerlsx.storyapp.feature.reader.tts.OfflineReaderTtsEngine
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsController
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsEngine
@@ -52,6 +53,7 @@ class StoryApplication : Application() {
     private val mutableProgressWriteError = MutableStateFlow<String?>(null)
     val progressWriteError = mutableProgressWriteError.asStateFlow()
     private val progressPersistenceMutex = Mutex()
+    private val readingProgressClock = ReadingProgressClock()
 
     val importedBookStorage by lazy {
         ImportedBookStorage(filesDir)
@@ -85,30 +87,37 @@ class StoryApplication : Application() {
 
     suspend fun awaitLibraryReady(): LibraryInitializationState = getInitializationTask().await()
 
+    fun nextReadingProgressTimestamp(): Long = readingProgressClock.nextTimestamp()
+
     fun persistReadingProgress(
         progress: ReadingProgress,
         repository: BookRepository = bookRepository,
-    ): Job = applicationScope.launch {
-        progressPersistenceMutex.withLock {
-            try {
-                val isApplicationRepository = repository === bookRepository
-                if (isApplicationRepository && awaitLibraryReady() !is LibraryInitializationState.Ready) {
-                    mutableProgressWriteError.value = "阅读位置暂时无法保存，请稍后重试。"
-                    return@withLock
-                }
-                if (isApplicationRepository) readerSettingsStore.awaitPendingWrites()
-                repository.saveReadingProgress(progress)
-                if (repository.getReadingProgress(progress.bookId) == progress) {
-                    mutableProgressWriteError.value = null
-                    val ready = mutableLibraryInitialization.value as? LibraryInitializationState.Ready
-                    if (isApplicationRepository && ready != null) {
-                        mutableLibraryInitialization.value = ready.copy(lastOpenedBookId = progress.bookId)
+    ): Job {
+        // Account for an existing checkpoint before later UI captures can be queued.
+        // Do not restamp this request: a late old request must remain rejectable.
+        readingProgressClock.observe(progress.updatedAt)
+        return applicationScope.launch {
+            progressPersistenceMutex.withLock {
+                try {
+                    val isApplicationRepository = repository === bookRepository
+                    if (isApplicationRepository && awaitLibraryReady() !is LibraryInitializationState.Ready) {
+                        mutableProgressWriteError.value = "阅读位置暂时无法保存，请稍后重试。"
+                        return@withLock
                     }
+                    if (isApplicationRepository) readerSettingsStore.awaitPendingWrites()
+                    repository.saveReadingProgress(progress)
+                    if (repository.getReadingProgress(progress.bookId) == progress) {
+                        mutableProgressWriteError.value = null
+                        val ready = mutableLibraryInitialization.value as? LibraryInitializationState.Ready
+                        if (isApplicationRepository && ready != null) {
+                            mutableLibraryInitialization.value = ready.copy(lastOpenedBookId = progress.bookId)
+                        }
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    mutableProgressWriteError.value = "阅读位置保存失败，请稍后重试。"
                 }
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                mutableProgressWriteError.value = "阅读位置保存失败，请稍后重试。"
             }
         }
     }
@@ -127,7 +136,9 @@ class StoryApplication : Application() {
             val result = try {
                 val restored = importedBookStorage.restoreCatalogWithIssues()
                 bookRepository.hydrateFromStorage(restored.snapshots, textContentLoader)
-                bookRepository.hydrateProgress(anchorStore.loadAll())
+                val restoredProgress = anchorStore.loadAll()
+                restoredProgress.forEach { readingProgressClock.observe(it.updatedAt) }
+                bookRepository.hydrateProgress(restoredProgress)
                 readerSettingsStore.load()
                 val lastOpenedBookId = anchorStore.getLastOpenedBookId()
                     ?.takeIf { bookRepository.getBook(it) != null }
