@@ -7,6 +7,7 @@
 | 需要做什么 | 先读哪里 |
 | --- | --- |
 | 捡起项目、了解功能/交互/代码结构 | [current-state.md](current-state.md) |
+| 接续10月16日全流程体验排查与优化 | [已批准实施计划](superpowers/plans/2026-10-16-app-experience-stability.md)：阅读与听书交接、正式分段预取播放、音质／连续播放／15分钟验证及迁移回退；当前状态与交付仍由 [current-state.md](current-state.md) 汇总 |
 | 讨论需求或后续方向 | [current-state.md](current-state.md) 中的需求、能力边界和建议；区分已确认与待选择 |
 | 修改代码或安排较复杂的工作 | [协作约定](knowledge/agent-operating-agreements.md)，再读当前状态中相关入口 |
 | 诊断已知症状或修 bug | [bug 索引](knowledge/bugs/INDEX.md) 中匹配记录，再核对当前代码和直接证据 |
