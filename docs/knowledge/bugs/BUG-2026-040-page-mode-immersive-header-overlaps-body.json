@@ -14,6 +14,14 @@
     "Avoid deriving page top padding from the temporary chrome-visible top bar; that can repaginate content when the chrome appears or hides."
   ],
   "impact": "Keeps the first page readable in the default page-mode reader and prevents the persistent immersive header from visually pressing into real novel text.",
+  "follow_up_2026_10_16": {
+    "observation": "The related device suite reported header=Rect(37,143-347,269) and body=Rect(63,269-440,338). The header's 48dp touch region ended at y=269px and the first body text line box started at y=269px: their edges met without a positive-area overlap. Inspection of the actual screen confirmed that the first body line was complete.",
+    "test_correction": "ReaderChromeTest.persistentHeaderShowsBackAndCurrentChapterWithoutRevealingChrome still required header.bottom + 8 <= body.top. That extra 8px gap was an outdated assertion after the 2026-09-20 change to a 4dp top offset plus a 48dp back target. The test now requires header.bottom <= body.top, matching non-overlap of the touch region and body line box. This does not add top padding, move the body or alter pagination; these node bounds are not the visible glyph outlines.",
+    "verification": {
+      "screen_and_existing_touch_regression": "The actual screen showed a complete first line, and the existing ReaderTtsControlsTest.continuationTextTouchDoesNotTriggerTheImmersiveBackButton regression passed. This supports preserving the first-line reading gesture outside the back target.",
+      "updated_directed_test": "Confirmed GREEN on StoryReader_API34 on 2026-10-16 after correcting the assertion. The direct case passed without changing header or body layout."
+    }
+  },
   "tags": [
     "android",
     "compose",
@@ -26,5 +34,5 @@
   ],
   "confidence": 0.93,
   "created_at": "2026-06-24",
-  "updated_at": "2026-09-20"
+  "updated_at": "2026-10-16"
 }

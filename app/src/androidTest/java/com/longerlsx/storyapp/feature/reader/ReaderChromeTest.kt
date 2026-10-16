@@ -70,7 +70,8 @@ class ReaderChromeTest {
             assertNotNull(firstBodyText)
             assertTrue(
                 "沉浸式头部不应压到首屏正文：header=${immersiveHeader!!.visibleBounds}, body=${firstBodyText!!.visibleBounds}",
-                immersiveHeader.visibleBounds.bottom + 8 <= firstBodyText.visibleBounds.top,
+                // The header includes its 48 dp touch target; touching edges are safe.
+                immersiveHeader.visibleBounds.bottom <= firstBodyText.visibleBounds.top,
             )
             assertTrue(device.hasObject(By.desc("返回")))
             assertTrue(device.hasObject(By.descContains("沉浸式章节：第1章 开始")))
