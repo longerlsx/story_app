@@ -241,7 +241,7 @@ class ReaderTtsService : Service(), ReaderTtsEngine.Callback {
         if (!isCurrent(token)) return
         engine?.applySettings(activeSettings)
         check(requestAudioFocus()) { "无法获取音频焦点，请关闭其他播放后重试" }
-        speakCurrentSegment(token)
+        speakCurrentSegment(token, initialPlayback = true)
     }
 
     private suspend fun initializeEngine() {
@@ -306,13 +306,8 @@ class ReaderTtsService : Service(), ReaderTtsEngine.Callback {
         val chapter = activeQueue.lastOrNull()?.segment?.chapterIndex ?: return
         val upcoming = (1..2).mapNotNull { activeQueue.getOrNull(activeQueueIndex + it)?.segment }
         if (upcoming.isNotEmpty()) engine?.prepareUpcoming(upcoming)
-        if (nextChapter == null) nextChapter = serviceScope.async {
-            withTimeout(PREPARATION_TIMEOUT_MILLIS) {
-                loadChapterQueue(request.bookId, ReaderTextStartLocation(chapter + 1, 0))
-            }
-        }
+        val pending = prepareNextChapter(request.bookId, chapter)
         if (upcoming.size == 2) return
-        val pending = requireNotNull(nextChapter)
         serviceScope.launch {
             try {
                 val queue = pending.await()
@@ -325,7 +320,30 @@ class ReaderTtsService : Service(), ReaderTtsEngine.Callback {
         }
     }
 
-    private fun speakCurrentSegment(token: Long) {
+    private fun prepareNextChapter(bookId: String, chapter: Int): Deferred<List<QueuedSegment>> =
+        nextChapter ?: serviceScope.async {
+            withTimeout(PREPARATION_TIMEOUT_MILLIS) {
+                loadChapterQueue(bookId, ReaderTextStartLocation(chapter + 1, 0))
+            }
+        }.also { nextChapter = it }
+
+    private suspend fun initialNextSegment(token: Long, utteranceId: String): ReaderTtsSegment? =
+        withContext(Dispatchers.Main.immediate) {
+            if (!isCurrent(token) || activeUtteranceId != utteranceId) return@withContext null
+            activeQueue.getOrNull(activeQueueIndex + 1)?.let { return@withContext it.segment }
+            val request = activeStartRequest ?: return@withContext null
+            val chapter = activeQueue.getOrNull(activeQueueIndex)?.segment?.chapterIndex ?: return@withContext null
+            try {
+                val next = prepareNextChapter(request.bookId, chapter).await().firstOrNull()?.segment
+                next.takeIf { isCurrent(token) && activeUtteranceId == utteranceId }
+            } catch (_: Exception) {
+                coroutineContext.ensureActive()
+                // Let the head play; the existing chapter transition reports a failed load.
+                null
+            }
+        }
+
+    private fun speakCurrentSegment(token: Long, initialPlayback: Boolean = false) {
         if (!isCurrent(token)) return
         val queued = activeQueue.getOrNull(activeQueueIndex) ?: error("朗读位置失效，请重试")
         pausedResumeLocation = ReaderTextStartLocation(queued.segment.chapterIndex, queued.segment.startCharOffset)
@@ -337,7 +355,10 @@ class ReaderTtsService : Service(), ReaderTtsEngine.Callback {
         activeUtteranceId = id
         activeUtteranceStarted = false
         armUtteranceWatchdog(id, PREPARATION_TIMEOUT_MILLIS, "声音生成超时，请重试")
-        check(engine?.speak(id, queued.segment) == true) { "声音无法开始播放，请重试" }
+        val accepted = if (initialPlayback) {
+            engine?.speak(id, queued.segment) { initialNextSegment(token, id) }
+        } else engine?.speak(id, queued.segment)
+        check(accepted == true) { "声音无法开始播放，请重试" }
         refreshNotification()
     }
 

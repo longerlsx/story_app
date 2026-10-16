@@ -114,14 +114,29 @@ class OfflineReaderTtsEngine(
         if (!closed && model != null) preparation.prepareUpcoming(segments, settings.copy(speechRate = 1f))
     }
 
-    override fun speak(utteranceId: String, segment: ReaderTtsSegment): Boolean {
+    override fun speak(utteranceId: String, segment: ReaderTtsSegment): Boolean =
+        startSpeech(utteranceId, segment, initialNextSegment = null)
+
+    override fun speak(
+        utteranceId: String,
+        segment: ReaderTtsSegment,
+        initialNextSegment: suspend () -> ReaderTtsSegment?,
+    ): Boolean = startSpeech(utteranceId, segment, initialNextSegment)
+
+    private fun startSpeech(
+        utteranceId: String,
+        segment: ReaderTtsSegment,
+        initialNextSegment: (suspend () -> ReaderTtsSegment?)?,
+    ): Boolean {
         if (closed || model == null || segment.spokenText.isBlank()) return false
         stopCurrentPlayback()
         val generation = epoch.get()
         val selected = settings
         playbackJob = scope.launch {
             try {
-                val generated = preparation.take(segment, selected.copy(speechRate = 1f))
+                val generated = preparation.takeForPlayback(
+                    segment, selected.copy(speechRate = 1f), selected.speechRate, initialNextSegment,
+                )
                 ensureCurrent(generation)
                 play(generation, utteranceId, segment, generated.samples, generated.sampleRate, selected.speechRate, selected.pitch)
                 notifyWhilePlaying(generation) { callback.onUtteranceCompleted(utteranceId) }
@@ -144,7 +159,7 @@ class OfflineReaderTtsEngine(
             val readyModel = checkNotNull(model)
             val reference = checkNotNull(referenceVoice)
             val startedAt = SystemClock.elapsedRealtime()
-            Log.i(TAG, "synthesisStart chapter=${segment.chapterIndex} offset=${segment.startCharOffset} chars=${segment.spokenText.length}")
+            Log.i(TAG, "synthesisStart chapter=${segment.chapterIndex} offset=${segment.startCharOffset} chars=${segment.spokenText.length} elapsedRealtime=$startedAt")
             val audio = readyModel.generateWithConfigAndCallback(
                 // sherpa's ZipVoice front end sends raw digit runs to English eSpeak.
                 // Transform only synthesis input; segment offsets and completion stay in source text.
@@ -168,7 +183,8 @@ class OfflineReaderTtsEngine(
             jobContext.ensureActive()
             if (closed) throw CancellationException("Engine closed")
             check(audio.samples.isNotEmpty()) { "这段文字没有生成声音，请重试或换一处开始" }
-            Log.i(TAG, "synthesisMs=${SystemClock.elapsedRealtime() - startedAt} audioMs=${audio.samples.size.toLong() * 1000 / audio.sampleRate} chars=${segment.spokenText.length} rate=${selected.speechRate}")
+            val completedAt = SystemClock.elapsedRealtime()
+            Log.i(TAG, "synthesisMs=${completedAt - startedAt} audioMs=${audio.samples.size.toLong() * 1000 / audio.sampleRate} chars=${segment.spokenText.length} rate=${selected.speechRate} chapter=${segment.chapterIndex} offset=${segment.startCharOffset} elapsedRealtime=$completedAt")
             ReaderSpeechAudio(audio.samples, audio.sampleRate)
         }
 
@@ -188,6 +204,9 @@ class OfflineReaderTtsEngine(
             .setTransferMode(AudioTrack.MODE_STREAM)
             .setBufferSizeInBytes(maxOf(AudioTrack.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_FLOAT), sampleRate / 5 * 4))
             .build()
+        fun logPlayback(event: String) {
+            Log.i(TAG, "$event utterance=$utteranceId chapter=${segment.chapterIndex} offset=${segment.startCharOffset} chars=${segment.spokenText.length} elapsedRealtime=${SystemClock.elapsedRealtime()}")
+        }
         try {
             synchronized(audioLock) {
                 ensureCurrent(generation)
@@ -216,6 +235,7 @@ class OfflineReaderTtsEngine(
                 reportResumedPlayback(track)
                 if (!announced && track.playbackHeadPosition > 0) {
                     announced = true
+                    logPlayback("playStart")
                     notifyWhilePlaying(generation) {
                         callback.onUtteranceStarted(utteranceId)
                         callback.onUtteranceRangeStart(utteranceId, 0, segment.spokenText.length)
@@ -230,6 +250,7 @@ class OfflineReaderTtsEngine(
                 reportResumedPlayback(track)
                 if (!announced && head > 0) {
                     announced = true
+                    logPlayback("playStart")
                     notifyWhilePlaying(generation) {
                         callback.onUtteranceStarted(utteranceId)
                         callback.onUtteranceRangeStart(utteranceId, 0, segment.spokenText.length)
@@ -243,11 +264,13 @@ class OfflineReaderTtsEngine(
                 delay(10)
             }
             if (!announced) {
+                logPlayback("playStart")
                 notifyWhilePlaying(generation) {
                     callback.onUtteranceStarted(utteranceId)
                     callback.onUtteranceRangeStart(utteranceId, 0, segment.spokenText.length)
                 }
             }
+            logPlayback("playEnd")
         } finally {
             synchronized(audioLock) {
                 if (activeTrack === track) {
@@ -330,8 +353,10 @@ class OfflineReaderTtsEngine(
     }
 
     override fun stop() {
-        preparation.clear()
+        // Invalidating the consumer first prevents a cancelled prefetch from releasing
+        // the startup join barrier while its old playback generation is still current.
         stopCurrentPlayback()
+        preparation.clear()
         val gate = synchronized(audioLock) {
             focusPauseGate.also {
                 focusPauseGate = null

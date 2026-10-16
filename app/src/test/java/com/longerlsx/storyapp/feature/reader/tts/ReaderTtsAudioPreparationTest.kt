@@ -22,6 +22,125 @@ class ReaderTtsAudioPreparationTest {
     private val settings = ReaderTtsSettings(voiceName = "male-a", speechRate = 1f)
 
     @Test
+    fun shortInitialAudioWaitsForLongNextAudioWithoutConsumingOrGeneratingItTwice() = runTest {
+        val first = next.copy(spokenText = "天亮了。")
+        val following = next.copy(chapterIndex = 3, spokenText = "他推开窗，看见远处的山林和清晨的薄雾。")
+        val followingReady = CompletableDeferred<Unit>()
+        val generated = mutableListOf<String>()
+        val preparation = ReaderTtsAudioPreparation(backgroundScope) { segment, _ ->
+            generated += segment.spokenText
+            if (segment == following) followingReady.await()
+            ReaderSpeechAudio(FloatArray(if (segment == first) 950 else 8_000), 1_000)
+        }
+        val starting = async { preparation.takeForPlayback(first, settings, 1f) { following } }
+        runCurrent()
+        assertFalse("A sub-second head must not play before its much longer successor is ready", starting.isCompleted)
+        assertEquals(listOf(first.spokenText, following.spokenText), generated)
+
+        followingReady.complete(Unit)
+        runCurrent()
+        assertEquals(950, starting.await().samples.size)
+        assertEquals(8_000, preparation.take(following, settings).samples.size)
+        assertEquals("Waiting must leave the following PCM available for its normal consumer", 2, generated.size)
+    }
+
+    @Test
+    fun ordinaryInitialAudioDoesNotEvenLoadTheFollowingChapter() = runTest {
+        val preparation = ReaderTtsAudioPreparation(backgroundScope) { _, _ ->
+            ReaderSpeechAudio(FloatArray(8_000), 1_000)
+        }
+        val audio = preparation.takeForPlayback(next, settings, 2f) {
+            error("A four-second playback window must not request extra chapter IO")
+        }
+        assertEquals(8_000, audio.samples.size)
+    }
+
+    @Test
+    fun startupBufferKeepsAnAlreadyMatchingTwoUnitWindow() = runTest {
+        val following = next.copy(spokenText = "这是一句比开头长得多的后续正文。")
+        val later = next.copy(spokenText = "再往后的下一段。")
+        val followingReady = CompletableDeferred<Unit>()
+        val generated = mutableListOf<String>()
+        val preparation = ReaderTtsAudioPreparation(backgroundScope) { segment, _ ->
+            generated += segment.spokenText
+            if (segment == following) followingReady.await()
+            ReaderSpeechAudio(FloatArray(950), 1_000)
+        }
+        val starting = async {
+            preparation.takeForPlayback(next, settings, 1f) {
+                preparation.prepareUpcoming(listOf(following, later), settings)
+                following
+            }
+        }
+        runCurrent()
+        followingReady.complete(Unit)
+        runCurrent()
+        starting.await()
+
+        assertEquals(listOf(next.spokenText, following.spokenText, later.spokenText), generated)
+        preparation.take(following, settings)
+        preparation.take(later, settings)
+        assertEquals(3, generated.size)
+    }
+
+    @Test
+    fun startupBufferUsesPlaybackRateAndOnlyWaitsForAMuchLongerSuccessor() = runTest {
+        val following = next.copy(spokenText = "这是一句比开头长得多的后续正文。")
+        val ready = CompletableDeferred<Unit>()
+        val generated = mutableListOf<String>()
+        val preparation = ReaderTtsAudioPreparation(backgroundScope) { segment, _ ->
+            generated += segment.spokenText
+            if (segment == following) ready.await()
+            ReaderSpeechAudio(FloatArray(3_000), 1_000)
+        }
+        val faster = async { preparation.takeForPlayback(next, settings, 2f) { following } }
+        runCurrent()
+        assertFalse("Three seconds of PCM only gives 1.5 seconds of lead at 2×", faster.isCompleted)
+        ready.complete(Unit)
+        faster.await()
+        preparation.clear()
+
+        val similar = next.copy(spokenText = "再读下一句。")
+        preparation.takeForPlayback(next, settings, 2f) { similar }
+        assertFalse("Similar short sentences must retain immediate startup", similar.spokenText in generated)
+    }
+
+    @Test
+    fun stoppingDuringStartupBufferCancelsPendingAudioAndNeverReleasesTheHead() = runTest {
+        val following = next.copy(spokenText = "这是一句比开头长得多的后续正文。")
+        var followingCancelled = false
+        var headReleased = false
+        val preparation = ReaderTtsAudioPreparation(backgroundScope) { segment, _ ->
+            if (segment == following) {
+                try { awaitCancellation() } finally { followingCancelled = true }
+            }
+            ReaderSpeechAudio(FloatArray(950), 1_000)
+        }
+        val starting = launch {
+            preparation.takeForPlayback(next, settings, 1f) { following }
+            headReleased = true
+        }
+        runCurrent()
+        starting.cancelAndJoin()
+        preparation.clear()
+        runCurrent()
+
+        assertTrue(followingCancelled)
+        assertFalse(headReleased)
+    }
+
+    @Test
+    fun failedStartupPrefetchStillPlaysTheHeadAndReportsFailureWhenFollowingAudioIsTaken() = runTest {
+        val following = next.copy(spokenText = "这是一句比开头长得多的后续正文。")
+        val preparation = ReaderTtsAudioPreparation(backgroundScope) { segment, _ ->
+            if (segment == following) error("following synthesis failed")
+            ReaderSpeechAudio(FloatArray(950), 1_000)
+        }
+        assertEquals(950, preparation.takeForPlayback(next, settings, 1f) { following }.samples.size)
+        assertEquals("following synthesis failed", runCatching { preparation.take(following, settings) }.exceptionOrNull()?.message)
+    }
+
+    @Test
     fun secondUnitIsReadyBeforeTheFirstIsConsumedAndOnlyTwoArePreparedInOrder() = runTest {
         val firstReady = CompletableDeferred<Unit>()
         val started = mutableListOf<String>()

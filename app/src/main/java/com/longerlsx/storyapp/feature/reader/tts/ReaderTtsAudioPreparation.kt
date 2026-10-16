@@ -58,6 +58,34 @@ internal class ReaderTtsAudioPreparation(
         prepareUpcoming(listOf(segment), settings)
     }
 
+    suspend fun takeForPlayback(
+        segment: ReaderTtsSegment,
+        settings: ReaderTtsSettings,
+        playbackRate: Float,
+        initialNextSegment: (suspend () -> ReaderTtsSegment?)? = null,
+    ): ReaderSpeechAudio {
+        val current = take(segment, settings)
+        val playbackMillis = current.samples.size * 1_000.0 / current.sampleRate / playbackRate.coerceIn(0.5f, 2f)
+        // A conservative startup rule for tiny heads, not a prediction of device throughput.
+        // Ordinary starts and previews never request the extra chapter IO or await another PCM.
+        if (initialNextSegment != null && playbackMillis < 2_000) {
+            val next = initialNextSegment()
+            if (next != null && next.spokenText.codePointCount(0, next.spokenText.length) >
+                segment.spokenText.codePointCount(0, segment.spokenText.length) * 2
+            ) {
+                val key = synthesisKey(next, settings)
+                fun matching() = synchronized(lock) { pending.firstOrNull()?.takeIf { it.key == key } }
+                // Preserve an already matching two-unit window, including its second unit.
+                if (matching() == null) prepareNext(next, settings)
+                // Joining does not consume the PCM or report a future synthesis failure early.
+                // stop() invalidates/cancels the consumer before clearing preparation.
+                matching()?.audio?.join()
+                currentCoroutineContext().ensureActive()
+            }
+        }
+        return current
+    }
+
     suspend fun take(segment: ReaderTtsSegment, settings: ReaderTtsSettings): ReaderSpeechAudio {
         val key = synthesisKey(segment, settings)
         val (prepared, obsolete) = synchronized(lock) {

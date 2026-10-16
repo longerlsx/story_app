@@ -30,7 +30,14 @@ import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsSessionState
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsStartRequest
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsVoiceOption
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsNotificationFactory
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -446,6 +453,50 @@ class ReaderTtsBackgroundPlaybackTest {
     }
 
     @Test
+    fun pauseDuringCrossChapterStartupBufferKeepsTheUnspokenHeadForExplicitResume() {
+        assertStartupBufferControl(stop = false)
+    }
+
+    @Test
+    fun stopDuringCrossChapterStartupBufferDoesNotPlayWhenTheBufferCompletes() {
+        assertStartupBufferControl(stop = true)
+    }
+
+    private fun assertStartupBufferControl(stop: Boolean) {
+        val book = seedBook("startup-buffer", "启动缓冲", listOf(
+            "第1章" to "天亮了。",
+            "第2章" to "他推开窗，看见远处的山林和清晨的薄雾。",
+        ))
+        engineHarness.blockStartupBuffer()
+        ActivityScenario.launch<MainActivity>(mainIntent()).use {
+            startPlaybackFor(book.id, book.title, 0, 0, "第1章")
+            val engine = engineHarness.awaitLatestEngine()
+            val following = engine.awaitStartupNextSegment()
+            assertEquals(1, following.chapterIndex)
+            assertEquals(0, following.startCharOffset)
+            assertEquals("他推开窗，看见远处的山林和清晨的薄雾。", following.spokenText)
+            waitForPlaybackState(ReaderTtsSessionState.STARTING)
+            assertNull("Preparing the next chapter must not announce the head as playing", engine.lastSpokenSegment)
+
+            context.startService(if (stop) ReaderTtsIntentFactory.stopService(context) else ReaderTtsIntentFactory.pauseService(context))
+            val expected = if (stop) ReaderTtsSessionState.STOPPED_BY_USER else ReaderTtsSessionState.PAUSED_BY_USER
+            waitForPlaybackState(expected)
+            assertTrue("Control must cancel preparation without awaiting the next sound", engine.startupBufferFinished.await(3, java.util.concurrent.TimeUnit.SECONDS))
+            engineHarness.releaseStartupBuffer()
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            assertEquals(expected, application.readerTtsController.playbackState)
+            assertNull(engine.lastSpokenSegment)
+
+            if (!stop) {
+                context.startForegroundService(ReaderTtsIntentFactory.resumeService(context))
+                val resumed = engineHarness.awaitSpokenSegment(0, 0)
+                waitForPlaybackState(ReaderTtsSessionState.PLAYING)
+                assertEquals("天亮了。", resumed.lastSpokenSegment?.spokenText)
+            }
+        }
+    }
+
+    @Test
     fun stopDuringBlockedStartDoesNotResurrectPlaybackAfterInitializeCompletes() {
         val seededBook = seedBook(
             bookId = "blocked-start-book",
@@ -649,6 +700,11 @@ private class ControlledReaderTtsEngineHarness {
     private var generation = 0
     @Volatile
     private var initializeLatch: CountDownLatch? = null
+    @Volatile private var startupBufferGate: CompletableDeferred<Unit>? = null
+
+    fun blockStartupBuffer() { startupBufferGate = CompletableDeferred() }
+
+    fun releaseStartupBuffer() { startupBufferGate?.complete(Unit) }
 
     fun blockNextInitialize() {
         initializeLatch = CountDownLatch(1)
@@ -666,6 +722,7 @@ private class ControlledReaderTtsEngineHarness {
         return ControlledReaderTtsEngine(
             callback = callback,
             generation = generation,
+            startupBufferGate = { startupBufferGate },
             awaitInitialize = suspend {
                 val startedAt = System.currentTimeMillis()
                 while (initializeLatch?.count ?: 0L > 0L) {
@@ -720,7 +777,12 @@ private class ControlledReaderTtsEngine(
     private val callback: ReaderTtsEngine.Callback,
     val generation: Int,
     private val awaitInitialize: suspend () -> Unit,
+    private val startupBufferGate: () -> CompletableDeferred<Unit>?,
 ) : ReaderTtsEngine {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var startupBufferJob: Job? = null
+    @Volatile private var startupNextSegment: ReaderTtsSegment? = null
+    val startupBufferFinished = CountDownLatch(1)
     @Volatile var destroyed: Boolean = false
         private set
     @Volatile var activeUtteranceId: String? = null
@@ -769,6 +831,29 @@ private class ControlledReaderTtsEngine(
     override fun speak(
         utteranceId: String,
         segment: ReaderTtsSegment,
+        initialNextSegment: suspend () -> ReaderTtsSegment?,
+    ): Boolean {
+        val gate = startupBufferGate() ?: return speak(utteranceId, segment)
+        startupBufferJob = scope.launch {
+            startupNextSegment = initialNextSegment()
+            gate.await()
+            speak(utteranceId, segment)
+        }.also { it.invokeOnCompletion { startupBufferFinished.countDown() } }
+        return true
+    }
+
+    fun awaitStartupNextSegment(): ReaderTtsSegment {
+        val deadline = System.currentTimeMillis() + 3_000
+        while (System.currentTimeMillis() < deadline) {
+            startupNextSegment?.let { return it }
+            Thread.sleep(20)
+        }
+        throw AssertionError("Startup buffering did not request the next formal segment")
+    }
+
+    override fun speak(
+        utteranceId: String,
+        segment: ReaderTtsSegment,
     ): Boolean {
         activeUtteranceId = utteranceId
         lastSpokenSettings = settings
@@ -778,7 +863,10 @@ private class ControlledReaderTtsEngine(
         return true
     }
 
-    override fun stop() { stopObserver?.countDown() }
+    override fun stop() {
+        startupBufferJob?.cancel()
+        stopObserver?.countDown()
+    }
 
     fun observeNextStop(): CountDownLatch = CountDownLatch(1).also { stopObserver = it }
 
@@ -795,5 +883,8 @@ private class ControlledReaderTtsEngine(
         return { callback.onUtteranceCompleted(id) }
     }
 
-    override fun shutdown() { destroyed = true }
+    override fun shutdown() {
+        destroyed = true
+        scope.cancel()
+    }
 }

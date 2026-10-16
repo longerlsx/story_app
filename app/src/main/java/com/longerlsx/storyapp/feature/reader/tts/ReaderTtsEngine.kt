@@ -12,6 +12,13 @@ interface ReaderTtsEngine {
         segment: ReaderTtsSegment,
     ): Boolean
 
+    /** Initial/rebuilt playback may request one successor after measuring its first PCM. */
+    fun speak(
+        utteranceId: String,
+        segment: ReaderTtsSegment,
+        initialNextSegment: suspend () -> ReaderTtsSegment?,
+    ): Boolean = speak(utteranceId, segment)
+
     /** Keep at most the next short unit ready; it must never start playing on its own. */
     fun prepareNext(segment: ReaderTtsSegment) = Unit
 
