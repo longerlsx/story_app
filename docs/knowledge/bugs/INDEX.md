@@ -125,6 +125,7 @@ This is mandatory for both:
 | BUG-2026-063 | A very short initial segment runs out before the longer next segment is generated | resolved | `tts`, `prefetch`, `startup`, `audio-gap` | [BUG-2026-063-short-initial-speech-starves-next-segment.json](BUG-2026-063-short-initial-speech-starves-next-segment.json) |
 | BUG-2026-064 | Reading progress is rejected after the wall clock moves backward | resolved | `reader`, `reading-progress`, `clock-rollback` | [BUG-2026-064-reading-progress-clock-rollback.json](BUG-2026-064-reading-progress-clock-rollback.json) |
 | BUG-2026-065 | Day/night theme changes leave stale accessibility descriptions | resolved | `reader`, `theme`, `accessibility` | [BUG-2026-065-theme-toggle-retains-stale-accessibility-nodes.json](BUG-2026-065-theme-toggle-retains-stale-accessibility-nodes.json) |
+| BUG-2026-066 | Intermittent audio handoff delay despite ready successor PCM | investigating | `tts`, `audio-gap`, `audio-handoff`, `emulator` | [BUG-2026-066-intermittent-audio-handoff-delay.json](BUG-2026-066-intermittent-audio-handoff-delay.json) |
 
 ## Retrieval Hints For Future Threads
 

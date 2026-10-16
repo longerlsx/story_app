@@ -1,0 +1,36 @@
+{
+  "id": "BUG-2026-066",
+  "title": "Intermittent audio handoff delay despite ready successor PCM",
+  "status": "investigating",
+  "symptom": "One normal-entry fixed-sample run at 1x on the dedicated API34 ARM64 emulator contains a measured 0.923208-second internal low-level interval even though the successor PCM was already generated. The app independently logs an 810ms playEnd-to-next-playStart handoff at that boundary. This is a remaining continuity investigation, separate from the resolved short-initial-unit generation deficit in BUG-2026-063.",
+  "root_cause": "Undetermined. The successor was ready approximately seven seconds before the preceding playEnd, excluding synthesis supply as the limiting factor at this boundary. AudioFlinger and SystemUI also slowed in the same window, but correlation does not establish whether application dispatch, old-track release, progress persistence, new-track startup or wider emulator scheduling caused the delay. The original run lacks timestamps separating these phases. No fsync, application-main-thread or stop-the-world GC cause is confirmed; reported concurrent GC total durations must not be treated as equivalent pause durations.",
+  "fix": [
+    "No behavior fix is established. Preserve this record as investigating even when other fixed-sample or long-listening runs pass. Do not reorder persistence and playback or rebuild the audio architecture from this single unlocalized event.",
+    "Diagnostic-only instrumentation adds four events under the existing tags: trackBuilt and trackReleased in OfflineReaderTtsEngine, completionStart and progressSaved in ReaderTtsService. Each includes utterance, chapter, source offset and elapsedRealtime. Existing playStart is tied to observed playback-head advancement. Together these delimit release, completion dispatch, the whole save path, next-track preparation and first observed playback progress without changing scheduling or persistence behavior.",
+    "The completionStart-to-progressSaved interval includes snapshot updates, coroutine scheduling and the complete storage operation; it does not isolate fsync. The progressSaved-to-trackBuilt interval also includes service handoff, any focus/chapter wait, worker dispatch and audio retrieval, so it is not an isolated AudioTrack constructor measurement."
+  ],
+  "evidence": [
+    "2026-10-16 voice-samples-1x.mka: actual speech spans 9.049667-165.504667 seconds. The full scan finds one internal low-level interval of at least 0.6 seconds, at 61.285667-62.208875 seconds, lasting 0.923208 seconds. The capture uses raw PCM in timestamp-preserving Matroska; recordings are not concatenated to remove idle time.",
+    "Matching voice-samples-1x-logcat.txt: chapter 1 / offset 90 finishes generation at 16:35:15.321. Preceding utterance 1-9, chapter 1 / offset 62, logs playEnd at 16:35:22.332, elapsedRealtime 4638866; utterance 1-10 logs playStart at 16:35:23.141, elapsedRealtime 4639676. The monotonic handoff is 810ms, so the observation cannot be dismissed solely as capture timestamp jitter. The preceding segment has 3498ms PCM but a 4824ms logged playback span; the old logs cannot separate delayed observations from actual playback slowdown.",
+    "The same original window includes AudioFlinger throttle values of 310ms and 280ms, SystemUI skipping 35 frames, and an 1828ms SysUiBg dispatch. SystemUI concurrent GC reports total durations of 2.109 seconds and 694ms with only microsecond pause fields. These are correlated scheduling observations, not a diagnosed application GC pause or a proven cause of the handoff.",
+    "The separate 1.45x formal recording of the same fixed text has no internal low-level interval of at least 0.6 seconds during actual speech at 8.193896-112.961729 seconds. The user listened to both fixed recordings and reported no obvious sound defects. This bounded quality acceptance and the clean 1.45x interval do not erase the 1x timing anomaly.",
+    "The subsequent formal fifteen-minute 1x run with the four diagnostic events starts actual playback at 16:54:41.137 and releases playback at timer expiry at 17:09:41.182. It contains 147 started units and 146 complete handoffs: median 150.5ms, P95 202ms, maximum 310ms, and none at least 600ms. The whole save interval reaches at most 139ms. Three recorded low-level intervals of at least 0.6 seconds lie inside units 1-5, 1-88 and 1-127; their logged playback spans remain close to their PCM durations, without evidence of corresponding extra handoff or supply stalls. The original 810ms anomaly is not reproduced or resolved by this run.",
+    "The user listened to excerpts from the fifteen-minute run covering its beginning, middle, end, chapter transition and all three low-level alerts, and replied '没有明显问题'. This accepts the heard excerpts without establishing the cause or resolution of the earlier measured handoff anomaly.",
+    "The completed same-text 1x diagnostic replay in voice-samples-recheck-1x-logcat.txt naturally finishes all 26 units and contains 25 handoffs: minimum 107ms, median 142ms, P95 168ms and maximum 201ms, with none at least 600ms. The original 1-9 to 1-10 boundary is the 201ms maximum, from elapsedRealtime 6914232 to 6914433, rather than the earlier 810ms. recheck-silence.txt reports actual speech at 16.926667-167.456354 seconds and only two internal low-level intervals of at least 0.6 seconds: 59.533708-60.185562 (0.651854 seconds) and 65.702708-66.407562 (0.704854 seconds). They fall inside units 1-8 and 1-9, whose logged playback spans of 6624ms and 3238ms remain close to their PCM durations of 6688ms and 3303ms. These within-unit observations are not a reproduction of the original delayed handoff. The original anomaly remains unexplained and this record stays investigating.",
+    "The authoritative execution record, candidate identity and subsequent results belong to docs/superpowers/plans/2026-10-16-app-experience-stability.md. The final evidence artifact root is app/build/outputs/experience-20261016/evidence; relevant artifacts include voice-samples-1x.mka, voice-samples-1x-logcat.txt, long-listen-logcat.txt, voice-samples-recheck-1x-logcat.txt and recheck-silence.txt. Only completed observations are recorded here."
+  ],
+  "failed_attempts": [],
+  "impact": "One measured audible-output continuity anomaly remains unexplained within the covered emulator conditions. Later successful windows narrow its observed frequency but do not prove a fix, identify its cause or establish physical-phone behavior. Retain the original recording and logs alongside later runs rather than selecting only passing intervals.",
+  "tags": [
+    "android",
+    "tts",
+    "zipvoice",
+    "audio-gap",
+    "audio-handoff",
+    "emulator",
+    "investigating"
+  ],
+  "confidence": 0.95,
+  "created_at": "2026-10-16",
+  "updated_at": "2026-10-16"
+}
