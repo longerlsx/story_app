@@ -851,11 +851,17 @@ private fun ReaderReadyContent(
         with(rootDensity) { pageInsets.calculateTopPadding().roundToPx() },
         with(rootDensity) { pageInsets.calculateBottomPadding().roundToPx() })
     val requestedPageLayout = ReaderPageLayoutKey(
-        with(rootDensity) { (viewportSize.width.toDp() - ReaderHorizontalPadding * 2).roundToPx() },
+        ReaderPageViewportMetricsResolver.availableWidthPx(
+            containerWidthPx = viewportSize.width,
+            horizontalPaddingPx = with(rootDensity) { ReaderHorizontalPadding.roundToPx() },
+        ),
         pageViewport.availableHeightPx, rootDensity.density, rootDensity.fontScale,
         readerSettings.fontSizeSp,
         (readerSettings.fontSizeSp * readerSettings.lineHeightMultiplier) / readerSettings.fontSizeSp,
-        with(rootDensity) { (readerSettings.fontSizeSp * readerSettings.paragraphSpacingEm).coerceIn(8f, 36f).dp.toPx() })
+        ReaderPageViewportMetricsResolver.paragraphSpacingPx(
+            with(rootDensity) { (readerSettings.fontSizeSp * readerSettings.paragraphSpacingEm).coerceIn(8f, 36f).dp.toPx() },
+        ),
+    )
 
     // Prepare PAGE without mounting a second body while the confirmed SCROLL remains visible.
     LaunchedEffect(position.request?.id, readerSettings.readingMode, requestedPageLayout, displayMode) {

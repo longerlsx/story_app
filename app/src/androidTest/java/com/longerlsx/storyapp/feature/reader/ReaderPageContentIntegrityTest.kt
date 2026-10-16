@@ -3,6 +3,7 @@ package com.longerlsx.storyapp.feature.reader
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -18,16 +19,23 @@ import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.createFontFamilyResolver
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextIndent
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.uiautomator.UiDevice
 import com.longerlsx.storyapp.core.model.ReaderSettings
+import java.io.File
 import kotlin.math.ceil
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -99,6 +107,57 @@ class ReaderPageContentIntegrityTest {
         }
 
         assertEveryPagePreservesAndDisplaysContent(content, fontSizeSp = 18, paragraphSpacingEm = 1.8f)
+    }
+
+    @Test
+    fun fractionalDensityPaddingKeepsMeasuredAndRenderedPageWidthsAligned() {
+        val density = Density(2.8125f, fontScale = 1f)
+        val measurer = TextMeasurer(
+            defaultFontFamilyResolver = createFontFamilyResolver(InstrumentationRegistry.getInstrumentation().targetContext),
+            defaultDensity = density,
+            defaultLayoutDirection = LayoutDirection.Ltr,
+        )
+        val settings = ReaderSettings(fontSizeSp = 20, paragraphSpacingEm = 0.8f)
+        val style = TextStyle(
+            fontSize = settings.fontSizeSp.sp,
+            lineHeight = (settings.fontSizeSp * settings.lineHeightMultiplier).sp,
+            textAlign = TextAlign.Start,
+            textIndent = TextIndent(firstLine = 2.em, restLine = 0.em),
+            platformStyle = PlatformTextStyle(includeFontPadding = false),
+        )
+        val paragraph = "甲甲W" + "i".repeat(31) + "乙"
+        val wider = measurer.measure(AnnotatedString(paragraph), style, constraints = Constraints(maxWidth = 765))
+        val narrower = measurer.measure(AnnotatedString(paragraph), style, constraints = Constraints(maxWidth = 764))
+        assertEquals("The regression fixture must fit one line at the old measurement width", 1, wider.lineCount)
+        assertEquals("The regression fixture must wrap at the real rendered width", 2, narrower.lineCount)
+        val content = List(40) { paragraph }.joinToString("\n") + "\n章尾唯一终点。"
+
+        // At this density each 24dp side rounds from 67.5px to 68px. The text must use
+        // the resulting real width, not round the combined 48dp subtraction once.
+        // Each real measured paragraph wraps only at the narrower width. The integral
+        // 45px paragraph gap isolates horizontal geometry from paragraph-gap rounding.
+        assertEveryPagePreservesAndDisplaysContent(
+            content,
+            fontSizeSp = 20,
+            paragraphSpacingEm = 0.8f,
+            densityOverride = density,
+            verifyMeasurementWidth = true,
+        )
+    }
+
+    @Test
+    fun fractionalParagraphSpacingKeepsLastShortParagraphInsidePage() {
+        val content = List(28) { "第${it + 1}段：甲乙丙丁。" }.joinToString("\n") + "\n章尾唯一终点。"
+
+        // Horizontal padding is exactly 63px here. Short one-line paragraphs isolate
+        // the 42.525px gap; the 390dp viewport places the seventh paragraph near its bottom.
+        assertEveryPagePreservesAndDisplaysContent(
+            content,
+            fontSizeSp = 18,
+            paragraphSpacingEm = 0.9f,
+            densityOverride = Density(2.625f, fontScale = 1f),
+            viewportHeight = 390.dp,
+        )
     }
 
     @Test
@@ -226,6 +285,11 @@ class ReaderPageContentIntegrityTest {
         content: String,
         fontSizeSp: Int,
         paragraphSpacingEm: Float,
+        densityOverride: Density? = null,
+        viewportHeight: Dp = PageHeight,
+        verifyMeasurementWidth: Boolean = false,
+    ) = withFailureScreenshot(
+        "page-integrity-density-${densityOverride?.density ?: "device"}-height-${viewportHeight.value}",
     ) {
         val settings = ReaderSettings(fontSizeSp = fontSizeSp, paragraphSpacingEm = paragraphSpacingEm)
         val palette = ReaderThemeResolver.resolveActivePalette(settings)
@@ -235,46 +299,57 @@ class ReaderPageContentIntegrityTest {
         var topPaddingPx = 0f
         var bottomPaddingPx = 0f
         var expectedIndentPx = 0f
+        var measuredWidthPx = 0
 
         composeRule.setContent {
-            val density = LocalDensity.current
-            val textMeasurer = rememberTextMeasurer()
-            val fontSize = fontSizeSp.sp
-            val lineHeight = (fontSizeSp * settings.lineHeightMultiplier).sp
-            val paragraphSpacing = (fontSizeSp * paragraphSpacingEm).coerceIn(8f, 36f).dp
-            val textStyle = TextStyle(
-                color = palette.content,
-                fontSize = fontSize,
-                lineHeight = lineHeight,
-                textAlign = TextAlign.Start,
-                platformStyle = PlatformTextStyle(includeFontPadding = false),
-            )
-            val widthPx = with(density) { (PageWidth - HorizontalPadding * 2).roundToPx() }
-            val heightPx = with(density) { (PageHeight - TopPadding - BottomPadding).roundToPx() }
-            val spacingPx = with(density) { paragraphSpacing.toPx() }
-            val pages = remember(content, widthPx, heightPx, spacingPx, textStyle, textMeasurer) {
-                // Call the exact production paginator, including its real page-fit remeasurement.
-                paginatePageSlices(content, widthPx, heightPx, spacingPx, textMeasurer, textStyle)
-            }
-            SideEffect {
-                measuredPages = pages
-                horizontalPaddingPx = with(density) { HorizontalPadding.toPx() }
-                topPaddingPx = with(density) { TopPadding.toPx() }
-                bottomPaddingPx = with(density) { BottomPadding.toPx() }
-                expectedIndentPx = with(density) { fontSize.toPx() * 2 }
-            }
-            Box(Modifier.requiredSize(PageWidth, PageHeight).testTag(PageViewportTag)) {
-                ReaderPageSurface(
-                    page = pages[displayedPage.intValue],
-                    themePalette = palette,
+            CompositionLocalProvider(LocalDensity provides (densityOverride ?: LocalDensity.current)) {
+                val density = LocalDensity.current
+                val textMeasurer = rememberTextMeasurer()
+                val fontSize = fontSizeSp.sp
+                val lineHeight = (fontSizeSp * settings.lineHeightMultiplier).sp
+                val paragraphSpacing = (fontSizeSp * paragraphSpacingEm).coerceIn(8f, 36f).dp
+                val textStyle = TextStyle(
+                    color = palette.content,
                     fontSize = fontSize,
                     lineHeight = lineHeight,
-                    paragraphSpacing = paragraphSpacing,
-                    pageTopPadding = TopPadding,
-                    pageBottomPadding = BottomPadding,
-                    highlightRange = null,
-                    modifier = Modifier.fillMaxSize(),
+                    textAlign = TextAlign.Start,
+                    platformStyle = PlatformTextStyle(includeFontPadding = false),
                 )
+                val widthPx = ReaderPageViewportMetricsResolver.availableWidthPx(
+                    containerWidthPx = with(density) { PageWidth.roundToPx() },
+                    horizontalPaddingPx = with(density) { HorizontalPadding.roundToPx() },
+                )
+                val heightPx = with(density) {
+                    viewportHeight.roundToPx() - TopPadding.roundToPx() - BottomPadding.roundToPx()
+                }
+                val spacingPx = ReaderPageViewportMetricsResolver.paragraphSpacingPx(
+                    with(density) { paragraphSpacing.toPx() },
+                )
+                val pages = remember(content, widthPx, heightPx, spacingPx, textStyle, textMeasurer) {
+                    // Call the exact production paginator, including its real page-fit remeasurement.
+                    paginatePageSlices(content, widthPx, heightPx, spacingPx, textMeasurer, textStyle)
+                }
+                SideEffect {
+                    measuredPages = pages
+                    measuredWidthPx = widthPx
+                    horizontalPaddingPx = with(density) { HorizontalPadding.roundToPx().toFloat() }
+                    topPaddingPx = with(density) { TopPadding.roundToPx().toFloat() }
+                    bottomPaddingPx = with(density) { BottomPadding.roundToPx().toFloat() }
+                    expectedIndentPx = with(density) { fontSize.toPx() * 2 }
+                }
+                Box(Modifier.requiredSize(PageWidth, viewportHeight).testTag(PageViewportTag)) {
+                    ReaderPageSurface(
+                        page = pages[displayedPage.intValue],
+                        themePalette = palette,
+                        fontSize = fontSize,
+                        lineHeight = lineHeight,
+                        paragraphSpacing = paragraphSpacing,
+                        pageTopPadding = TopPadding,
+                        pageBottomPadding = BottomPadding,
+                        highlightRange = null,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
             }
         }
         composeRule.waitForIdle()
@@ -283,6 +358,7 @@ class ReaderPageContentIntegrityTest {
         assertPageRangesPreserveSource(content, pages)
 
         val renderedCharacters = StringBuilder()
+        var widthMismatch: Pair<Int, Int>? = null
         pages.forEachIndexed { pageIndex, page ->
             composeRule.runOnIdle { displayedPage.intValue = pageIndex }
             composeRule.waitForIdle()
@@ -293,9 +369,11 @@ class ReaderPageContentIntegrityTest {
             ).fetchSemanticsNodes().sortedBy { it.positionInRoot.y }
             assertTrue("Page $pageIndex must render actual text nodes", textNodes.isNotEmpty())
             val pageCharacters = StringBuilder()
+            val paragraphDiagnostics = StringBuilder()
             var paragraphSearchOffset = 0
+            var previousParagraphBottomPx: Float? = null
             composeRule.runOnIdle {
-                textNodes.forEach { node ->
+                textNodes.forEachIndexed { paragraphIndex, node ->
                     val layouts = mutableListOf<TextLayoutResult>()
                     val action = node.config[SemanticsActions.GetTextLayoutResult].action
                     assertTrue("Page $pageIndex must expose its actual text layout", action?.invoke(layouts) == true)
@@ -312,8 +390,44 @@ class ReaderPageContentIntegrityTest {
                         expectedFirstLineLeft, layout.getBoundingBox(0).left, 1f,
                     )
                     paragraphSearchOffset = localParagraphStart + text.length
-                    assertFalse("Page $pageIndex text must not overflow its own layout", layout.hasVisualOverflow)
+                    val lastLine = layout.lineCount - 1
+                    val lastGlyphBottom = (layout.getLineStart(lastLine) until layout.getLineEnd(lastLine, visibleEnd = true))
+                        .filterNot { text[it].isWhitespace() }
+                        .maxOfOrNull { layout.getBoundingBox(it).bottom }
+                    val paragraphTopPx = node.positionInRoot.y
+                    paragraphDiagnostics.appendLine(
+                        "paragraph=$paragraphIndex y=$paragraphTopPx gap=${previousParagraphBottomPx?.let { paragraphTopPx - it }} " +
+                            "layoutHeight=${layout.size.height} constraints=${layout.layoutInput.constraints} " +
+                            "lastLineBottom=${layout.getLineBottom(lastLine)} lastGlyphBottom=$lastGlyphBottom " +
+                            "glyphRootBottom=${lastGlyphBottom?.let { paragraphTopPx + it }} " +
+                            "bodyTop=${viewport.top + topPaddingPx} bodyBottom=${viewport.bottom - bottomPaddingPx} " +
+                            "viewport=$viewport measuredWidth=$measuredWidthPx overflow=${layout.hasVisualOverflow}",
+                    )
+                    previousParagraphBottomPx = paragraphTopPx + layout.size.height
+                    if (layout.hasVisualOverflow) println("PAGE_LAYOUT_OVERFLOW page=$pageIndex\n$paragraphDiagnostics")
+                    assertFalse(
+                        "Page $pageIndex text must not overflow its own layout\n$paragraphDiagnostics",
+                        layout.hasVisualOverflow,
+                    )
                     assertEquals(text.length, layout.getLineEnd(layout.lineCount - 1, visibleEnd = false))
+                    for (charOffset in layout.getLineStart(lastLine) until layout.getLineEnd(lastLine, visibleEnd = true)) {
+                        if (text[charOffset].isWhitespace()) continue
+                        val glyph = layout.getBoundingBox(charOffset)
+                        assertTrue(
+                            "Page $pageIndex last-line character $charOffset is clipped inside its Text",
+                            glyph.bottom <= layout.size.height + 1f,
+                        )
+                        assertTrue(
+                            "Page $pageIndex last-line character $charOffset crosses the page bottom",
+                            node.positionInRoot.y + glyph.bottom <= viewport.bottom - bottomPaddingPx + 1f,
+                        )
+                    }
+                    if (verifyMeasurementWidth && widthMismatch == null &&
+                        measuredWidthPx != layout.layoutInput.constraints.maxWidth
+                    ) {
+                        // Preserve the mismatch, but inspect every page for actual clipping first.
+                        widthMismatch = pageIndex to layout.layoutInput.constraints.maxWidth
+                    }
                     repeat(layout.lineCount) { line ->
                         if (line > 0) assertEquals(
                             "Wrapped lines must stay flush", 0f,
@@ -340,6 +454,30 @@ class ReaderPageContentIntegrityTest {
         }
         assertEquals(content.filterNot(Char::isWhitespace), renderedCharacters.toString())
         assertTrue("The last rendered page must retain the chapter ending", renderedCharacters.endsWith("章尾唯一终点。"))
+        widthMismatch?.let { (pageIndex, actualWidthPx) ->
+            assertEquals(
+                "Page $pageIndex measurement width must equal the real Text constraint",
+                measuredWidthPx, actualWidthPx,
+            )
+        }
+    }
+
+    private fun withFailureScreenshot(name: String, assertions: () -> Unit) {
+        try {
+            assertions()
+        } catch (failure: AssertionError) {
+            // runOnIdle rethrows here on the test thread, before the rule disposes the composition.
+            runCatching {
+                val instrumentation = InstrumentationRegistry.getInstrumentation()
+                val directory = checkNotNull(instrumentation.targetContext.getExternalFilesDir(null))
+                val screenshot = File(directory, "$name.png")
+                check(UiDevice.getInstance(instrumentation).takeScreenshot(screenshot)) {
+                    "Could not capture the failed page to ${screenshot.absolutePath}"
+                }
+                println("PAGE_INTEGRITY_FAILURE_SCREENSHOT=${screenshot.absolutePath}")
+            }.onFailure { failure.addSuppressed(it) }
+            throw failure
+        }
     }
 
     private fun assertPageRangesPreserveSource(content: String, pages: List<ReaderPageSlice>) {

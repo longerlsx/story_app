@@ -1,5 +1,7 @@
 package com.longerlsx.storyapp.feature.reader
 
+import kotlin.math.roundToInt
+
 data class ReaderPageViewportMetrics(
     val topPaddingPx: Int,
     val bottomPaddingPx: Int,
@@ -7,6 +9,12 @@ data class ReaderPageViewportMetrics(
 )
 
 object ReaderPageViewportMetricsResolver {
+    fun availableWidthPx(containerWidthPx: Int, horizontalPaddingPx: Int): Int =
+        (containerWidthPx - horizontalPaddingPx * 2).coerceAtLeast(0)
+
+    // Column's spacedBy rounds each gap independently before placing its children.
+    fun paragraphSpacingPx(spacingPx: Float): Float = spacingPx.roundToInt().toFloat()
+
     fun resolve(
         containerHeightPx: Int,
         baseTopPaddingPx: Int,

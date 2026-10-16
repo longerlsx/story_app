@@ -1,8 +1,9 @@
 {
   "id": "BUG-2026-008",
   "title": "Page mode clips the last visible line near the bottom edge while scroll mode remains correct",
+  "status": "investigating",
   "symptom": "In page mode, the last line near the bottom edge appears partially cut, as if an invisible horizontal strip sits in front of the text. The same chapter in scroll mode does not show the problem.",
-  "root_cause": "The defect came from a mismatch between page measurement and page rendering in a fixed-height viewport. Page mode first sliced text using one viewport/safe-area interpretation and then rendered each page with a slightly different bottom-safe-area and text-layout model. Two details mattered: page mode had been reading bottom insets through a fragile one-shot path, and the runtime `Text` did not fully mirror the measurement style. Scroll mode did not reproduce the bug because it uses a `LazyColumn` that can continue flowing past the bottom edge instead of forcing text into one fixed page-height box.",
+  "root_cause": "Historical diagnosis recorded on 2026-04-20: the defect came from a mismatch between page measurement and page rendering in a fixed-height viewport. Page mode first sliced text using one viewport/safe-area interpretation and then rendered each page with a slightly different bottom-safe-area and text-layout model. Two details mattered: page mode had been reading bottom insets through a fragile one-shot path, and the runtime `Text` did not fully mirror the measurement style. Scroll mode did not reproduce the bug because it uses a `LazyColumn` that can continue flowing past the bottom edge instead of forcing text into one fixed page-height box. The 2026-10-16 follow-up below confirms two additional pixel-rounding defects; the original book conditions of the latest user report have not been reproduced.",
   "fix": [
     "Switched page-mode safe-area handling to Compose-managed `WindowInsets.safeDrawing`, so the effective bottom viewport matches the real drawable area instead of relying on a one-shot root inset snapshot.",
     "Unified page measurement and page rendering around the same page `TextStyle`, including `PlatformTextStyle(includeFontPadding = false)`, so the page splitter and the actual on-screen `Text` use the same layout assumptions.",
@@ -16,6 +17,36 @@
     "Changed system bar colors and navigation-bar contrast settings, which improved bar appearance but did not address the actual clipping behavior."
   ],
   "impact": "This is a release-blocking issue for page mode because it makes the reading surface look physically obstructed and damages trust in the pagination engine.",
+  "follow_up_2026_10_16": {
+    "reported_symptom": "The user again reported occasional page-mode text cut across the last line. This investigation reproduced two measurement/rendering defects in controlled fixtures, without reproducing the user's original book and exact display conditions.",
+    "confirmed_causes": [
+      {
+        "cause": "The paginator rounded the combined horizontal padding subtraction once, while Compose rounded each 24dp side separately. At density 2.8125 and fontScale 1, a 320dp viewport is 900px wide: measurement used 765px, but each 67.5px side became 68px and the real Text constraint was 764px.",
+        "red_evidence": "With 20sp text, the fixed mixed-text paragraph '甲甲W' + 'i'.repeat(31) + '乙' is one line at 765px and two lines at 764px, as confirmed by real TextMeasurer results. Repeating the paragraph in a 320x480dp ReaderPageSurface with an integral 45px paragraph gap produced 166px-high rendered paragraphs. The sixth paragraph had maxHeight=0 and layoutHeight=0 while its last glyph bottom was 166px; it was not displayed. This is a more severe loss of a paragraph under different conditions, not a reproduction of the user's exact half-line appearance.",
+        "fix": "ReaderPageViewportMetricsResolver.availableWidthPx now subtracts two independently rounded side paddings from the integer container width. StablePageReaderContent uses constraints.maxWidth, and ReaderScreen's prepared-page layout uses viewportSize.width through the same helper."
+      },
+      {
+        "cause": "Pagination accumulated the fractional paragraph gap, while Column's Arrangement.spacedBy rounded every gap to integer pixels before placing paragraphs. At density 2.625, 18sp text and paragraphSpacingEm=0.9, measurement used 42.525px per gap but the real gap was 43px.",
+        "red_evidence": "In a 320x390dp ReaderPageSurface, the actual viewport was 840x1024px and the body was 714x740px. Seven 69px one-line paragraphs plus six fractional gaps appeared to need 738.15px, while the actual rounded gaps required 741px. The seventh paragraph started at y=809px, received maxHeight=68 and layoutHeight=68, and had lastGlyphBottom=69px: its glyph bottom reached y=878px beyond bodyBottom=877px. The real TextLayoutResult reported visual overflow.",
+        "fix": "ReaderPageViewportMetricsResolver.paragraphSpacingPx now rounds each gap before pagination. Both StablePageReaderContent and ReaderScreen's prepared-page layout use this helper; the pagination algorithm and rendered spacing remain unchanged."
+      }
+    ],
+    "regression_tests": [
+      "ReaderPageContentIntegrityTest.fractionalDensityPaddingKeepsMeasuredAndRenderedPageWidthsAligned",
+      "ReaderPageContentIntegrityTest.fractionalParagraphSpacingKeepsLastShortParagraphInsidePage"
+    ],
+    "verification": {
+      "status": "passed_for_controlled_cases",
+      "details": "On 2026-10-16, all 8 ReaderPageContentIntegrityTest cases passed in the simulator regression run. Both new cases had first failed against the pre-fix implementation: the narrower rendered width left a later paragraph with zero height, and rounded paragraph gaps left the seventh paragraph one pixel shorter than its glyph bounds. After the shared geometry fix, the actual ReaderPageSurface/TextLayoutResult checks passed for overflow, last-line glyph bounds, source-text order and chapter-tail preservation. This GREEN result covers the controlled cases and does not establish resolution of every intermittent clipping condition."
+    },
+    "remaining_boundaries": [
+      "The latest user's original book, settings and exact intermittent half-line clipping conditions remain unreproduced. These two confirmed causes do not establish that every occasional clipping case has been fixed.",
+      "This round's controlled layout evidence does not replace acceptance on the user's physical phone."
+    ],
+    "evidence": [
+      "RED/GREEN summary: [approved plan execution record](../../superpowers/plans/2026-10-16-app-experience-stability.md#6-执行记录). The temporary raw logs and screenshots are not permanent evidence attachments."
+    ]
+  },
   "tags": [
     "android",
     "compose",
@@ -25,10 +56,10 @@
     "text-layout",
     "rendering",
     "safe-drawing",
-    "resolved",
+    "investigating",
     "failed-attempts"
   ],
   "confidence": 0.93,
   "created_at": "2026-04-20",
-  "updated_at": "2026-04-20"
+  "updated_at": "2026-10-16"
 }

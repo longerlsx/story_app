@@ -107,13 +107,18 @@ internal fun StablePageReaderContent(
             systemBottomInsetPx = with(density) { insets.calculateBottomPadding().roundToPx() },
         )
         val layout = ReaderPageLayoutKey(
-            widthPx = with(density) { (maxWidth - ReaderHorizontalPadding * 2).roundToPx() },
+            widthPx = ReaderPageViewportMetricsResolver.availableWidthPx(
+                containerWidthPx = constraints.maxWidth,
+                horizontalPaddingPx = with(density) { ReaderHorizontalPadding.roundToPx() },
+            ),
             heightPx = viewport.availableHeightPx,
             density = density.density,
             fontScale = density.fontScale,
             fontSizeSp = fontSize.value.toInt(),
             lineHeightMultiplier = lineHeight.value / fontSize.value,
-            paragraphSpacingPx = with(density) { paragraphSpacing.toPx() },
+            paragraphSpacingPx = ReaderPageViewportMetricsResolver.paragraphSpacingPx(
+                with(density) { paragraphSpacing.toPx() },
+            ),
         )
         val appearance = PageAppearance(
             layout, fontSize, lineHeight, paragraphSpacing,
