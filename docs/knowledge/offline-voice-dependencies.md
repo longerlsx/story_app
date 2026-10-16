@@ -1,10 +1,10 @@
 # 离线声音依赖与资源准备
 
-本页维护生产语音资源、固定版本和可复现准备入口。产品状态与验收结论见[当前状态](../current-state.md)，接入历史见[ZipVoice实施计划](../superpowers/plans/2026-09-22-zipvoice-listening-upgrade.md)，当前性能候选见[发热改善计划](../superpowers/plans/2026-09-23-offline-listening-thermal.md)。
+本页维护生产语音资源、固定版本和可复现准备入口。产品状态与验收结论见[当前状态](../current-state.md)，接入历史见[ZipVoice实施计划](../superpowers/plans/2026-09-22-zipvoice-listening-upgrade.md)，9月23日性能候选与试验条件见[发热改善计划](../superpowers/plans/2026-09-23-offline-listening-thermal.md)。
 
 ## 当前接入选择
 
-2026-09-22按用户确认改接 **ZipVoice-Distill INT8／4步＋官方 `leijun-1` 完整参考声音**。9月23日最终试用配置为**四线程／3步／原参考首句1.930秒**，音色标识仍为 `zipvoice:leijun`，界面显示“雷军”。两步E因用户较长试听反馈部分字有滋滋声、听不清而撤回；手机最后由代理安装的仍是三步完整参考D。D有一次真机降温结果，不能套用于短参考组合，耗电和重复性也未通过完整验收。三步低于官方所列4步配置。声音仍为参考录音条件下的合成声音，不训练、不联网、不使用系统TTS。选择过程与限制见[阶段交接](2026-09-23-offline-tts-thermal-handoff.md)，不由资源配置推断温耗或音质通过。
+2026-10-16按用户要求恢复 **ZipVoice-Distill INT8／四线程／3步＋官方 `leijun-1` 完整6.057秒参考声音**。用户实际试用反馈1.930秒短参考经常失真，9月23日的短参考试用选择已撤回；失真机制尚未定位，恢复完整参考不代表所有正文音质已验收。音色标识仍为 `zipvoice:leijun`，界面显示“雷军”。两步E此前也因滋滋声、部分字听不清而撤回。三步完整参考D在9月23日有一次真机降温结果，耗电和重复性未通过完整验收，不能由本轮配置恢复改判。三步低于官方所列4步配置。声音仍为参考录音条件下的合成声音，不训练、不联网、不使用系统TTS。历史选择过程见[9月23日阶段交接](2026-09-23-offline-tts-thermal-handoff.md)，本轮交付身份和证据统一见[当前状态](../current-state.md)。
 
 APK只包含这一套模型与一个参考音色。旧 `kokoro:*` 音色设置在读取时迁移到唯一音色，引擎也不再按旧值选择不同说话人。书籍、进度和其他设置不因换音源清除。此前Kokoro FP32／INT8选择和设备记录保留在[上一轮计划](../superpowers/plans/2026-09-20-offline-listening.md)；它们不是新版包内备用音源。
 
@@ -13,8 +13,8 @@ APK只包含这一套模型与一个参考音色。旧 `kokoro:*` 音色设置�
 | 推理运行库 | sherpa-onnx Android 1.13.8，CPU，`numThreads=4`；9月23日三线程候选在1.45×真机长测未达温度／电荷目标且出现供给停顿，已撤回，见发热改善计划 |
 | 主模型 | `sherpa-onnx-zipvoice-distill-int8-zh-en-emilia` 的 encoder／decoder INT8 |
 | 声码器 | `vocos_24khz.onnx` |
-| 参考声音 | 原官方 `test_wavs/leijun-1.wav`（PCM16／24kHz／单声道／6.057秒）完整保留在APK；初始化读出后只取前46,320帧，即1.930秒，不重采样、不额外调速，与桌面试听截点一致 |
-| 参考文字 | `那还是三十六年前,`，与所取首句匹配；原完整版文字和录音身份保留在四步基线tag |
+| 参考声音 | 原官方 `test_wavs/leijun-1.wav`（PCM16／24kHz／单声道／6.057秒）随APK内置，初始化使用完整录音，不裁短、不重采样、不额外调速 |
+| 参考文字 | `那还是三十六年前, 一九八七年. 我呢考上了武汉大学的计算机系.`，与完整6.057秒录音匹配，沿用完整参考基线的文字及标点 |
 | 生成参数 | `numSteps=3`（原问题包为4，两步E已撤回）、`silenceScale=0.2`、`min_char_in_sentence=30`；模型固定自然语速1×，播放时应用用户语速与独立音调 |
 
 现有AAR提供 `OfflineTtsZipVoiceModelConfig`、`GenerationConfig`、`generateWithConfigAndCallback` 及 `WaveReader.readWave(AssetManager, path)`，不需自写WAV解码或升级运行库。[固定版本Kotlin接口](https://github.com/k2-fsa/sherpa-onnx/blob/v1.13.8/sherpa-onnx/kotlin-api/Tts.kt)
@@ -25,7 +25,7 @@ flowchart LR
     H --> A[随 APK 内置唯一声音]
     T[当前小说正文及原文位置] --> N[仅合成输入：中文数字与时刻规范化]
     N --> G[手机本地 ZipVoice 按1×合成]
-    A --> C[初始化一次取前1.930秒并匹配首句参考文字]
+    A --> C[初始化读取完整6.057秒录音及完整参考文字]
     C --> G
     G --> P[既有 AudioTrack 与播放服务]
     R[用户语速与音调] --> P
@@ -37,7 +37,7 @@ ZipVoice合成接入只替换生成与初始化；焦点暂停、实际播放完
 
 首次模拟器实播发现，同一34字测试句在模型 `speed=1` 时生成6.688秒，在 `speed=2` 时仅生成0.309秒，实际播放时长断言失败。这不是用户所需的正常倍速。官方[ONNX导出代码](https://github.com/k2-fsa/ZipVoice/blob/master/zipvoice/bin/onnx_export.py#L119-L128)按“参考＋目标”的总长度除以speed，而[sherpa 1.13.8](https://github.com/k2-fsa/sherpa-onnx/blob/v1.13.8/sherpa-onnx/csrc/offline-tts-zipvoice-model.cc#L132-L144)随后减去未缩放的参考帧。因此目标时长近似为 `(参考时长＋自然目标时长)÷speed－参考时长`；使用6.057秒参考时，这与0.309秒的实测一致。
 
-9月22日对此问题的修复是先按1×完整合成，再用Android [PlaybackParams](https://developer.android.com/reference/android/media/PlaybackParams)设置实际播放速度，音调独立设置，当时没有裁短参考或降低用户语速。当前仍保持该播放路径：语音单元保持开始时的参数快照，下一单元取最新设置；预备与取用均按1×生成参数索引，同一自然语音缓存不因改播放速度失效。9月23日裁短参考是另一个明确的生成成本／听感取舍，不替代该修复。四步完整参考的2×音频、短章尾及跨章证据见[历史实施记录](../superpowers/plans/2026-09-22-zipvoice-listening-upgrade.md#执行记录)，不能外推最终组合的真机能力。
+9月22日对此问题的修复是先按1×完整合成，再用Android [PlaybackParams](https://developer.android.com/reference/android/media/PlaybackParams)设置实际播放速度，音调独立设置，当时没有裁短参考或降低用户语速。当前仍保持该播放路径：语音单元保持开始时的参数快照，下一单元取最新设置；预备与取用均按1×生成参数索引，同一自然语音缓存不因改播放速度失效。9月23日裁短参考是另一个生成成本／听感取舍，10月16日已因用户失真反馈撤回；它不替代上述倍速修复。四步完整参考的2×音频、短章尾及跨章证据见[历史实施记录](../superpowers/plans/2026-09-22-zipvoice-listening-upgrade.md#执行记录)，不能外推当前三步配置的真机能力。
 
 ### 中文数字前端的补齐边界
 
