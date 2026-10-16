@@ -13,7 +13,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -221,5 +224,32 @@ class ReaderTtsSettingsSheetTest {
         composeRule.onNodeWithContentDescription("切换主题：暖黄").performScrollTo()
         assertFalse(composeRule.onNodeWithContentDescription("当前主题：纸白").captureToImage().toPixelMap().containsTrapColor(trap))
         assertFalse(composeRule.onNodeWithContentDescription("切换主题：暖黄").captureToImage().toPixelMap().containsTrapColor(trap))
+    }
+
+    @Test
+    fun themeSwatchAccessibilityActionUpdatesSelectionAndPreservesNightTheme() {
+        var settings by mutableStateOf(
+            ReaderSettings(dayThemePreset = ReaderThemePreset.PAPER, nightThemePreset = ReaderThemePreset.AMOLED),
+        )
+        val updates = mutableListOf<ReaderSettings>()
+        composeRule.setContent {
+            MaterialTheme {
+                ReaderSettingsSheet(settings, ReaderThemeResolver.resolveActivePalette(settings)) {
+                    settings = it
+                    updates += it
+                }
+            }
+        }
+        composeRule.onNodeWithContentDescription("当前主题：纸白").assertIsSelected().assertHasClickAction()
+        composeRule.onNodeWithContentDescription("切换主题：暖黄")
+            .performScrollTo().assertIsNotSelected().assertHasClickAction().performClick()
+
+        composeRule.onNodeWithContentDescription("当前主题：暖黄").assertIsSelected().assertHasClickAction()
+        composeRule.onNodeWithContentDescription("切换主题：纸白").assertIsNotSelected()
+        composeRule.runOnIdle {
+            assertEquals(1, updates.size)
+            assertEquals(ReaderThemePreset.SEPIA, settings.dayThemePreset)
+            assertEquals(ReaderThemePreset.AMOLED, settings.nightThemePreset)
+        }
     }
 }

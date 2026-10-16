@@ -123,6 +123,7 @@ This is mandatory for both:
 | BUG-2026-061 | ZipVoice sends unnormalized Arabic numbers in Chinese narration to its English front end | resolved | `tts`, `zipvoice`, `text-normalization`, `chinese-numbers` | [BUG-2026-061-zipvoice-chinese-numbers-use-english-front-end.json](BUG-2026-061-zipvoice-chinese-numbers-use-english-front-end.json) |
 | BUG-2026-062 | ZipVoice long listening heats Xiaomi phones and drains battery quickly | investigating | `tts`, `zipvoice`, `thermal`, `battery`, `performance` | [BUG-2026-062-zipvoice-long-listening-thermal.json](BUG-2026-062-zipvoice-long-listening-thermal.json) |
 | BUG-2026-064 | Reading progress is rejected after the wall clock moves backward | resolved | `reader`, `reading-progress`, `clock-rollback` | [BUG-2026-064-reading-progress-clock-rollback.json](BUG-2026-064-reading-progress-clock-rollback.json) |
+| BUG-2026-065 | Day/night theme changes leave stale accessibility descriptions | resolved | `reader`, `theme`, `accessibility` | [BUG-2026-065-theme-toggle-retains-stale-accessibility-nodes.json](BUG-2026-065-theme-toggle-retains-stale-accessibility-nodes.json) |
 
 ## Retrieval Hints For Future Threads
 

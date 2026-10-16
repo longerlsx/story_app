@@ -29,7 +29,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.font.FontWeight
@@ -346,11 +350,18 @@ private fun ReaderThemeSwatch(
     Surface(
         modifier = modifier
             .heightIn(min = 48.dp)
-            .semantics {
+            // Keep the description, selection and action on one accessible control.
+            .clearAndSetSemantics {
                 contentDescription = if (selected) {
                     "当前主题：${preset.label}"
                 } else {
                     "切换主题：${preset.label}"
+                }
+                this.selected = selected
+                role = Role.RadioButton
+                onClick {
+                    onClick()
+                    true
                 }
             },
         shape = RoundedCornerShape(12.dp),

@@ -1,0 +1,35 @@
+{
+  "id": "BUG-2026-065",
+  "title": "Day/night theme switching retains stale accessibility descriptions and bounds",
+  "status": "resolved",
+  "symptom": "After selecting the warm day theme and dark-gray night theme, switching back to DAY correctly restores the warm background and selection checkmark, but UiAutomator cannot find the accessibility description 当前主题：暖黄 within three seconds. The exported hierarchy still describes the first three swatches as night themes.",
+  "root_cause": "The accessibility client can retain stale theme descriptions and bounds even though the settings and rendered swatches have updated. A single UiAutomation.clearCache call restores the expected query without further UI input, confirming an update failure at the accessibility-cache boundary rather than incorrect application settings. Local Compose 1.10.4 bytecode shows that merged nodes with a content description can expose a synthetic description child whose ID is derived from its parent; the stale descriptions appeared on these non-clickable child nodes. Giving presets separate identities did not solve selection changes within the same preset group, so cross-theme identity reuse alone is not a sufficient explanation. The exact missing, delayed or undelivered invalidation event has not been independently traced.",
+  "evidence": [
+    "On 2026-10-16, the root agent observed three runs failing at the same original assertion in ReaderAppearanceToggleTest.directAppearanceToggleRemembersSeparateDayAndNightThemes: waiting for 当前主题：暖黄 after returning to DAY. The repeated failure was not dismissed as a timing flake.",
+    "The recording shows the warm background and warm-theme checkmark. The failure-time store contains appearanceMode=DAY, dayThemePreset=SEPIA and nightThemePreset=CHARCOAL. ReaderScreen's requestedSettings is an alias of selectedSettings; the swatch checkmark and content description derive from the same selected argument.",
+    "The failure-time hierarchy exports 当前主题：深灰 at [53,1913][361,2116], 切换主题：墨蓝 at [387,1913][694,2116], and 切换主题：纯黑 at [720,1913][1027,2116], retaining the previous approximately 308-pixel-wide night slots. Its fourth description is the newly added 切换主题：淡蓝 at [803,1913][1027,2116], using the correct 224-pixel-wide day slot. The temporary appearance-probe.txt log under /private/tmp/story-app-experience-20261016 captured this mixed hierarchy and store state; it is not a permanent repository artifact.",
+    "After the original failed query, the root agent called UiAutomation.clearCache once. With no further click or sleep, the same query immediately returned afterClear=true. The local Android SDK marks this public method as available from API 34; its implementation clears the connection's accessibility cache without changing the app state or layout.",
+    "Local UiAutomator 2.3.0 bytecode shows hasObject/findObject obtaining window roots and traversing accessibility nodes without clearing the accessibility cache on each query. Extending the wait alone therefore does not establish that the stale nodes will refresh.",
+    "With key(preset) added, the original test still failed at the earlier night-selection assertion. A follow-up broader query already listed the expected description, so the stale export was not necessarily permanent; replacing only cross-theme identities was insufficient.",
+    "On 2026-10-16, the single-node implementation passed the original ReaderAppearanceToggleTest.directAppearanceToggleRemembersSeparateDayAndNightThemes without added delays or cache clearing, and ReaderTtsSettingsSheetTest.themeSwatchAccessibilityActionUpdatesSelectionAndPreservesNightTheme also passed: two device tests in 12.96 seconds, recorded in the temporary semantics-green.txt log. The root agent also confirmed the full 347-test JVM suite, lint and build succeeded."
+  ],
+  "fix": [
+    "Remove the unsuccessful key(preset) change. Use clearAndSetSemantics on each ReaderThemeSwatch to expose one control containing its existing dynamic content description, selected state, RadioButton role and accessibility click action. Keep the Surface's normal touch action. Local SemanticsNode.getReplacedChildren returns no descendants for clearing semantics, avoiding a separate synthetic description child.",
+    "Keep theme selection, persistence, layout, descriptions and the original ReaderAppearanceToggleTest assertions unchanged. Remove the temporary failure diagnostics and cache-clearing probe; cache clearing remains diagnostic evidence, not a product or test workaround.",
+    "Add ReaderTtsSettingsSheetTest.themeSwatchAccessibilityActionUpdatesSelectionAndPreservesNightTheme using the real settings component. It invokes the theme's semantic click action, checks the old and new selected states, verifies exactly one settings update, and confirms the day preset changes while the night preset is preserved."
+  ],
+  "validation": {
+    "red": "Confirmed: three same-point failures, correct visual and stored state, mixed stale/new exported nodes, and immediate query recovery after one diagnostic cache clear. The key(preset) attempt also failed on the earlier night-selection assertion.",
+    "green": "Confirmed on 2026-10-16: the unchanged original appearance regression and the new real-component semantic-action regression both passed in 12.96 seconds, without added delays or diagnostic cache clearing. Full JVM suite: 347 tests passed; lint and build succeeded.",
+    "scope": "Evidence covers the normal reader UI and its UiAutomation accessibility export on the tested device environment. TalkBack was not exercised, and no claim is made that all accessibility services or Android versions exhibit the same behavior."
+  },
+  "failed_attempts": [
+    "Adding key(preset) did not make the original regression pass: it failed while selecting 深灰 within the night preset group. The change was removed instead of stacking another identity workaround.",
+    "Adding selected semantics alone was not adopted as a cache fix. Local Compose emits parent-node state/content property events, and the local Android AccessibilityCache clears a subtree only for a SUBTREE change; those property events do not establish that the synthetic description child is invalidated."
+  ],
+  "impact": "The covered day/night theme sequence now exposes the expected selection descriptions through UiAutomation. The real component also preserves its accessibility click action, updates selection once and leaves the inactive appearance's preset unchanged. TalkBack behavior and other device environments have not been tested.",
+  "tags": ["android", "compose", "reader", "settings", "theme", "accessibility", "uiautomator", "resolved"],
+  "confidence": 0.97,
+  "created_at": "2026-10-16",
+  "updated_at": "2026-10-16"
+}
