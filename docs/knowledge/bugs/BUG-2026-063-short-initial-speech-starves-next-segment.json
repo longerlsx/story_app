@@ -21,12 +21,20 @@
     "The candidate uses raw PCM in timestamp-preserving Matroska rather than concatenated PCM. A calibration with an intentional 5.063-second pause followed by 2.649 seconds of resume generation corresponds approximately to a 7.5575-second recorded idle interval, confirming that this capture retains real idle time. Earlier FLAC capture timestamps have jitter and are excluded from the final B audio evidence; sample concatenation or silently rewriting timestamps must not be used to hide gaps.",
     "A second complete short cold-start recording, /private/tmp/story-app-experience-20261016/startup-cancel-controls.mka, has no internal low-level interval of at least 0.6 seconds across actual speech at 24.069-55.106 seconds. Its filename is historical: this recording contains uninterrupted complete playback, not cancellation-control evidence.",
     "Separate formal buffer controls are evidenced by buffer-pause-logcat and buffer-stop-logcat in /private/tmp/story-app-experience-20261016: the user taps pause 86ms and stop 146ms after successor synthesis begins. After eight seconds the respective UI states remain paused and stopped, without spontaneous playback. The separate buffer-controls.mka capture spans 85.99 seconds with a maximum level of -91dB and contains no emitted speech. This covers actual preparation cancellation in addition to the fake-service regressions.",
-    "Fixed representative samples and the separate fifteen-minute formal UI recording are still in progress at this defect's closure. Subjective speech quality has not been listened to and accepted in this task; preserving model parameters does not establish quality acceptance. These broader checks are not included in this resolved short-initial-unit supply conclusion.",
+    "The user listened to both formal fixed representative recordings at 1x and 1.45x and confirmed no obvious sound defects on 2026-10-16. This passes subjective quality for those fixed samples, not arbitrary text. The 1x recording separately contains a 0.923208-second handoff gap under investigation; its successor PCM was already ready. The fifteen-minute formal run is being verified separately. These broader checks do not change the resolved short-initial-unit supply scope.",
     "This record belongs to the approved 2026-10-16 experience-stability work. The main execution evidence and eventual candidate identity are maintained in docs/superpowers/plans/2026-10-16-app-experience-stability.md; BUG-2026-056 covers the earlier steady short-tail lookahead defect, and BUG-2026-062 retains the separate real-device thermal and sustained-throughput limits."
   ],
   "failed_attempts": [],
   "impact": "Resolved within the measured short-initial-unit supply scope: normal-entry candidate recordings and generation/playback timing show the successor ready before the short head starts, removing the baseline 2.849771-second generation wait; actual buffering-period pause and stop do not later emit speech. Startup buffering exchanges some initial waiting for continuity and cannot make fixed generation cost disappear. The status does not close the overall experience audit or establish fixed-sample and fifteen-minute acceptance, sustained performance on arbitrary text, hot-state or physical-phone behavior, battery/temperature improvement, or subjective voice quality.",
-  "tags": ["android", "tts", "zipvoice", "audio-preparation", "cold-start", "chapter-boundary", "resolved"],
+  "tags": [
+    "android",
+    "tts",
+    "zipvoice",
+    "audio-preparation",
+    "cold-start",
+    "chapter-boundary",
+    "resolved"
+  ],
   "confidence": 0.99,
   "created_at": "2026-10-16",
   "updated_at": "2026-10-16"

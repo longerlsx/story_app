@@ -208,6 +208,7 @@ class OfflineReaderTtsEngine(
             Log.i(TAG, "$event utterance=$utteranceId chapter=${segment.chapterIndex} offset=${segment.startCharOffset} chars=${segment.spokenText.length} elapsedRealtime=${SystemClock.elapsedRealtime()}")
         }
         try {
+            logPlayback("trackBuilt")
             synchronized(audioLock) {
                 ensureCurrent(generation)
                 check(track.state == AudioTrack.STATE_INITIALIZED) { "无法打开音频输出，请重试" }
@@ -282,6 +283,7 @@ class OfflineReaderTtsEngine(
                 track.flush()
                 track.release()
             }
+            logPlayback("trackReleased")
         }
     }
 

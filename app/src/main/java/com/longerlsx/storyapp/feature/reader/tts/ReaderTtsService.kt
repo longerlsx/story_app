@@ -414,6 +414,7 @@ class ReaderTtsService : Service(), ReaderTtsEngine.Callback {
             val token = playbackToken
             try {
                 val completed = activeQueue.getOrNull(activeQueueIndex) ?: return@launch
+                Log.i(TAG, "completionStart utterance=$utteranceId chapter=${completed.segment.chapterIndex} offset=${completed.segment.startCharOffset} elapsedRealtime=${SystemClock.elapsedRealtime()}")
                 pausedResumeLocation = ReaderTextStartLocation(completed.segment.chapterIndex, completed.segment.endCharOffset)
                 controller.updatePlaybackSnapshot(
                     controller.playbackSnapshot.copy(
@@ -424,6 +425,7 @@ class ReaderTtsService : Service(), ReaderTtsEngine.Callback {
                 withTimeout(PREPARATION_TIMEOUT_MILLIS) {
                     persistLocation(completed, completed.segment.endCharOffset)
                 }
+                Log.i(TAG, "progressSaved utterance=$utteranceId chapter=${completed.segment.chapterIndex} offset=${completed.segment.startCharOffset} nextOffset=${completed.segment.endCharOffset} elapsedRealtime=${SystemClock.elapsedRealtime()}")
                 // Notification time must neither count as preparation timeout nor start a new unit.
                 awaitRetainedAudioFocus(token)
                 activeQueueIndex++
