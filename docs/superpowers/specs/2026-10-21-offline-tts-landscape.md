@@ -77,7 +77,7 @@ flowchart LR
 
 进一步追查发现，Matcha并非只能搭较大的Vocos：官方还列出HiFiGAN v1／v2／v3，发布资产中的v2约3.75MB、v3约5.86MB。这是值得核验的组合方向，但没有查到它们配中文Baker后的可靠音质／手机温耗对照，**不能把原配0.391的RTF移给新组合，也不能从小文件推定低计算**。[官方搭配说明](https://k2-fsa.github.io/sherpa/onnx/tts/pretrained_models/matcha.html#matcha-icefall-zh-baker-chinese-1-female-speaker)、[声码器发布资产](https://github.com/k2-fsa/sherpa-onnx/releases/tag/vocoder-models)。
 
-小型AISHELL3本轮核到的发布权重仍是8kHz，没有找到同系列已发布的16／22.05kHz轻量中文升级。旧121MB／INT8约39.9MB AISHELL3也仍是8kHz；`fanchen-wnj`虽有明确男声和16kHz，计算证据又不占优。174声的原始名单存在，但本轮未建立可靠SID→性别映射，不猜测男声编号。[旧AISHELL3](https://huggingface.co/csukuangfj/vits-zh-aishell3/tree/main)、[小模型speaker名单](https://huggingface.co/csukuangfj/icefall-tts-aishell3-vits-low-2024-04-06/blob/main/data/speakers.txt)。
+小型AISHELL3本轮核到的发布权重仍是8kHz，没有找到同系列已发布的16／22.05kHz轻量中文升级。旧121MB／INT8约39.9MB AISHELL3也仍是8kHz；`fanchen-wnj`虽有明确男声和16kHz，计算证据又不占优。174声的原始名单存在；首次调查未建立可靠SID→性别映射，随后公开样音筛选已补齐两个男声，见第10节。[旧AISHELL3](https://huggingface.co/csukuangfj/vits-zh-aishell3/tree/main)、[小模型speaker名单](https://huggingface.co/csukuangfj/icefall-tts-aishell3-vits-low-2024-04-06/blob/main/data/speakers.txt)。
 
 有一个跨项目的佐证但不能拿来给中文排序：VoicePing 作者公开了 Galaxy S10／四线程的英文测试，Piper低规格模型明显快于所测Kokoro，且INT8 Kokoro更慢；全部模型“PASS”只指未崩溃／OOM，并不表示实时、声音好或低热。它支持优先考察轻量架构，也再次否定“量化必定更快”。[作者测试与代码入口](https://voiceping.net/zh/blog/research-offline-tts-eval/)。
 
@@ -165,3 +165,24 @@ sherpa v1.13.8的中文词典路线存在词典外字符忽略等分支，`Chara
 4. **系统离线声音只作明确的产品取舍。** 它可能最快得到用户熟悉的体验，但改变独立打包与声音选择边界；商业SDK同理，不把收费或在线激活悄悄带进当前免费离线目标。
 
 值得投入的是一轮有淘汰标准的音源比较，以及必要的播放诊断；目前证据不支持再做一轮全App大重构来解决发热。研究结论是“已有更匹配的技术路线”，尚不是“某模型已经在两台手机上解决问题”。
+
+## 10. 10月21日公开样音初筛
+
+用户选择先听公开中文样音、男声优先，听感可接受后再做手机验证；本阶段不接入App、不安装或运行新引擎。以下均为发布方的合成演示，尚无用户偏好结论，也不等于正式小说与1.45×听书验收。原始音频保留在发布方地址，本轮没有下载、拼接、调速或修饰声音。
+
+| 编号 | 具体声音 | 试听 | 身份与用途 |
+| --- | --- | --- | --- |
+| A | icefall AISHELL3，SID 21 | [官方WAV，约6.94秒](https://k2-fsa.github.io/sherpa/_static/vits-zh-aishell3/liubei-21.wav) | 男声，SSB0241；8kHz，默认1×。先判断能否接受音色，短句不能代表长篇稳定性 |
+| B | icefall AISHELL3，SID 10 | [官方WAV，约3.36秒](https://k2-fsa.github.io/sherpa/_static/vits-zh-aishell3/liliana-10.wav) | 男声，SSB0073；同一轻量模型的另一声音 |
+| C | Piper 超文，chaowen-medium | [sherpa同文MP3，约34.20秒](https://k2-fsa.github.io/sherpa/onnx/tts/all/piper/mp3/zh_CN/vits-piper-zh_CN-chaowen-medium/0.mp3) | 22.05kHz；新增固定中文声音候选，原模型卡未标性别，不凭名字确认。与D/E读相同正文 |
+| D | Piper 小雅，xiao_ya-medium | [sherpa同文MP3，约35.11秒](https://k2-fsa.github.io/sherpa/onnx/tts/all/piper/mp3/zh_CN/vits-piper-zh_CN-xiao_ya-medium/0.mp3) | 女声，22.05kHz，来源为标贝标准女声语料 |
+| E | Matcha icefall Baker | [官方MP3，约33.64秒](https://k2-fsa.github.io/sherpa/onnx/tts/all/matcha/icefall-zh/mp3/0.mp3) | 女声，22.05kHz；页面示例为三步＋Vocos，不能当作小HiFiGAN组合的听感 |
+| F | Bert-VITS2-MNN，22娘 | [作者媒体附件](https://github.com/user-attachments/assets/fd6cc25c-79ca-42fc-a60a-352d8f99e437)／[作者样音表](https://github.com/Voine/Bert-VITS2-MNN#-示例音频) | 女角色，22.05kHz，中英混合短句。作者Android工程样例，没有逐段构建与量化身份，不宣称等同当前29.7MB构建 |
+
+补齐首次调查的男声身份缺口：A/B的SID由[有序speaker列表](https://huggingface.co/csukuangfj/icefall-tts-aishell3-vits-low-2024-04-06/blob/main/data/speakers.txt)对应[原始性别表](https://huggingface.co/datasets/AISHELL/AISHELL-3/blob/main/spk-info.txt)。[官方生成命令及播放器](https://k2-fsa.github.io/sherpa/onnx/tts/pretrained_models/vits.html#aishell3-chinese-multi-speaker-174-speakers)明确使用29MiB icefall；音频虽保留旧目录名，[2024-03-26更新](https://github.com/k2-fsa/sherpa/commit/f01690b236284acc83643eef06017cf8a7ee5ebc)同时替换了模型说明及两份WAV，故不是仅改文字、沿用旧121MB录音。
+
+C/D/E的[超文页面](https://k2-fsa.github.io/sherpa/onnx/tts/all/Chinese/vits-piper-zh_CN-chaowen-medium.html#samples)、[小雅页面](https://k2-fsa.github.io/sherpa/onnx/tts/all/Chinese/vits-piper-zh_CN-xiao_ya-medium.html#samples)、[Matcha页面](https://k2-fsa.github.io/sherpa/onnx/tts/all/Chinese/matcha-icefall-zh-baker.html#samples)都给出原文与默认speed=1.0；包含多音字、数字和后半段叙述。A–E已在官方页面浏览器播放器读取到有效时长、readyState=4且无媒体错误，这只验证载入，不替代用户核听。
+
+补充可比音色：Piper官方“彩虹”同文样音还有[huayan medium／22.05kHz](https://rhasspy.github.io/piper-samples/samples/zh/zh_CN/huayan/medium/speaker_0.mp3)和[huayan x_low／16kHz](https://rhasspy.github.io/piper-samples/samples/zh/zh_CN/huayan/x_low/speaker_0.mp3)，浏览器载入时长分别19.15／19.54秒。它们是同一音色不同模型档位，原模型卡未确认性别；x_low仅作为新增声音比较，不因名字就认定能耗合格。[Piper官方来源](https://rhasspy.github.io/piper-samples/)、[小雅声源说明](https://www.data-baker.com/open_source.html)。
+
+Bert-VITS2-MNN此次未找到可确认的中文男声现成样音；其余公开中文角色多为44.1kHz，不混入22kHz轻量配置对比。ChineseTtsTflite没有找到与其Android量化组合对应的可交付公开样音，不用其他桌面构建冒充。后续只将用户认为可接受的声音推进到更长的同文及手机验证。
