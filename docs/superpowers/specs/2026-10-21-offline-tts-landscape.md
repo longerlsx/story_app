@@ -168,7 +168,7 @@ sherpa v1.13.8的中文词典路线存在词典外字符忽略等分支，`Chara
 
 ## 10. 10月21日公开样音初筛
 
-用户选择先听公开中文样音、男声优先，听感可接受后再做手机验证；本阶段不接入App、不安装或运行新引擎。以下均为发布方的合成演示，尚无用户偏好结论，也不等于正式小说与1.45×听书验收。原始音频保留在发布方地址，没有下载、拼接或修改文件；按后续要求增加浏览器1.45×保留音高播放，与原速逐份对比。
+用户选择先听公开中文样音、男声优先，听感可接受后再做手机验证；本阶段不接入App、不安装或运行新引擎。以下均为发布方的合成演示；后续用户已明确认可C「超文」，没有分别给出两档速度或其余音色的验收结论，不等于正式小说与1.45×听书验收。原始音频保留在发布方地址，没有下载、拼接或修改文件；按后续要求增加浏览器1.45×保留音高播放，与原速逐份对比。
 
 | 编号 | 具体声音 | 试听 | 身份与用途 |
 | --- | --- | --- | --- |
@@ -199,3 +199,62 @@ Bert-VITS2-MNN此次未找到可确认的中文男声现成样音；其余公开
 - AISHELL3此前因8kHz带宽取舍未作为默认升级方向，但没有找到SID21／10的既往用户试听结论；C–F也未找到此前具体淘汰记录。旧记录不能还原用户所指全部名单，本轮不把“未找到记录”写为“从未听过”。
 
 集中页验证：A–E此前在发布方页面已确认有效时长、`readyState=4`且无媒体错误；F在集中页确认5.201秒、`readyState=4`和实际播放进度。已启动连续播放，观察到A自动由原速进入1.45×且播放进度推进；页面布局及暂停状态正常。以上只证明载入与播放器行为，不替代用户听感结论，不证明所有候选均无声音缺陷。
+
+用户随后反馈网页卡顿并要求停止：本机HTTP服务已收到中断并正常退出，浏览器会话标签列表为空。页面只播放发布方录音，没有运行Piper推理；没有据此归因卡顿原因或判断模型的手机开销。静态HTML和预览保留，未经新要求不重启服务。
+
+## 11. Piper定向调查：超文、现成音色与训练边界
+
+### 当前结论
+
+用户明确认可的是**C「超文」**，不是泛指所有Piper声音。它应成为下一步的第一候选：**现成权重已训练完成，使用和更换现成音色都不要求我们重新训练。** 本轮继续只读调查官方目录、模型卡、社区仓库和固定版本源码，没有安装、下载模型、合成、训练或手机操作。
+
+### 官方中文声音有多少
+
+当前[OHF声音入口](https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/VOICES.md)仍指向[rhasspy中文目录](https://huggingface.co/rhasspy/piper-voices/tree/main/zh/zh_CN)。按[声音索引](https://huggingface.co/rhasspy/piper-voices/blob/main/voices.json)，是**3个命名音色、4个模型，全部单说话人**，不是几百种中文声音。大小为原版主ONNX文件十进制MB，不能等同APK、运行内存或耗电。
+
+| 现成模型 | 采样率／主模型 | 对本项目的用途 |
+| --- | --- | --- |
+| `zh_CN-chaowen-medium` 超文 | 22.05kHz／63.2MB | 用户认可的C；首选继续核查。原始资料未明确性别，不用第三方标签补造身份 |
+| `zh_CN-xiao_ya-medium` 小雅 | 22.05kHz／63.2MB | 已听D；单女声，用户此次没有选择它 |
+| `zh_CN-huayan-medium` | 22.05kHz／63.2MB | 另一命名音色；目前没有用户试听结论 |
+| `zh_CN-huayan-x_low` | 16kHz／20.6MB | 与上一项同名声音的低档模型，不能当成第四种独立音色 |
+
+超文`num_speakers=1`且`speaker_id_map`为空，只有默认说话人。想从超文切到小雅，需要切换整套声音模型；修改超文的SID不会产生新声音。[超文模型卡](https://github.com/rhasspy/piper-samples/blob/master/samples/zh/zh_CN/chaowen/medium/MODEL_CARD)说明它由小雅medium微调而来，**作者已经完成这项训练**，并非每个使用者都必须重做。超文原始声音数据来自[OHF众包数据](https://github.com/OHF-Voice/voice-datasets)，数据许可写为CC0；运行时代码与其他模型分别看各自许可，不能把CC0概括成整个APK的许可。原始资料没有确认发音人性别，维护者身份也不等于发音人身份。
+
+### 哪些事不需要训练
+
+| 目标 | 需要做什么 |
+| --- | --- |
+| 使用超文或另一个现成Piper音色 | 取得已发布权重和配套配置／前端；无需训练，也无需参考录音 |
+| 切换多说话人模型内已有声音 | 选择该模型已有SID；无需为每个SID训练 |
+| 调整语速、音量和生成变化程度 | 调推理或播放参数；无需训练，但不会凭空变成另一个说话人 |
+| 修正明确的字词读法、数字和分句 | 先处理词典、文本规范化或分段；通常不需要重训声学模型 |
+| 做现成资源中没有的指定音色 | 寻找已训练版本；确实不存在时，才考虑带文本的录音数据和微调／训练，再导出部署模型 |
+
+原生Piper声音通常由`.onnx`和配套`.onnx.json`组成；自定义训练需要录音与文本对应关系，官方建议从已有checkpoint微调。当前标准固定音色路径不是给几秒参考录音就能克隆任意声音。[使用说明](https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/VOICES.md)、[参数说明](https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/API_PYTHON.md)、[训练与多说话人说明](https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/TRAINING.md)
+
+### 与当前App最接近的路线
+
+用户认可的C来自**sherpa版超文样音**。[同一官方页面](https://k2-fsa.github.io/sherpa/onnx/tts/all/Chinese/vits-piper-zh_CN-chaowen-medium.html)已有重打包资源、Kotlin例子和sherpa-onnx 1.13.8 Android包；项目当前版本已包含VITS接口，不必为了试超文先升级整个推理库。未来优先复用这套包和前端，保留现有正式分段、预取与播放流程；本轮没有实施替换。
+
+这套资源包括模型、`tokens.txt`、`lexicon.txt`及电话／日期／数字三个FST。sherpa的VITS接口不直接读取任意原版Piper JSON；其[适配脚本](https://github.com/k2-fsa/sherpa-onnx/blob/v1.13.8/scripts/piper/add_meta_data.py)补元数据和音素表，属于部署适配而非训练。现成官方重包可避免重复处理。
+
+固定1.13.8的`has_g2pw`标记实际选用`CharacterLexicon`词典及短语匹配，**没有在手机加载G2PW神经网络**；词语未命中会拆字，完全未命中内容存在忽略分支。因此人名、生僻字、多音字、英文与数字仍要用小说验证。原生OHF Piper的拼音前端会调用G2PW，两者不能因模型同名就当作读法完全相同。[前端选择](https://github.com/k2-fsa/sherpa-onnx/blob/v1.13.8/sherpa-onnx/csrc/offline-tts-vits-impl.h#L374)、[词典实现](https://github.com/k2-fsa/sherpa-onnx/blob/v1.13.8/sherpa-onnx/csrc/character-lexicon.cc#L150)、[原生中文前端](https://github.com/OHF-Voice/piper1-gpl/blob/main/src/piper/phonemize_chinese.py)
+
+Piper支持原生`speed=1.45`，固定实现使用`length_scale=1/speed`，值得和“1×合成后1.45×播放”比较。若采用原生加速，播放端不能再重复乘1.45（会约成2.10×），预取时长与缓存身份也必须对应实际语速。这里只是后续实验设计；尚未证明原生倍速听感通过或节电，不能沿用ZipVoice特定截断机制替它下结论。[固定推理实现](https://github.com/k2-fsa/sherpa-onnx/blob/v1.13.8/sherpa-onnx/csrc/offline-tts-vits-model.cc#L212)
+
+### 社区174说话人资源：有权重，尚无公开试听
+
+找到[writeAPoemForYou/piper-voices-zh-AISHELL-3](https://huggingface.co/writeAPoemForYou/piper-voices-zh-AISHELL-3)：作者已发布标准Piper ONNX及配置，22.05kHz、medium、174个说话人。文件元数据确认主ONNX为77,639,618字节（77.64MB），配套JSON为6,338字节；不是只有训练代码的空壳项目。使用这些已有声音不需要重新训练，但尚未执行推理或检验Android适配。
+
+它与之前8kHz icefall模型使用同一AISHELL-3语料体系，却是不同权重和前端；**不是174个全新发音人，也不能沿用旧模型的SID或用旧样音代表新模型**。[实际配置](https://huggingface.co/writeAPoemForYou/piper-voices-zh-AISHELL-3/resolve/main/zh/zh_CN/cn_aishell3/medium/zh_CN-cn_aishell3-medium.onnx.json)与[原始性别表](https://huggingface.co/datasets/AISHELL/AISHELL-3/blob/main/spk-info.txt)可对应这些男声：SID20=SSB0710、SID49=SSB0073、SID93=SSB0241。例如SSB0073在之前icefall模型中是SID10，这里是49。
+
+作者模型库、checkpoint库的文件清单没有音频，模型卡和定向检索也未找到可直接交付的公开样音。若以后要比较，需用该模型生成少量样本；当前不能说这些男声已经好听或与超文相似。作者标注模型Apache-2.0，数据集与运行代码仍分别记录各自许可。
+
+标准配置是`phoneme_type=pinyin`，由当前OHF Piper的G2PW前端处理；官方另有[约113MB的G2PW压缩资源](https://huggingface.co/datasets/rhasspy/piper-checkpoints/tree/main/zh/zh_CN/_resources)。离线部署需预先备齐，不能让首次朗读临时联网获取，也不能仅拿77.64MB声学文件宣称整条链路很轻。若改用sherpa词典前端，还须验证元数据、音素ID与实际读法一致；这种适配通常不需重训，却不能未经验证当成即插即用。
+
+### 相近分支与投入顺序
+
+另核查了[Piper Plus](https://github.com/ayutaz/piper-plus)及其[预训练资源](https://github.com/ayutaz/piper-plus/blob/dev/docs/guides/development/pretrained-models.md)。有能读中文的固定声音与公开权重，但作者明确说明其音素体系／结构与标准Piper不兼容，不能直接当作超文的更多可替换音色。其公开实验基线仍有噪声和声音迁移限制，先保留为备用，不挤占超文验证。社区聚合目录的数千说话人是多语言总数，不是中文可用人数。
+
+建议顺序是：**现成超文维持默认参数并确认较长小说读法 → 少量现成中文男声备选 → 只对听感合格者做手机温耗比较**。暂不投入自训练。固定音色路径无需ZipVoice参考条件与三步迭代，结构上有降低计算的理由；仍没有超文在15 Ultra／17 Pro、1.45×长听的有效温耗证据，不能承诺不发热。现有被撤回的旧音源及配置继续排除。
