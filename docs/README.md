@@ -14,6 +14,7 @@
 | 导入/标题/章节切分 | 当前状态中的解析说明 → `ImportCoordinator` / `ChapterParser` 及其测试 |
 | 翻页/滚动/目录/设置 | 当前状态中的交互表 → `ReaderScreen` 及对应组件、定位和分页逻辑 |
 | 听书/音色 | 当前状态中的离线听书 → `ReaderTtsService` / `OfflineReaderTtsEngine`；资源准备见[离线声音依赖](knowledge/offline-voice-dependencies.md) |
+| 继续研究离线朗读、低计算及发热替代路线 | [10月21日离线TTS调查](superpowers/specs/2026-10-21-offline-tts-landscape.md)：中文模型、真实阅读器实现、移动端运行时与NPU、行业离线SDK；这是可行性报告，不是已经选定或验收的替代引擎 |
 | 接续9月23日发热优化 | 先看[当前状态](current-state.md)：10月16日因短参考失真反馈恢复三步完整参考；[历史阶段交接](knowledge/2026-09-23-offline-tts-thermal-handoff.md)保存全部已试路线、真实温耗边界与当时试用交付，详细过程再读其链接计划 |
 | 构建、设备、语料与验证工具 | [项目 README](../README.md)、[环境与验证操作说明](knowledge/gradle-android-environment-troubleshooting.md) |
 | 查询历史决定 | [开发历史](knowledge/2026-04-android-reader-development-cycle.md)，需要时再读 `superpowers/specs` / `superpowers/plans` |
