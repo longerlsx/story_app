@@ -168,7 +168,7 @@ sherpa v1.13.8的中文词典路线存在词典外字符忽略等分支，`Chara
 
 ## 10. 10月21日公开样音初筛
 
-用户选择先听公开中文样音、男声优先，听感可接受后再做手机验证；本阶段不接入App、不安装或运行新引擎。以下均为发布方的合成演示，尚无用户偏好结论，也不等于正式小说与1.45×听书验收。原始音频保留在发布方地址，本轮没有下载、拼接、调速或修饰声音。
+用户选择先听公开中文样音、男声优先，听感可接受后再做手机验证；本阶段不接入App、不安装或运行新引擎。以下均为发布方的合成演示，尚无用户偏好结论，也不等于正式小说与1.45×听书验收。原始音频保留在发布方地址，没有下载、拼接或修改文件；按后续要求增加浏览器1.45×保留音高播放，与原速逐份对比。
 
 | 编号 | 具体声音 | 试听 | 身份与用途 |
 | --- | --- | --- | --- |
@@ -186,3 +186,16 @@ C/D/E的[超文页面](https://k2-fsa.github.io/sherpa/onnx/tts/all/Chinese/vits
 补充可比音色：Piper官方“彩虹”同文样音还有[huayan medium／22.05kHz](https://rhasspy.github.io/piper-samples/samples/zh/zh_CN/huayan/medium/speaker_0.mp3)和[huayan x_low／16kHz](https://rhasspy.github.io/piper-samples/samples/zh/zh_CN/huayan/x_low/speaker_0.mp3)，浏览器载入时长分别19.15／19.54秒。它们是同一音色不同模型档位，原模型卡未确认性别；x_low仅作为新增声音比较，不因名字就认定能耗合格。[Piper官方来源](https://rhasspy.github.io/piper-samples/)、[小雅声源说明](https://www.data-baker.com/open_source.html)。
 
 Bert-VITS2-MNN此次未找到可确认的中文男声现成样音；其余公开中文角色多为44.1kHz，不混入22kHz轻量配置对比。ChineseTtsTflite没有找到与其Android量化组合对应的可交付公开样音，不用其他桌面构建冒充。后续只将用户认为可接受的声音推进到更长的同文及手机验证。
+
+### 集中试听与历史排除
+
+按用户要求制作[集中试听页](../../../app/build/outputs/voice-audition-20261021/index.html)，顺序A→F，每份先原速、再1.45×；可暂停、跳过或单独重听。只保留一个播放器，倍速采用浏览器`playbackRate=1.45`及`preservesPitch=true`，不调用模型。该页加载发布方音频需要网络，不是离线能力验收；静态HTML可重开，临时本机HTTP服务终止后需重新启动。
+
+此次补核历史资料，明确区分“听感撤回”与“没有选用”：
+
+- **Kokoro旧音色不再放入。** 曾有男声断句、口音及语感不自然的反馈，后续用户选择ZipVoice替换全部旧音色；没有逐SID的完整淘汰记录。[9月21日研究](2026-09-21-chinese-tts-quality-research.md)、[9月22日选择](2026-09-22-listening-controls-and-voice.md)
+- **VITS fanchen-wnj SID0不再放入。** 已提供过约56.1秒真实小说同文试听，后续选择ZipVoice；文档没有单独记录该音色“难听”，不能补造评价。A/B属于不同的icefall AISHELL3模型，不是该旧样音换名。[旧同文试听](2026-09-21-chinese-tts-quality-research.md#真实小说同文试听)
+- **ZipVoice两步与三步短参考不再放入。** 前者因噪声、部分字不清撤回，后者因实际使用频繁失真撤回。[发热计划](../plans/2026-09-23-offline-listening-thermal.md)、[声音依赖](../../knowledge/offline-voice-dependencies.md)
+- AISHELL3此前因8kHz带宽取舍未作为默认升级方向，但没有找到SID21／10的既往用户试听结论；C–F也未找到此前具体淘汰记录。旧记录不能还原用户所指全部名单，本轮不把“未找到记录”写为“从未听过”。
+
+集中页验证：A–E此前在发布方页面已确认有效时长、`readyState=4`且无媒体错误；F在集中页确认5.201秒、`readyState=4`和实际播放进度。已启动连续播放，观察到A自动由原速进入1.45×且播放进度推进；页面布局及暂停状态正常。以上只证明载入与播放器行为，不替代用户听感结论，不证明所有候选均无声音缺陷。
