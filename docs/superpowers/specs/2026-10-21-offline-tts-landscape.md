@@ -168,7 +168,7 @@ sherpa v1.13.8的中文词典路线存在词典外字符忽略等分支，`Chara
 
 ## 10. 10月21日公开样音初筛
 
-用户选择先听公开中文样音、男声优先，听感可接受后再做手机验证；本阶段不接入App、不安装或运行新引擎。以下均为发布方的合成演示；后续用户已明确认可C「超文」，没有分别给出两档速度或其余音色的验收结论，不等于正式小说与1.45×听书验收。原始音频保留在发布方地址，没有下载、拼接或修改文件；按后续要求增加浏览器1.45×保留音高播放，与原速逐份对比。
+用户选择先听公开中文样音、男声优先，听感可接受后再做手机验证；本阶段不接入App、不安装或运行新引擎。以下均为发布方的合成演示；用户当时认可C「超文」，之后分享后的原速喉音反馈改变了后续排序，见第12节；均不等于正式小说与1.45×听书验收。此阶段只播放发布方音频、增加浏览器1.45×保留音高播放；随后按用户要求另存超文两档本地文件，见第12节。
 
 | 编号 | 具体声音 | 试听 | 身份与用途 |
 | --- | --- | --- | --- |
@@ -206,7 +206,7 @@ Bert-VITS2-MNN此次未找到可确认的中文男声现成样音；其余公开
 
 ### 当前结论
 
-用户明确认可的是**C「超文」**，不是泛指所有Piper声音。它应成为下一步的第一候选：**现成权重已训练完成，使用和更换现成音色都不要求我们重新训练。** 本轮继续只读调查官方目录、模型卡、社区仓库和固定版本源码，没有安装、下载模型、合成、训练或手机操作。
+用户最初明确认可的是**C「超文」**，因此完成以下定向调查；随后朋友的原速喉音反馈使它暂不定选，最新排序见第12节。**现成权重已训练完成，使用和更换现成音色都不要求我们重新训练。** 本节调查没有安装、合成、训练或手机操作。
 
 ### 官方中文声音有多少
 
@@ -214,7 +214,7 @@ Bert-VITS2-MNN此次未找到可确认的中文男声现成样音；其余公开
 
 | 现成模型 | 采样率／主模型 | 对本项目的用途 |
 | --- | --- | --- |
-| `zh_CN-chaowen-medium` 超文 | 22.05kHz／63.2MB | 用户认可的C；首选继续核查。原始资料未明确性别，不用第三方标签补造身份 |
+| `zh_CN-chaowen-medium` 超文 | 22.05kHz／63.2MB | 用户最初认可的C；后续喉音反馈使它暂不定选。原始资料未明确性别，不用第三方标签补造身份 |
 | `zh_CN-xiao_ya-medium` 小雅 | 22.05kHz／63.2MB | 已听D；单女声，用户此次没有选择它 |
 | `zh_CN-huayan-medium` | 22.05kHz／63.2MB | 另一命名音色；目前没有用户试听结论 |
 | `zh_CN-huayan-x_low` | 16kHz／20.6MB | 与上一项同名声音的低档模型，不能当成第四种独立音色 |
@@ -239,7 +239,7 @@ Bert-VITS2-MNN此次未找到可确认的中文男声现成样音；其余公开
 
 这套资源包括模型、`tokens.txt`、`lexicon.txt`及电话／日期／数字三个FST。sherpa的VITS接口不直接读取任意原版Piper JSON；其[适配脚本](https://github.com/k2-fsa/sherpa-onnx/blob/v1.13.8/scripts/piper/add_meta_data.py)补元数据和音素表，属于部署适配而非训练。现成官方重包可避免重复处理。
 
-固定1.13.8的`has_g2pw`标记实际选用`CharacterLexicon`词典及短语匹配，**没有在手机加载G2PW神经网络**；词语未命中会拆字，完全未命中内容存在忽略分支。因此人名、生僻字、多音字、英文与数字仍要用小说验证。原生OHF Piper的拼音前端会调用G2PW，两者不能因模型同名就当作读法完全相同。[前端选择](https://github.com/k2-fsa/sherpa-onnx/blob/v1.13.8/sherpa-onnx/csrc/offline-tts-vits-impl.h#L374)、[词典实现](https://github.com/k2-fsa/sherpa-onnx/blob/v1.13.8/sherpa-onnx/csrc/character-lexicon.cc#L150)、[原生中文前端](https://github.com/OHF-Voice/piper1-gpl/blob/main/src/piper/phonemize_chinese.py)
+固定1.13.8的`has_g2pw`标记实际选用`CharacterLexicon`词典及短语匹配，**没有在手机加载G2PW神经网络**；词语未命中会拆字，完全未命中内容存在忽略分支。因此人名、生僻字、多音字、英文与数字仍要用小说验证。原生OHF Piper的Python拼音前端会调用G2PW，两者不能因模型同名就当作读法完全相同。[前端选择](https://github.com/k2-fsa/sherpa-onnx/blob/v1.13.8/sherpa-onnx/csrc/offline-tts-vits-impl.h#L374)、[词典实现](https://github.com/k2-fsa/sherpa-onnx/blob/v1.13.8/sherpa-onnx/csrc/character-lexicon.cc#L150)、[原生中文前端](https://github.com/OHF-Voice/piper1-gpl/blob/main/src/piper/phonemize_chinese.py)
 
 Piper支持原生`speed=1.45`，固定实现使用`length_scale=1/speed`，值得和“1×合成后1.45×播放”比较。若采用原生加速，播放端不能再重复乘1.45（会约成2.10×），预取时长与缓存身份也必须对应实际语速。这里只是后续实验设计；尚未证明原生倍速听感通过或节电，不能沿用ZipVoice特定截断机制替它下结论。[固定推理实现](https://github.com/k2-fsa/sherpa-onnx/blob/v1.13.8/sherpa-onnx/csrc/offline-tts-vits-model.cc#L212)
 
@@ -255,6 +255,34 @@ Piper支持原生`speed=1.45`，固定实现使用`length_scale=1/speed`，值�
 
 ### 相近分支与投入顺序
 
-另核查了[Piper Plus](https://github.com/ayutaz/piper-plus)及其[预训练资源](https://github.com/ayutaz/piper-plus/blob/dev/docs/guides/development/pretrained-models.md)。有能读中文的固定声音与公开权重，但作者明确说明其音素体系／结构与标准Piper不兼容，不能直接当作超文的更多可替换音色。其公开实验基线仍有噪声和声音迁移限制，先保留为备用，不挤占超文验证。社区聚合目录的数千说话人是多语言总数，不是中文可用人数。
+另核查了[Piper Plus](https://github.com/ayutaz/piper-plus)及其[预训练资源](https://github.com/ayutaz/piper-plus/blob/dev/docs/guides/development/pretrained-models.md)。有能读中文的固定声音与公开权重，但作者明确说明其音素体系／结构与标准Piper不兼容，不能直接当作超文的更多可替换音色。其公开实验基线仍有噪声和声音迁移限制，先保留为备用，不优先投入适配。社区聚合目录的数千说话人是多语言总数，不是中文可用人数。
 
-建议顺序是：**现成超文维持默认参数并确认较长小说读法 → 少量现成中文男声备选 → 只对听感合格者做手机温耗比较**。暂不投入自训练。固定音色路径无需ZipVoice参考条件与三步迭代，结构上有降低计算的理由；仍没有超文在15 Ultra／17 Pro、1.45×长听的有效温耗证据，不能承诺不发热。现有被撤回的旧音源及配置继续排除。
+收到最新原速听感反馈后，建议顺序调整为：**其他现成中文男声同文初筛 → 听感合格者验证长篇读法 → 手机温耗比较**。暂不投入自训练。固定音色路径无需ZipVoice参考条件与三步迭代，结构上有降低计算的理由；仍没有超文在15 Ultra／17 Pro、1.45×长听的有效温耗证据，不能承诺不发热。现有被撤回的旧音源及配置继续排除。
+
+## 12. 超文原速喉音反馈与后续筛选
+
+用户最初认可超文，分享给朋友后转述“油腻、咯痰”，并明确**原速也明显**。这是新增主观听感反馈，不能倒写成用户从未喜欢，也不能仅凭形容词确定是发音人本身、训练数据还是合成伪影。超文暂不定选，优先换现成声音；没有直接听辨能力的代理不能宣称已听出或消除了喉音。
+
+### 已排除的错误解释与参数边界
+
+- 分享的[原速文件](../../../app/build/outputs/超文试听-20261021/超文-原速.mp3)是sherpa公开MP3的原样副本，34.20秒；[1.45倍速文件](../../../app/build/outputs/超文试听-20261021/超文-1.45倍速.mp3)通过FFmpeg `atempo=1.45`生成，23.60秒，没有EQ或降噪。原速也有问题，故不能只归因倍速；它也不是在用户手机热态生成的录音。
+- FFmpeg全文件解码及`astats`显示，原速／倍速解码峰值分别约−3.07／−3.43dBFS，无NaN／Inf。只说明当前文件没有达到满幅过载，不能排除源头削波、声线粗糙或其他失真，更不能替代主观听辨。
+- 超文默认`noise_scale=0.667`控制声学潜变量随机幅度，`noise_w=0.8`控制时长随机变化；它们不是录音降噪或“去喉音”开关。`length_scale`控制合成时长。调参不要求训练，但没有查到维护者确认的超文喉音参数修复，当前不盲目制作多套滤波／降噪版本。[模型配置](https://huggingface.co/rhasspy/piper-voices/blob/main/zh/zh_CN/chaowen/medium/zh_CN-chaowen-medium.onnx.json)、[实际推理代码](https://github.com/OHF-Voice/piper1-gpl/blob/main/src/piper/train/vits/models.py#L719)
+
+### 换声的具体候选
+
+社区Piper的174声并非174个男声。实际配置已读取，下列三名发音人均可与[AISHELL-3原始性别表](https://huggingface.co/datasets/AISHELL/AISHELL-3/blob/main/spk-info.txt)对应，并有另一架构的公开合成演示：
+
+| 发音人 | 原始资料 | 社区Piper SID | FastSpeech2公开合成样音 |
+| --- | --- | --- | --- |
+| SSB0590 | 男，26–40岁，北方口音 | 19 | [对话句](https://cmchien.ttic.edu/FastSpeech2/demo/AISHELL3/SSB05900363_synthesized.wav) |
+| SSB1020 | 男，14–25岁，南方口音 | 30 | [叙述句](https://cmchien.ttic.edu/FastSpeech2/demo/AISHELL3/SSB10200388_synthesized.wav) |
+| SSB0863 | 男，14–25岁，北方口音 | 151 | [请求句](https://cmchien.ttic.edu/FastSpeech2/demo/AISHELL3/SSB08630110_synthesized.wav) |
+
+音频来自[作者FastSpeech2试听页](https://cmchien.ttic.edu/FastSpeech2/)的`Synthesized`，不是旁边真人`Ground-Truth`。这三个公开WAV本次HEAD均为200／audio/wav。原始[AISHELL-3论文](https://www.isca-archive.org/interspeech_2021/shi21c_interspeech.pdf)记录采用中性朗读要求，但不保证某个模型输出符合用户听感；不能将这些演示冒充Piper样音，也不能将同一发音人跨模型的效果视为相同。
+
+优先尝试社区Piper对应SID的少量同文原速／1.45×样本，不先重训、集成App或占用手机。模型主文件77,639,618字节，官方页面SHA256为`f46e009dcfcaa0f8c5e6eefe23dabc36296c69123ea22df82d31078ab6e0174f`。**本次已取得配置，但大模型通过官方下载、浏览器及镜像均未下载成功（分发端TLS失败／超时），没有执行合成或产生新Piper试听。** 临时配置与空试听目录已清理，原超文文件保留；不存在已验证音质改善的结果。
+
+[FastSpeech2+HiFi-GAN](https://github.com/ming024/FastSpeech2)可作备用研究：有22.05kHz的AISHELL-3 checkpoint入口，但当前下载可达性、权重包许可及Android部署尚未核实，没有可直接替换现有sherpa的成品路径。它的价值先限于额外声音线索，不能升级为已确认低热方案。暂无理由为凑候选重推旧Kokoro／fanchen-wnj，或直接投入自训练及重型克隆。
+
+若少量现成男声持续不满足听感，再评估用授权、干净且朗读平直的语料微调固定声音。训练在电脑完成，手机仍可运行导出的固定音色模型，不必引入实时克隆链路；但数据准备、中文读法、导出兼容及实际听感仍需评估，不能承诺换数据即可成功。本次未启动训练。[Piper微调说明](https://github.com/OHF-Voice/piper1-gpl/blob/main/docs/TRAINING.md)
