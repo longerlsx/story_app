@@ -98,7 +98,7 @@ scripts/prepare-offline-voice.sh
 
 | 依赖 | 来源与声明 |
 | --- | --- |
-| ZipVoice／Distill模型 | [项目](https://github.com/k2-fsa/ZipVoice)、[模型卡](https://huggingface.co/k2-fsa/ZipVoice)、[sherpa模型说明](https://k2-fsa.github.io/sherpa/onnx/tts/zipvoice.html)；模型卡标Apache-2.0，ONNX与参考声音来自上述固定官方包 |
+| ZipVoice／Distill模型 | [项目](https://github.com/k2-fsa/ZipVoice)、[模型卡](https://huggingface.co/k2-fsa/ZipVoice)、[sherpa模型说明](https://k2-fsa.github.io/sherpa/onnx/tts/zipvoice.html)；2026-10-21重新核对：代码为Apache-2.0，模型卡正文明确预训练模型因Emilia数据约束采用CC-BY-NC，纠正此前将代码许可概括为模型许可的记录。ONNX与参考声音来自上述固定官方包；不据此推定参考声音的所有用途均获授权 |
 | Vocos | [原项目](https://github.com/gemelo-ai/vocos)声明MIT；使用sherpa发布的24kHz ONNX资源 |
 | sherpa-onnx 1.13.8 | [代码许可](https://github.com/k2-fsa/sherpa-onnx/blob/v1.13.8/LICENSE)Apache-2.0；不能概括整份AAR所有依赖 |
 | ONNX Runtime 1.28.2 | [代码许可](https://github.com/microsoft/onnxruntime/blob/v1.28.2/LICENSE)MIT，保留该版本ThirdPartyNotices来源 |
