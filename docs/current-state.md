@@ -1,8 +1,8 @@
 # 大脸猫阅读（Story App）项目背景、功能与实现概览
 
-**10月22日最新进展：** 用户准备以Piper替换ZipVoice，要求将侧面讨论与实际代码分析落档；已整理[接入与体验边界讨论](superpowers/specs/2026-10-22-piper-listening-replacement.md)。用户明确可先用模拟器开发、验收，真机后补。建议单一Piper后端、共享模型提供C/F，复用听书框架，在候选阶段完成旧路径清理、资源与数据回退；C暂作默认仍是建议。完整中文前端、较长试听及手机低热尚未验证，本轮只整理文档，未实施替换。
+**10月22日最新进展：** 用户已批准[以Piper替换ZipVoice的实施计划](superpowers/plans/2026-10-22-piper-listening-replacement.md)，当前实施中、尚未形成验收候选。已确认单一Piper后端、共享模型C/F双声且C默认、英文逐字母兜底，先模拟器后真机；中文读法与分段协同、旧路径清理和数据回退一起完成。完整中文前端、较长试听及手机低热仍待验证。[讨论稿](superpowers/specs/2026-10-22-piper-listening-replacement.md)保留历史依据。
 
-更新时间：2026-10-22。**当前进入Piper替换的方案讨论，生产仍为ZipVoice，发热问题未解决。** 15 Ultra和17 Pro均有1.45×下发热及随发热出现失真的反馈；小米浏览器、番茄和网盘App断网朗读本地小说是用户的体验对照。免费、离线、男声及尽量一体打包偏好继续成立，目标仍是朗读通顺、低运算、长听舒适。广泛路线调查见[可行性报告](superpowers/specs/2026-10-21-offline-tts-landscape.md)，MNN、新克隆模型、高通NPU及雷军声轻量训练保留为未实施后备方向，不混入当前替换范围。实际安装包身份与“热后失真”机制未完成新取证，不能从相关性推定根因；[BUG-062](knowledge/bugs/BUG-2026-062-zipvoice-long-listening-thermal.json)继续调查。
+更新时间：2026-10-22。**当前执行Piper替换，已交付版本仍为ZipVoice，发热问题未解决。** 15 Ultra和17 Pro均有1.45×下发热及随发热出现失真的反馈；小米浏览器、番茄和网盘App断网朗读本地小说是用户的体验对照。免费、离线、男声及尽量一体打包偏好继续成立，目标仍是朗读通顺、低运算、长听舒适。广泛路线调查见[可行性报告](superpowers/specs/2026-10-21-offline-tts-landscape.md)，MNN、新克隆模型、高通NPU及雷军声轻量训练保留为未实施后备方向，不混入当前替换范围。实际安装包身份与“热后失真”机制未完成新取证，不能从相关性推定根因；[BUG-062](knowledge/bugs/BUG-2026-062-zipvoice-long-listening-thermal.json)继续调查。
 
 **已取得的选型证据：** 用户认可[六男声试听](../app/build/outputs/现成男声试听-20261022)中的C（SSB1020／SID30）和F（SSB0863／SID151）。同M1 Pro、sherpa1.13.8、两线程、50字输入，三轮交替初筛显示C/F同文热运行CPU较ZipVoice三步完整参考减少71.5%／73.2%；条件、归一指标及限制由[研究第15节](superpowers/specs/2026-10-21-offline-tts-landscape.md#15-10月22日cf认可与本机计算成本初筛)和[原始结果](../app/build/outputs/tts-cost-20261022/README.md)维护。样音用人工拼音，性能测试用固定小词典；结果支持投入候选，不是完整前端或手机节电／温降结论。尚未试听全部174声，也未接入App或开展新的手机验证。
 
