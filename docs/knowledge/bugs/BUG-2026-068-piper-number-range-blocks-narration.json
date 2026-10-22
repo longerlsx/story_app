@@ -1,0 +1,28 @@
+{
+  "id": "BUG-2026-068",
+  "title": "Numeric ranges with a tilde block Piper narration",
+  "status": "resolved",
+  "symptom": "The C 1.45x real-novel attempt targeting 15 minutes stops after about 9 minutes 17 seconds of playback in chapter 2 of 玩家救世指南. The last completed unit is 2022-2061; the following 2061-2100 unit is not played. The actual UI reports 离线声音暂不支持‘~’(U+7E)…本段未播放. A later 2100-2139 unit is prepared successfully but is not played past the failed unit.",
+  "root_cause": "The shared numeric classification and normalization lacked the meaning of tilde-delimited number ranges. U+007E reached the strict character-coverage guard and failed the whole unit. The guard preserved unread progress as intended. Unlike a standalone decorative middle dot, the tilde in 2~3 carries range meaning and must not simply be removed.",
+  "fix": [
+    "Recognize ~, ～ and 〜 between signed integer or decimal quantities as 到 through shared lexical classification and normalization. Permit horizontal whitespace but never join across a line break. Preserve range semantics and source mapping through the formal 40-character and general 80-character limits, small bounds, long tokens and starts inside a token.",
+    "Keep X~100 and 2%~3% outside quantity-range classification and preserve the symbol with a 波浪号 fallback; do not infer percentage-range support. Retain the unknown-readable-character guard and do not skip failed units.",
+    "Add 13 permanent regressions: first 9 range RED cases, then 3 horizontal-whitespace RED cases and 1 percentage/symbol-preservation RED case. All pass with the narrow implementation, and formal playback now completes the original failed range."
+  ],
+  "source_excerpt": "（注：技能熟练度分为1初出茅庐、2~3登堂入室、4~5融会贯通、6~7炉火纯青、8~9登峰造极、10出神入化。…）",
+  "evidence": [
+    "StoryReader_API34, 68972ce: C145_final15_start is recorded at 20:48:42.917, starting from chapter 1 offset 1213; first playback starts at 20:48:46.798. Chapter 1 completes offset 3289 at 20:53:29.755 and crosses naturally into chapter 2.",
+    "The failed chapter 2 unit 2061-2100 has synthesisStart at 20:57:55.510 without an end record. The preceding 2022-2061 unit completes at 20:58:03.851. The successful later prefetch 2100-2139 does not advance playback or completion past the failed unit.",
+    "app/build/outputs/piper-20261022/piper-C-145-final-15min.mkv and the matching .log retain the failed attempt. There is no internal low-level interval of at least 0.6 seconds within 22.044-579.033 seconds, but the final stop still makes this a failed attempt. The filename records the intended target, not a pass.",
+    "The final JVM suite passes all 392 cases; assembleDebug, assembleDebugAndroidTest and lint also pass in the approximately 20-second batch.",
+    "After ending the old process and normally opening the original chapter 2 page at offset 1887, C145_range_fixed15_start is recorded at 21:20:53.029, model preparation takes 3399 ms and SID 30 begins playback at about 21:20:58.079. Units 2032-2069 and 2069-2100 containing the formerly failed ranges both generate and play completely; 2100 is confirmed at 21:21:24.904 and playback continues beyond 2139.",
+    "A bounded check of 62 distinct non-Han characters in the first five chapters finds only the four tilde occurrences missing classification; percent signs, slashes and the other inspected characters already have handling. This does not establish whole-book coverage. Execution context is in docs/superpowers/plans/2026-10-22-piper-listening-replacement.md, section C长听数字范围停读与窄修."
+  ],
+  "verification_limits": "The corrected piper-C-145-range-fix-15min.mkv and matching .log are still being recorded; complete 15-minute acceptance and subjective listening are pending. Existing upgrade/rollback conclusions remain valid. This narrow resolution does not close BUG-2026-062 or BUG-2026-066, or complete overall emulator/phone acceptance.",
+  "failed_attempts": [],
+  "impact": "The confirmed tilde-delimited quantity ranges no longer block narration or lose their range meaning. Broader syntax, sustained playback and subjective voice quality remain separate acceptance boundaries.",
+  "tags": ["android", "tts", "piper", "chinese-numbers", "text-normalization", "segmentation", "resolved"],
+  "confidence": 0.99,
+  "created_at": "2026-10-22",
+  "updated_at": "2026-10-22"
+}

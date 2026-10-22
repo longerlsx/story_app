@@ -124,7 +124,7 @@ JSON供宿主转换使用，APK所需的是上述四份输出。模型／词典�
 
 本轮旧资源副本为`.local-tts/backups/pre-piper-assets-WOY3Nl/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia/`；encoder、decoder、tokens、lexicon、完整参考WAV、Vocos六份摘要以及全部eSpeak文件／相对路径合并摘要均与旧准备脚本一致，eSpeak合并摘要为`8291f49f39de7ee67e7a383694a5e2b3559bbb4ae9ed657aa1d9d92ffd8f2a01`。旧固定准备规则可从替换前提交`61f9fc4`的`scripts/prepare-offline-voice.sh`恢复，不能用当前Piper脚本的参数冒充旧ZipVoice准备入口。
 
-旧版本首次初始化会从自身APK的`espeak-ng-data`重建私有依赖。Piper接线仅在新模型成功初始化后清理原专属`offline-voice/zipvoice-distill-int8-v1`目录，保留书籍、设置及进度；是否真正能覆盖安装回退仍须运行验证。原ZipVoice下载包未附`LICENSE`文件，不能声称包内已有完整许可文件。
+旧版本首次初始化会从自身APK的`espeak-ng-data`重建私有依赖。Piper接线仅在新模型成功初始化后清理原专属`offline-voice/zipvoice-distill-int8-v1`目录，保留书籍、设置及进度。10月22日模拟器已完成“旧版→Piper产生新进度→旧版继续使用→Piper”覆盖安装往返：旧版成功重建该目录并播放，再升级的Piper初始化成功后清除它；正文、两类新增进度及非音色设置保留。具体证据与音色回落例外见[实施记录](../superpowers/plans/2026-10-22-piper-listening-replacement.md#6-执行记录)。原ZipVoice下载包未附`LICENSE`文件，不能声称包内已有完整许可文件。
 
 ### 保留的历史问题证据
 

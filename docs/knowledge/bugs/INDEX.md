@@ -127,6 +127,7 @@ This is mandatory for both:
 | BUG-2026-065 | Day/night theme changes leave stale accessibility descriptions | resolved | `reader`, `theme`, `accessibility` | [BUG-2026-065-theme-toggle-retains-stale-accessibility-nodes.json](BUG-2026-065-theme-toggle-retains-stale-accessibility-nodes.json) |
 | BUG-2026-066 | Intermittent audio handoff delay despite ready successor PCM | investigating | `tts`, `audio-gap`, `audio-handoff`, `emulator` | [BUG-2026-066-intermittent-audio-handoff-delay.json](BUG-2026-066-intermittent-audio-handoff-delay.json) |
 | BUG-2026-067 | Common middle-dot separators incorrectly block Piper narration | resolved | `tts`, `piper`, `text-normalization`, `segmentation` | [BUG-2026-067-piper-middle-dot-blocks-narration.json](BUG-2026-067-piper-middle-dot-blocks-narration.json) |
+| BUG-2026-068 | Numeric ranges with a tilde block Piper narration | resolved | `tts`, `piper`, `chinese-numbers`, `text-normalization`, `segmentation` | [BUG-2026-068-piper-number-range-blocks-narration.json](BUG-2026-068-piper-number-range-blocks-narration.json) |
 
 ## Retrieval Hints For Future Threads
 

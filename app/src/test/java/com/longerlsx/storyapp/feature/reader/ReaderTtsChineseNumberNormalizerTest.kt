@@ -254,4 +254,108 @@ class ReaderTtsChineseNumberNormalizerTest {
                 segments.map { it.startCharOffset to it.endCharOffset })
         }
     }
+
+    @Test
+    fun theRealNovelSkillRangesRemainReadableThroughFortyCharacterSegments() {
+        val source = "（注：技能熟练度分为1初出茅庐、2~3登堂入室、4~5融会贯通、6~7炉火纯青、8~9登峰造极、10出神入化。"
+        val segments = ReaderTtsSegmenter.segment(2, source, maxChunkChars = 40)
+
+        assertEquals(
+            "（注：技能熟练度分为一初出茅庐、二到三登堂入室、四到五融会贯通、六到七炉火纯青、八到九登峰造极、十出神入化。",
+            segments.joinToString("") { ReaderTtsChineseNumberNormalizer.normalize(it) },
+        )
+        assertEquals(0, segments.first().startCharOffset)
+        assertEquals(source.length, segments.last().endCharOffset)
+    }
+
+    @Test
+    fun numericTildeRangesReadBothEndpointsAsQuantitiesAcrossWidthVariants() {
+        val examples = listOf(
+            "范围2~3。" to "范围二到三。",
+            "范围12~34。" to "范围十二到三十四。",
+            "范围１２～３４。" to "范围十二到三十四。",
+            "范围12〜34。" to "范围十二到三十四。",
+            "范围-12.5~3.5。" to "范围负十二点五到三点五。",
+        )
+        examples.forEach { (source, expected) ->
+            assertEquals(source, expected, ReaderTtsChineseNumberNormalizer.normalize(source))
+        }
+    }
+
+    @Test
+    fun restartingInsideARangeDoesNotRepeatItsEarlierNumberOrLoseTheConnector() {
+        val source = "前12~1234后"
+        val examples = listOf(
+            2 to "二到一千二百三十四后",
+            3 to "到一千二百三十四后",
+            4 to "一千二百三十四后",
+            5 to "二三四后",
+        )
+        examples.forEach { (offset, expected) ->
+            val segment = ReaderTtsSegmenter.segment(0, source, startCharOffset = offset).single()
+            assertEquals(expected, ReaderTtsChineseNumberNormalizer.normalize(segment))
+            assertEquals(offset, segment.startCharOffset)
+            assertEquals(ReaderTtsCharacterRange(offset, 9),
+                segment.sourceRangeForSpokenRange(0, segment.spokenText.length))
+        }
+    }
+
+    @Test
+    fun oversizedRangeFragmentsKeepTheirConnectorAndVisibleEndpointContext() {
+        val segments = ReaderTtsSegmenter.segment(0, "1".repeat(81) + "~12")
+
+        assertEquals(listOf("一".repeat(80), "一到十二"),
+            segments.map { ReaderTtsChineseNumberNormalizer.normalize(it) })
+        assertEquals(listOf(0 to 80, 80 to 84),
+            segments.map { it.startCharOffset to it.endCharOffset })
+        assertEquals("1~12", segments.last().spokenText)
+        assertEquals(ReaderTtsCharacterRange(81, 82), segments.last().sourceRangeForSpokenRange(1, 2))
+    }
+
+    @Test
+    fun aOneCharacterLimitKeepsTheRangeConnectorAsItsOwnReadableUnit() {
+        val segments = ReaderTtsSegmenter.segment(0, "12〜34", maxChunkChars = 1)
+
+        assertEquals(listOf("一", "二", "到", "三", "四"),
+            segments.map { ReaderTtsChineseNumberNormalizer.normalize(it) })
+        assertEquals(listOf(0 to 1, 1 to 2, 2 to 3, 3 to 4, 4 to 5),
+            segments.map { it.startCharOffset to it.endCharOffset })
+    }
+
+    @Test
+    fun tildesInsideIdentifiersOrBetweenLettersAreNotNumericRanges() {
+        val segment = ReaderTtsSegmenter.segment(0, "型号X~100，a~b。").single()
+
+        assertEquals("型号X波浪号一零零，a b。", ReaderTtsChineseNumberNormalizer.normalize(segment))
+    }
+
+    @Test
+    fun spacesAroundANumericRangeKeepItsMeaningThroughSpeechSanitizing() {
+        val examples = listOf("范围12 ~ 34。", "范围12  ~ \t34。", "范围１２　～　３４。")
+        examples.forEach { source ->
+            val segment = ReaderTtsSegmenter.segment(0, source).single()
+            assertEquals(source, "范围十二到三十四。", ReaderTtsChineseNumberNormalizer.normalize(segment))
+            assertEquals(source, "范围十二到三十四。", ReaderTtsChineseNumberNormalizer.normalize(source))
+        }
+    }
+
+    @Test
+    fun restartingInsideASpacedRangeKeepsWholeAndPartialEndpointReadings() {
+        val source = "前12  ~ \t1234后"
+        val examples = listOf(5 to "到一千二百三十四后", 8 to "一千二百三十四后", 9 to "二三四后")
+        examples.forEach { (offset, expected) ->
+            val segment = ReaderTtsSegmenter.segment(0, source, startCharOffset = offset).single()
+            assertEquals(expected, ReaderTtsChineseNumberNormalizer.normalize(segment))
+            assertEquals(offset, segment.startCharOffset)
+            assertEquals(ReaderTtsCharacterRange(offset, 13),
+                segment.sourceRangeForSpokenRange(0, segment.spokenText.length))
+        }
+    }
+
+    @Test
+    fun percentageExpressionsKeepTheirTildeMeaningWithoutClaimingNumericRangeSupport() {
+        val segment = ReaderTtsSegmenter.segment(0, "范围2%~3%。").single()
+
+        assertEquals("范围二百分号波浪号三百分号。", ReaderTtsChineseNumberNormalizer.normalize(segment))
+    }
 }

@@ -64,7 +64,9 @@ object ReaderTtsSegmenter {
         var whitespaceBoundary = -1
         for (index in start until limit) {
             val character = text[index]
-            if (character.isWhitespace()) whitespaceBoundary = index
+            if (character.isWhitespace() && tokens.none {
+                    it.kind != ReaderTtsLexicalTokens.Kind.WORD && index in it.start until it.end
+                }) whitespaceBoundary = index
             if (character in "。！？!?，,；;：:、.\n" && tokens.none { index in it.start until it.end }) {
                 punctuationBoundary = index + 1
             }
@@ -132,6 +134,7 @@ object ReaderTtsSegmenter {
     private fun isNoisySymbol(ch: Char): Boolean {
         return ch == '-' ||
             ch == '·' ||
+            ch == '~' ||
             ch == '－' ||
             ch == '—' ||
             ch == '–' ||

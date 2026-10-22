@@ -19,7 +19,8 @@ internal object ReaderTtsChineseNumberNormalizer {
                 append(when (token.kind) {
                     ReaderTtsLexicalTokens.Kind.WORD -> value
                     ReaderTtsLexicalTokens.Kind.QUANTITY -> quantity(value)
-                    ReaderTtsLexicalTokens.Kind.DATE, ReaderTtsLexicalTokens.Kind.CLOCK ->
+                    ReaderTtsLexicalTokens.Kind.DATE, ReaderTtsLexicalTokens.Kind.CLOCK,
+                    ReaderTtsLexicalTokens.Kind.RANGE ->
                         ReaderTtsLexicalTokens.readings(folded, token, token.start, token.end).joinToString("") {
                             read(folded.substring(it.start, it.end), it.kind, it.suffix)
                         }
@@ -61,8 +62,10 @@ internal object ReaderTtsChineseNumberNormalizer {
     private fun read(text: String, reading: ReaderTtsNumberReading, suffix: ReaderTtsNumberSuffix): String {
         val spoken = when (reading) {
             ReaderTtsNumberReading.DIGITS -> readDigits(text)
-            ReaderTtsNumberReading.NEGATIVE_DIGITS -> readDigits(text, negative = true)
+            ReaderTtsNumberReading.NEGATIVE_DIGITS -> readDigits(text.trimStart(), negative = true)
             ReaderTtsNumberReading.QUANTITY -> integer(text.trimStart('0').ifEmpty { "0" })
+            ReaderTtsNumberReading.RANGE_ENDPOINT -> quantity(text.trim())
+            ReaderTtsNumberReading.RANGE_SEPARATOR -> "到"
             ReaderTtsNumberReading.CLOCK_MINUTES -> if (text.toInt() == 0) "整" else integer(text) + "分"
             ReaderTtsNumberReading.YEAR_SEPARATOR -> "年"
             ReaderTtsNumberReading.MONTH_SEPARATOR -> "月"
@@ -86,6 +89,7 @@ internal object ReaderTtsChineseNumberNormalizer {
                 ':', '：' -> "冒号"
                 ',' -> "逗号"
                 '_' -> "下划线"
+                '~' -> "波浪号"
                 '%', '％' -> "百分号"
                 else -> ch.toString()
             })

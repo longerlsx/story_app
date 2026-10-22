@@ -38,6 +38,8 @@ enum class ReaderTtsNumberReading {
     DIGITS,
     NEGATIVE_DIGITS,
     QUANTITY,
+    RANGE_ENDPOINT,
+    RANGE_SEPARATOR,
     CLOCK_MINUTES,
     YEAR_SEPARATOR,
     MONTH_SEPARATOR,

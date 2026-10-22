@@ -2,7 +2,7 @@ package com.longerlsx.storyapp.feature.reader.tts
 
 /** Shared lexical boundaries keep speech sanitizing and number readings in agreement. */
 internal object ReaderTtsLexicalTokens {
-    enum class Kind { WORD, QUANTITY, YEAR, DATE, CLOCK, IDENTIFIER, NUMBER_ID, SEPARATED }
+    enum class Kind { WORD, QUANTITY, YEAR, DATE, CLOCK, RANGE, IDENTIFIER, NUMBER_ID, SEPARATED }
 
     data class Token(
         val start: Int,
@@ -20,6 +20,7 @@ internal object ReaderTtsLexicalTokens {
     )
 
     private val quantity = Regex("(?:(?:[0-9]+|[0-9]{1,3}(?:,[0-9]{3})+)(?:\\.[0-9]+)?|\\.[0-9]+)")
+    private val range = Regex("[+-]?${quantity.pattern}[ \\t\u3000]*~[ \\t\u3000]*[+-]?${quantity.pattern}")
     private val date = Regex("([0-9]{4})([-/.])([0-9]{1,2})\\2([0-9]{1,2})")
     private val clock = Regex("([0-9]{1,2})[:：]([0-9]{2})")
     private val numberLabel = Regex("""(?:电话|手机号|号码|编号)[\s:：=“"「『（(]*(?:是|为)?[\s:：=“"「『（(]*$""")
@@ -34,6 +35,7 @@ internal object ReaderTtsLexicalTokens {
                 '．' -> '.'
                 '／' -> '/'
                 '＿' -> '_'
+                '～', '〜' -> '~'
                 else -> ch
             })
         }
@@ -102,6 +104,14 @@ internal object ReaderTtsLexicalTokens {
                     Reading(separator + 1, token.end, ReaderTtsNumberReading.CLOCK_MINUTES),
                 )
             }
+            Kind.RANGE -> {
+                val separator = (token.start until token.end).first { text[it] == '~' }
+                listOf(
+                    Reading(token.start, separator, ReaderTtsNumberReading.RANGE_ENDPOINT),
+                    Reading(separator, separator + 1, ReaderTtsNumberReading.RANGE_SEPARATOR),
+                    Reading(separator + 1, token.end, ReaderTtsNumberReading.RANGE_ENDPOINT),
+                )
+            }
             else -> listOf(Reading(token.start, token.end,
                 if (token.negative && visibleStart == token.start) ReaderTtsNumberReading.NEGATIVE_DIGITS
                 else ReaderTtsNumberReading.DIGITS))
@@ -110,15 +120,29 @@ internal object ReaderTtsLexicalTokens {
             val from = maxOf(part.start, visibleStart)
             val to = minOf(part.end, visibleEnd)
             if (from >= to) null else {
-                val partialNumber = (from > part.start || to < part.end) &&
-                    part.kind in listOf(ReaderTtsNumberReading.QUANTITY, ReaderTtsNumberReading.CLOCK_MINUTES)
+                // Range endpoints own the spaces beside '~', but trimming spaces is not losing digits.
+                var numberStart = part.start
+                var numberEnd = part.end
+                if (part.kind == ReaderTtsNumberReading.RANGE_ENDPOINT) {
+                    while (numberStart < numberEnd && text[numberStart].isRangeSpace()) numberStart++
+                    while (numberEnd > numberStart && text[numberEnd - 1].isRangeSpace()) numberEnd--
+                }
+                val partialNumber = (from > numberStart || to < numberEnd) &&
+                    part.kind in listOf(ReaderTtsNumberReading.QUANTITY, ReaderTtsNumberReading.CLOCK_MINUTES,
+                        ReaderTtsNumberReading.RANGE_ENDPOINT)
                 val suffix = when {
                     to < part.end -> ReaderTtsNumberSuffix.NONE
                     partialNumber && part.kind == ReaderTtsNumberReading.CLOCK_MINUTES -> ReaderTtsNumberSuffix.MINUTE
                     else -> part.suffix
                 }
+                val kind = when {
+                    !partialNumber -> part.kind
+                    part.kind == ReaderTtsNumberReading.RANGE_ENDPOINT && from <= numberStart &&
+                        text[numberStart] == '-' -> ReaderTtsNumberReading.NEGATIVE_DIGITS
+                    else -> ReaderTtsNumberReading.DIGITS
+                }
                 part.copy(start = from, end = to,
-                    kind = if (partialNumber) ReaderTtsNumberReading.DIGITS else part.kind,
+                    kind = kind,
                     suffix = suffix)
             }
         }
@@ -128,6 +152,7 @@ internal object ReaderTtsLexicalTokens {
         if (value.none { it.isAsciiDigit() }) return Kind.WORD
         if (value.any { it in 'a'..'z' || it in 'A'..'Z' }) return Kind.IDENTIFIER
         if (labeledNumber && value.all { it.isAsciiDigit() }) return Kind.NUMBER_ID
+        if (range.matches(value)) return Kind.RANGE
         val calendar = date.matchEntire(value)
         if (calendar != null && isValidDate(calendar)) return Kind.DATE
         val time = clock.matchEntire(value)
@@ -161,10 +186,23 @@ internal object ReaderTtsLexicalTokens {
     private fun innerSeparatorEnd(text: String, index: Int): Int {
         val before = text.getOrNull(index - 1)
         if (before == null || !before.isAsciiLetterOrDigit()) return index
+        if (before.isAsciiDigit()) {
+            var rangeEnd = index
+            // Keep percentage expressions intact for SEPARATED fallback; they are not numeric ranges.
+            if (text.getOrNull(rangeEnd) == '%' || text.getOrNull(rangeEnd) == '％') rangeEnd++
+            while (text.getOrNull(rangeEnd).isRangeSpace()) rangeEnd++
+            if (text.getOrNull(rangeEnd) == '~') {
+                rangeEnd++
+                while (text.getOrNull(rangeEnd).isRangeSpace()) rangeEnd++
+                if (text.getOrNull(rangeEnd) == '+' || text.getOrNull(rangeEnd) == '-') rangeEnd++
+                if (text.getOrNull(rangeEnd) == '.') rangeEnd++
+                if (text.getOrNull(rangeEnd).isAsciiDigit()) return rangeEnd
+            }
+        }
         var end = index
         var identifierSeparator = false
-        while (end < text.length && text[end] in "-_/+.,:：") {
-            if (text[end] in "-_/+") identifierSeparator = true
+        while (end < text.length && text[end] in "-_/+.,:：~") {
+            if (text[end] in "-_/+~") identifierSeparator = true
             end++
         }
         val after = text.getOrNull(end) ?: return index
@@ -173,5 +211,6 @@ internal object ReaderTtsLexicalTokens {
     }
 
     private fun Char?.isAsciiDigit(): Boolean = this != null && this in '0'..'9'
+    private fun Char?.isRangeSpace(): Boolean = this == ' ' || this == '\t' || this == '\u3000'
     private fun Char.isAsciiLetterOrDigit(): Boolean = this in '0'..'9' || this in 'a'..'z' || this in 'A'..'Z'
 }

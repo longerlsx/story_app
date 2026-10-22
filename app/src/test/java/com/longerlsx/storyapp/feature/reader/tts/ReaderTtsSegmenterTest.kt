@@ -275,4 +275,54 @@ class ReaderTtsSegmenterTest {
         assertEquals(emptyList<ReaderTtsSegment>(), ReaderTtsSegmenter.segment(0, "正文。", startCharOffset = 3))
         assertEquals(emptyList<ReaderTtsSegment>(), ReaderTtsSegmenter.segment(0, "正文。", startCharOffset = 100))
     }
+
+    @Test
+    fun aNumericRangeCrossingFortyCharactersMovesTogetherAfterASupplementaryCharacter() {
+        val prefix = "甲".repeat(37) + "😀"
+        val segments = ReaderTtsSegmenter.segment(0, prefix + "12~34乙", maxChunkChars = 40)
+
+        assertEquals(listOf(prefix, "12~34乙"), segments.map { it.spokenText })
+        assertEquals(listOf(0 to 39, 39 to 45),
+            segments.map { it.startCharOffset to it.endCharOffset })
+        assertEquals(ReaderTtsCharacterRange(41, 42), segments.last().sourceRangeForSpokenRange(2, 3))
+    }
+
+    @Test
+    fun widthVariantRangesKeepTheirSourceMappingAtAndAcrossTheEightyCharacterLimit() {
+        for (separator in listOf("~", "～", "〜")) {
+            val crossing = ReaderTtsSegmenter.segment(0, "甲".repeat(78) + "12" + separator + "34乙")
+            assertEquals(listOf("甲".repeat(78), "12~34乙"), crossing.map { it.spokenText })
+            assertEquals(listOf(0 to 78, 78 to 84),
+                crossing.map { it.startCharOffset to it.endCharOffset })
+            assertEquals(ReaderTtsCharacterRange(80, 81), crossing.last().sourceRangeForSpokenRange(2, 3))
+
+            val exact = ReaderTtsSegmenter.segment(0, "甲".repeat(75) + "12" + separator + "34乙")
+            assertEquals(listOf("甲".repeat(75) + "12~34", "乙"), exact.map { it.spokenText })
+            assertEquals(listOf(0 to 80, 80 to 81), exact.map { it.startCharOffset to it.endCharOffset })
+        }
+    }
+
+    @Test
+    fun decorativeTildesSeparateTextAndNeverBecomeStandaloneSpeech() {
+        val segment = ReaderTtsSegmenter.segment(0, "~甲～乙〜").single()
+
+        assertEquals("甲 乙", segment.spokenText)
+        assertEquals(ReaderTtsCharacterRange(1, 2), segment.sourceRangeForSpokenRange(0, 1))
+        assertEquals(ReaderTtsCharacterRange(2, 3), segment.sourceRangeForSpokenRange(1, 2))
+        assertEquals(ReaderTtsCharacterRange(3, 4), segment.sourceRangeForSpokenRange(2, 3))
+        assertEquals(emptyList<ReaderTtsSegment>(), ReaderTtsSegmenter.segment(0, "~ ～ 〜"))
+    }
+
+    @Test
+    fun spacesInsideARangeAreNotPreferredSplitPointsAndStillMapToOriginalWhitespace() {
+        val prefix = "甲".repeat(36)
+        val segments = ReaderTtsSegmenter.segment(0, prefix + "12  ~ \t34乙", maxChunkChars = 40)
+
+        assertEquals(listOf(prefix, "12 ~ 34乙"), segments.map { it.spokenText })
+        assertEquals(listOf(0 to 36, 36 to 46),
+            segments.map { it.startCharOffset to it.endCharOffset })
+        assertEquals(ReaderTtsCharacterRange(38, 40), segments.last().sourceRangeForSpokenRange(2, 3))
+        assertEquals(ReaderTtsCharacterRange(40, 41), segments.last().sourceRangeForSpokenRange(3, 4))
+        assertEquals(ReaderTtsCharacterRange(41, 43), segments.last().sourceRangeForSpokenRange(4, 5))
+    }
 }
