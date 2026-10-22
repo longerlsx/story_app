@@ -10,6 +10,15 @@ class ReaderTtsChineseFrontendTest {
     private fun segment(text: String) = ReaderTtsSegment(2, 17, 17 + text.length, text)
 
     @Test
+    fun formalSegmentationPreparesARealChapterTailWithAStandaloneMiddleDot() {
+        val text = "砰砰砰！\n大脑存放处.jpg[可怜]\n·"
+        val source = ReaderTtsSegmenter.segment(1, text, maxChunkChars = 40).single()
+        assertEquals("砰砰砰！ 大脑存放处.j p g 可怜",
+            frontend("砰！大脑存放处.jpg可怜").prepare(source))
+        assertEquals(text.length, source.endCharOffset)
+    }
+
+    @Test
     fun asciiWordsAreLowercasedAndSeparatedForNativeSingleLetterLookup() {
         val characters = "abcdefghijklmnopqrstuvwxyz"
         assertEquals(characters.toList().joinToString(" "), frontend(characters).prepare(segment(characters.uppercase())))

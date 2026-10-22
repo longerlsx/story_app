@@ -7,6 +7,16 @@ import org.junit.Test
 class ReaderTtsSegmenterTest {
 
     @Test
+    fun middleDotSeparatesNamesAndStandaloneMarkersNeverBecomeSpeechUnits() {
+        val name = ReaderTtsSegmenter.segment(0, "伊万·彼得。").single()
+        assertEquals("伊万 彼得。", name.spokenText)
+        assertEquals(ReaderTtsCharacterRange(2, 3), name.sourceRangeForSpokenRange(2, 3))
+        val bounded = ReaderTtsSegmenter.segment(0, "甲·乙", maxChunkChars = 1)
+        assertEquals(listOf("甲", "乙"), bounded.map { it.spokenText })
+        assertEquals(listOf(0 to 1, 2 to 3), bounded.map { it.startCharOffset to it.endCharOffset })
+    }
+
+    @Test
     fun splitsTextIntoSentenceChunksWithoutBreakingWords() {
         val segments = ReaderTtsSegmenter.segment(
             chapterIndex = 4,

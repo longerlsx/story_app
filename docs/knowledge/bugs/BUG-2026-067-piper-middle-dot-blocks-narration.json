@@ -1,0 +1,24 @@
+{
+  "id": "BUG-2026-067",
+  "title": "Common middle-dot separators incorrectly block Piper narration",
+  "status": "resolved",
+  "symptom": "The first F 1.45x real-novel recording stops near the end of chapter 1 of 玩家救世指南. Playback confirms offset 3254 but never plays the following 3257-3289 unit or crosses the chapter. The unplayed unit contains readable prose, a jpg label and a standalone U+00B7 middle dot. Progress is retained rather than skipping the unit.",
+  "root_cause": "The production segmenter's explicit presentation-symbol cleaning omitted U+00B7. The symbol therefore reached the strict single-character lexicon coverage check and rejected the entire unit. The fail-closed guard worked as intended for unknown readable characters; the classification of this common name/section separator was incomplete. Simply ignoring the symbol in the final frontend would still leave standalone separator-only units to fail as empty audio input.",
+  "fix": [
+    "Treat U+00B7 as a presentation separator in the existing segmenter, preserving a mapped space between names and omitting separator-only units just like existing decorative markers. Do not change the stored source, numeric/model protection or unknown-readable-character failure policy.",
+    "Add permanent regressions for a name separator, a one-character bound with a standalone separator, exact UTF-16 source ranges and the actual formal segmentation-to-frontend chapter-tail input. Both new cases failed before the fix and passed afterward."
+  ],
+  "evidence": [
+    "484ec30, StoryReader_API34: piper-F-145-novel.log shows synthesisStart at chapter 1 offset 3257 without synthesis completion; the previous unit completes and saves offset 3254 at 20:27:02.323. The raw recording becomes silent near 372.106 seconds and remains silent before the later explicit force-stop. This window is not a successful cross-chapter or uninterrupted long-listening acceptance.",
+    "Both new direct JVM cases fail before the production change: the formal chapter tail throws IllegalStateException, and the name-separator output differs from the manually specified expectation. The latest full JVM suite passes all 379 cases; assembleDebug, assembleDebugAndroidTest and lint also pass.",
+    "On StoryReader_API34, the corrected F 1.45x formal playback starts from chapter 1 offset 3023, completes the formerly blocked 3257-3289 unit and saves 3289 at 20:41:46.529. Chapter 2 offset 0 starts at 20:41:46.622 and completes/saves offset 29 at 20:41:50.232; the session is manually stopped at 20:42:12.822.",
+    "app/build/outputs/piper-20261022/piper-F-middle-dot-recheck.mkv retains the 78.914-second raw capture. Actual audio spans 20.762-76.140 seconds with no internal low-level interval of at least 0.6 seconds. The original failed recording is retained; detailed execution context is in docs/superpowers/plans/2026-10-22-piper-listening-replacement.md, section 真实小说中点停读窄修."
+  ],
+  "verification_limits": "The corrected chapter-boundary audio has not yet received subjective listening review. Existing 41 device regressions and the four fixed recordings are inherited for unaffected behavior; the fixed texts contain no middle dot. This narrow resolution does not complete overall emulator acceptance, upgrade/rollback, 15-minute listening or phone thermal validation, and does not close BUG-2026-062 or BUG-2026-066.",
+  "failed_attempts": [],
+  "impact": "Ordinary imported novels using a middle dot for names or section decoration can stop narration. The guard prevents silent text loss but must not reject known presentation syntax.",
+  "tags": ["android", "tts", "piper", "text-normalization", "segmentation", "resolved"],
+  "confidence": 0.99,
+  "created_at": "2026-10-22",
+  "updated_at": "2026-10-22"
+}

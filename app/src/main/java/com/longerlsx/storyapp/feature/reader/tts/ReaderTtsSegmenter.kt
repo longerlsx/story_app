@@ -131,6 +131,7 @@ object ReaderTtsSegmenter {
 
     private fun isNoisySymbol(ch: Char): Boolean {
         return ch == '-' ||
+            ch == '·' ||
             ch == '－' ||
             ch == '—' ||
             ch == '–' ||
