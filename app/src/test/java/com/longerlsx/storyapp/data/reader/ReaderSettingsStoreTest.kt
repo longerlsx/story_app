@@ -18,14 +18,15 @@ import org.junit.Test
 class ReaderSettingsStoreTest {
 
     @Test
-    fun oldVoicePreferencesUseBundledReferenceVoiceWithoutRewritingOrLosingOtherSettings() {
-        val root = Files.createTempDirectory("story-zipvoice-migration").toFile()
+    fun unsupportedVoicePreferencesUsePiperCWithoutRewritingOrLosingOtherSettings() {
+        val root = Files.createTempDirectory("story-piper-voice-migration").toFile()
         try {
-            for (voice in listOf("kokoro:59", "kokoro:58", "kokoro:3", "kokoro:4", "zh-CN-system-voice")) {
-                val original = "ttsVoiceName=$voice\nttsSpeechRate=2.0\nttsPitch=0.9\nttsTimerPreset=COUNTDOWN_60\nfontSizeSp=24\nreadingMode=SCROLL\n"
+            for (voice in listOf(null, "", "invalid", "zipvoice:leijun", "kokoro:59", "kokoro:58", "kokoro:3", "kokoro:4", "zh-CN-system-voice")) {
+                val original = (voice?.let { "ttsVoiceName=$it\n" } ?: "") +
+                    "ttsSpeechRate=2.0\nttsPitch=0.9\nttsTimerPreset=COUNTDOWN_60\nfontSizeSp=24\nreadingMode=SCROLL\n"
                 val file = root.resolve("reader-settings.properties").apply { writeText(original) }
                 val loaded = ReaderSettingsStore(root).load()
-                assertEquals("zipvoice:leijun", loaded.ttsSettings.voiceName)
+                assertEquals("piper:aishell3:ssb1020", loaded.ttsSettings.voiceName)
                 assertEquals(2f, loaded.ttsSettings.speechRate)
                 assertEquals(0.9f, loaded.ttsSettings.pitch)
                 assertEquals(ReaderTtsTimerPreset.Countdown(60), loaded.ttsSettings.timerPreset)
@@ -44,7 +45,9 @@ class ReaderSettingsStoreTest {
         try {
             val store = ReaderSettingsStore(tempDir, writeScope = this)
             store.save(ReaderSettings(fontSizeSp = 20))
-            val latest = ReaderSettings(fontSizeSp = 24, nightBrightness = 0.45f)
+            store.save(ReaderSettings(ttsSettings = ReaderTtsSettings(voiceName = "piper:aishell3:ssb1020")))
+            val latest = ReaderSettings(fontSizeSp = 24, nightBrightness = 0.45f,
+                ttsSettings = ReaderTtsSettings(voiceName = "piper:aishell3:ssb0863"))
             store.save(latest)
 
             assertEquals(latest, store.load())
@@ -107,7 +110,7 @@ class ReaderSettingsStoreTest {
     }
 
     @Test
-    fun savesAndLoadsReaderSettingsAcrossStoreRecreation() = runTest {
+    fun bothPiperVoiceChoicesSurviveStoreRecreationWithOtherSettingsUnchanged() = runTest {
         val tempDir = Files.createTempDirectory("story-app-reader-settings-test").toFile()
         try {
             val settings = ReaderSettings(
@@ -121,17 +124,20 @@ class ReaderSettingsStoreTest {
                 dayThemePreset = ReaderThemePreset.PAPER,
                 nightThemePreset = ReaderThemePreset.AMOLED,
                 ttsSettings = ReaderTtsSettings(
-                    voiceName = "zipvoice:leijun",
+                    voiceName = "piper:aishell3:ssb1020",
                     speechRate = 1.45f,
                     pitch = 0.95f,
                     timerPreset = ReaderTtsTimerPreset.Countdown(15),
                 ),
             )
 
-            ReaderSettingsStore(tempDir, writeScope = this).save(settings)
-            advanceUntilIdle()
+            for (voice in listOf("piper:aishell3:ssb1020", "piper:aishell3:ssb0863")) {
+                val selected = settings.copy(ttsSettings = settings.ttsSettings.copy(voiceName = voice))
+                ReaderSettingsStore(tempDir, writeScope = this).save(selected)
+                advanceUntilIdle()
 
-            assertEquals(settings, ReaderSettingsStore(tempDir).load())
+                assertEquals(selected, ReaderSettingsStore(tempDir).load())
+            }
         } finally {
             tempDir.deleteRecursively()
         }
@@ -142,6 +148,7 @@ class ReaderSettingsStoreTest {
         val tempDir = Files.createTempDirectory("story-app-reader-settings-default-test").toFile()
         try {
             assertEquals(ReaderSettings(), ReaderSettingsStore(tempDir).load())
+            assertEquals("piper:aishell3:ssb1020", ReaderSettingsStore(tempDir).load().ttsSettings.voiceName)
             assertEquals(ReaderTtsTimerPreset.NoTimer, ReaderSettings().ttsSettings.timerPreset)
         } finally {
             tempDir.deleteRecursively()
@@ -165,7 +172,7 @@ class ReaderSettingsStoreTest {
             val settings = ReaderSettingsStore(tempDir).load()
 
             assertEquals(1f, settings.ttsSettings.speechRate)
-            assertEquals("zipvoice:leijun", settings.ttsSettings.voiceName)
+            assertEquals("piper:aishell3:ssb1020", settings.ttsSettings.voiceName)
             assertEquals(0.95f, settings.ttsSettings.pitch)
             assertEquals(ReaderTtsTimerPreset.Countdown(30), settings.ttsSettings.timerPreset)
             assertEquals(24, settings.fontSizeSp)

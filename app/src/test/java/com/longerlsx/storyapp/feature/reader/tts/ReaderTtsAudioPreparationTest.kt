@@ -22,6 +22,24 @@ class ReaderTtsAudioPreparationTest {
     private val settings = ReaderTtsSettings(voiceName = "male-a", speechRate = 1f)
 
     @Test
+    fun identicalDigitsFromAModelAndAQuantityNeverReuseDifferentReadings() = runTest {
+        val modelTail = ReaderTtsSegmenter.segment(0, "X-100", startCharOffset = 2).single()
+        val quantity = ReaderTtsSegmenter.segment(1, "100").single()
+        assertEquals("100", modelTail.spokenText)
+        assertEquals("100", quantity.spokenText)
+        val readings = mutableListOf<String>()
+        val preparation = ReaderTtsAudioPreparation(backgroundScope) { segment, _ ->
+            val reading = ReaderTtsChineseNumberNormalizer.normalize(segment)
+            readings += reading
+            ReaderSpeechAudio(floatArrayOf(if (reading == "一零零") 1f else 2f), 22_050)
+        }
+        preparation.prepareNext(modelTail, settings)
+        runCurrent()
+        assertEquals(2f, preparation.take(quantity, settings).samples.single(), 0f)
+        assertEquals(listOf("一零零", "一百"), readings)
+    }
+
+    @Test
     fun shortInitialAudioWaitsForLongNextAudioWithoutConsumingOrGeneratingItTwice() = runTest {
         val first = next.copy(spokenText = "天亮了。")
         val following = next.copy(chapterIndex = 3, spokenText = "他推开窗，看见远处的山林和清晨的薄雾。")

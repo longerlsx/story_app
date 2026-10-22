@@ -119,6 +119,96 @@ class ReaderOfflineListeningTest {
     }
 
     @Test
+    fun unsupportedCharacterInFirstSegmentFailsWithoutPlayingOrAdvancing() {
+        val book = seedBook("offline-unsupported-first", listOf("他看见𰻞字，停下来读完这一句。"))
+        val marker = "unsupportedFirstBegin=${SystemClock.elapsedRealtime()}"
+        ActivityScenario.launch<MainActivity>(mainIntent()).use {
+            Log.i(TAG, marker)
+            startFromReader(book)
+            awaitCondition("the real frontend rejects the entire first segment", 60_000) {
+                assertFalse("A partially supported segment must not emit audio", audioManager.isMusicActive)
+                controller.playbackState == ReaderTtsSessionState.FAILED
+            }
+            assertTrue("Expected the unsupported character in the error: ${controller.localErrorMessage}",
+                controller.localErrorMessage?.contains("“𰻞”") == true)
+            assertTrue(device.wait(Until.hasObject(By.desc("重试朗读")), 3_000))
+            val saved = requireNotNull(progress(book.id))
+            assertEquals(0 to 0, saved.position())
+            assertFalse(saved.completed)
+            assertEquals(null, controller.playbackSnapshot.currentSegment)
+            val events = offlineEventsSince(marker)
+            assertTrue(events.contains("synthesisStart chapter=0 offset=0 "))
+            assertFalse("Coverage failure must happen before an AudioTrack is built", events.contains("trackBuilt "))
+            assertFalse("Coverage failure must not produce partial PCM", events.contains("synthesisMs="))
+        }
+    }
+
+    @Test
+    fun unsupportedNextChapterFailsOnlyWhenConsumedAndExplicitRetryKeepsItsUnreadStart() {
+        val firstText = "清晨，他推开窗，看见远处的青山。河边的人慢慢走过小桥，准备开始新的一天。"
+        val book = seedBook("offline-unsupported-next", listOf(
+            firstText, "他看见𰻞字，停下来读完这一句。", "这一章还没有开始。",
+        ))
+        val marker = "unsupportedNextBegin=${SystemClock.elapsedRealtime()}"
+        ActivityScenario.launch<MainActivity>(mainIntent()).use {
+            Log.i(TAG, marker)
+            startFromReader(book)
+            awaitCondition("the supported first chapter emits real audio", 60_000) {
+                controller.playbackState == ReaderTtsSessionState.PLAYING && audioManager.isMusicActive
+            }
+            awaitCondition("the next chapter reaches the real frontend during current playback", 10_000) {
+                offlineEventsSince(marker).contains("synthesisStart chapter=1 offset=0 ")
+            }
+            assertEquals(ReaderTtsSessionState.PLAYING, controller.playbackState)
+            assertTrue(audioManager.isMusicActive)
+            assertEquals(null, controller.localErrorMessage)
+            assertEquals(0 to 0, progress(book.id)?.position())
+
+            awaitCondition("the cached failure is reported when the next chapter is consumed", 60_000) {
+                controller.playbackState == ReaderTtsSessionState.FAILED
+            }
+            assertTrue(controller.localErrorMessage?.contains("“𰻞”") == true)
+            // Audio policy can report the released first track as active briefly after FAILED.
+            awaitCondition("completed audio becomes inactive after the coverage failure", 5_000, failOnPlaybackFailure = false) {
+                assertEquals(ReaderTtsSessionState.FAILED, controller.playbackState)
+                !audioManager.isMusicActive
+            }
+            val saved = requireNotNull(progress(book.id))
+            assertEquals(0 to firstText.length, saved.position())
+            assertFalse(saved.completed)
+            var events = offlineEventsSince(marker)
+            assertTrue("The supported chapter must finish before reporting the future failure",
+                events.lineSequence().any { it.contains("playEnd ") && it.contains("chapter=0 ") })
+            assertTrue(events.lineSequence().any { it.contains("trackReleased ") && it.contains("chapter=0 ") })
+            assertEquals("Consuming the prefetched failure must not regenerate it", 1,
+                events.lineSequence().count { it.contains("synthesisStart chapter=1 offset=0 ") })
+
+            tapListeningControl("重试朗读")
+            awaitCondition("explicit retry fails again at the same unread chapter", 60_000, failOnPlaybackFailure = false) {
+                events = offlineEventsSince(marker)
+                controller.playbackState == ReaderTtsSessionState.FAILED &&
+                    events.lineSequence().count { it.contains("synthesisStart chapter=1 offset=0 ") } >= 2
+            }
+            assertEquals("Only the explicit retry may make a second attempt", 2,
+                events.lineSequence().count { it.contains("synthesisStart chapter=1 offset=0 ") })
+            assertEquals("Retry must not replay the completed first chapter", 1,
+                events.lineSequence().count { it.contains("synthesisStart chapter=0 offset=0 ") })
+            assertFalse("The unread chapter must never be skipped", events.contains("synthesisStart chapter=2 "))
+            assertFalse("No part of the unsupported chapter may play",
+                events.lineSequence().any { it.contains("trackBuilt ") && it.contains("chapter=1 ") })
+            assertTrue(controller.localErrorMessage?.contains("“𰻞”") == true)
+            awaitCondition("failed retry leaves actual audio inactive", 5_000, failOnPlaybackFailure = false) {
+                assertEquals(ReaderTtsSessionState.FAILED, controller.playbackState)
+                !audioManager.isMusicActive
+            }
+            val retried = requireNotNull(progress(book.id))
+            assertEquals(1 to 0, retried.position())
+            assertFalse(retried.completed)
+            assertTrue(device.wait(Until.hasObject(By.desc("重试朗读")), 3_000))
+        }
+    }
+
+    @Test
     fun doubleSpeedReaderPauseResumeStopAndPageTopRestartKeepTimerChoice() {
         val firstChapter = "清晨，他推开窗，沿着河岸慢慢前行。路旁的树叶带着露水，远处有人打开木门。商量前面的路线。"
         val book = seedBook("offline-double-speed-controls", listOf(firstChapter, chapterBody(2), chapterBody(3)))
@@ -543,11 +633,23 @@ class ReaderOfflineListeningTest {
     private fun progress(bookId: String): ListeningProgress? = runBlocking { application.listeningProgressStore.load(bookId) }
     private fun ListeningProgress.position(): Pair<Int, Int> = chapterIndex to charOffset
 
-    private fun awaitCondition(label: String, timeoutMillis: Long, predicate: () -> Boolean) {
+    private fun offlineEventsSince(marker: String): String =
+        device.executeShellCommand("logcat -d -v brief -s OfflineReaderTts:I ReaderOfflineListening:I")
+            .also { assertTrue("The test marker must remain available", it.contains(marker)) }
+            .substringAfter(marker)
+
+    private fun awaitCondition(
+        label: String,
+        timeoutMillis: Long,
+        failOnPlaybackFailure: Boolean = true,
+        predicate: () -> Boolean,
+    ) {
         val deadline = SystemClock.elapsedRealtime() + timeoutMillis
         while (SystemClock.elapsedRealtime() < deadline) {
             if (predicate()) return
-            check(controller.playbackState != ReaderTtsSessionState.FAILED) { "$label: ${controller.localErrorMessage}" }
+            check(!failOnPlaybackFailure || controller.playbackState != ReaderTtsSessionState.FAILED) {
+                "$label: ${controller.localErrorMessage}"
+            }
             Thread.sleep(50)
         }
         throw AssertionError("Timed out: $label; state=${controller.runtimeState.value}")

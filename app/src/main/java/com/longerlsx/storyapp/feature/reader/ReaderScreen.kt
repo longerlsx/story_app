@@ -1269,6 +1269,7 @@ private fun ReaderReadyContent(
                                     onUpdateSpeechRate = { updateTtsSettings(selectedSettings.ttsSettings.copy(speechRate = it)) },
                                     onUpdatePitch = { updateTtsSettings(selectedSettings.ttsSettings.copy(pitch = it)) },
                                     onUpdateTimerPreset = { updateTtsSettings(selectedSettings.ttsSettings.copy(timerPreset = it)) },
+                                    onUpdateVoiceName = { updateTtsSettings(selectedSettings.ttsSettings.copy(voiceName = it)) },
                                     errorText = listeningError,
                                 )
                             }

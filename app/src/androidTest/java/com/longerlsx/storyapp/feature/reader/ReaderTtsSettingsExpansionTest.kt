@@ -12,11 +12,14 @@ import androidx.test.uiautomator.Until
 import com.longerlsx.storyapp.MainActivity
 import com.longerlsx.storyapp.StoryApplication
 import com.longerlsx.storyapp.core.model.ReaderTtsSettings
+import com.longerlsx.storyapp.data.reader.ReaderSettingsStore
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsEngine
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsSegment
 import com.longerlsx.storyapp.feature.reader.tts.ReaderTtsVoiceOption
 import java.io.File
+import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -58,10 +61,44 @@ class ReaderTtsSettingsExpansionTest {
             assertTrue(read != null && device.clickObjectCenter(read))
             assertTrue(device.wait(Until.hasObject(By.text("定时关闭")), 3_000))
             assertTrue(device.wait(Until.hasObject(By.desc("暂停朗读")), 3_000))
-            assertTrue(device.hasObject(By.text("雷军 · 合成音色")))
+            assertTrue(device.hasObject(By.desc("C · SSB1020")))
             assertFalse(device.hasObject(By.text("亮度")))
             assertFalse(device.hasObject(By.text("从当前文字开始")))
             assertFalse(device.hasObject(By.text("从章节开头开始")))
+        }
+    }
+
+    @Test
+    fun voiceChoicePersistsItsStableIdentityWithoutStartingPlayback() {
+        ActivityScenario.launch<MainActivity>(buildImportIntent("reader-voice-choice")).use {
+            assertTrue(device.wait(Until.hasObject(By.textContains("第一章正文")), 8_000))
+            assertTrue(device.revealReaderChrome("朗读"))
+            assertTrue(device.longPressActionLabel("朗读"))
+            assertTrue(device.wait(Until.hasObject(By.desc("开始朗读")), 3_000))
+            assertTrue(device.wait(Until.hasObject(voiceChoiceSelector("C · SSB1020").checked(true)), 3_000))
+            val original = application.readerSettingsStore.load()
+
+            for (label in listOf("F · SSB0863", "C · SSB1020", "F · SSB0863")) {
+                val choice = device.wait(Until.findObject(voiceChoiceSelector(label)), 3_000)
+                assertTrue(choice != null && device.clickObjectCenter(choice))
+                assertTrue(device.wait(Until.hasObject(voiceChoiceSelector(label).checked(true)), 3_000))
+            }
+            assertTrue(device.hasObject(By.desc("开始朗读")))
+            assertFalse(device.hasObject(By.desc("暂停朗读")))
+            runBlocking { application.readerSettingsStore.awaitPendingWrites() }
+            assertEquals(
+                original.copy(ttsSettings = original.ttsSettings.copy(voiceName = "piper:aishell3:ssb0863")),
+                ReaderSettingsStore(context.filesDir).load(),
+            )
+        }
+        ActivityScenario.launch<MainActivity>(Intent(context, MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }).use {
+            assertTrue(device.wait(Until.hasObject(By.textContains("第一章正文")), 8_000))
+            assertTrue(device.revealReaderChrome("朗读"))
+            assertTrue(device.longPressActionLabel("朗读"))
+            assertTrue(device.wait(Until.hasObject(voiceChoiceSelector("F · SSB0863").checked(true)), 3_000))
+            assertTrue(device.hasObject(By.desc("开始朗读")))
         }
     }
 
@@ -100,6 +137,10 @@ class ReaderTtsSettingsExpansionTest {
             assertFalse(device.hasObject(By.descContains("设置分页：")))
         }
     }
+
+    // The exported description is a child; its clickable parent owns the checked state.
+    private fun voiceChoiceSelector(label: String) =
+        By.clickable(true).checkable(true).hasChild(By.desc(label))
 
     private fun buildImportIntent(fileName: String): Intent {
         val importFile = File(context.cacheDir, "$fileName.txt").apply {

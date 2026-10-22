@@ -129,7 +129,7 @@ class ReaderOfflineVoiceTest {
     @Test
     fun bundledVoiceGeneratesAndPlaysNewChineseText(): Unit = runBlocking {
         val application = ApplicationProvider.getApplicationContext<StoryApplication>()
-        val voiceName = InstrumentationRegistry.getArguments().getString("voiceName", "kokoro:59")
+        val voiceName = InstrumentationRegistry.getArguments().getString("voiceName", ReaderTtsSettings.DEFAULT_VOICE_NAME)
         val speechRate = InstrumentationRegistry.getArguments().getString("speechRate", "1").toFloat()
         application.setReaderTtsEngineFactoryForTests(null)
         val completed = CompletableDeferred<Unit>()
@@ -154,8 +154,8 @@ class ReaderOfflineVoiceTest {
         val engine = withContext(Dispatchers.Main) { application.createReaderTtsEngine(callback) }
         try {
             val voices = withTimeout(60_000) { engine.initialize().getOrThrow() }
-            assertEquals("Only the bundled reference voice is selectable", listOf("zipvoice:leijun"), voices.map { it.name })
-            // The old persisted Kokoro value must still synthesize through the new single voice.
+            assertEquals("The shared model exposes the two accepted speakers",
+                listOf("piper:aishell3:ssb1020", "piper:aishell3:ssb0863"), voices.map { it.name })
             val text = InstrumentationRegistry.getArguments().getString("text")
                 ?: "他推开窗，看见远处的山林。今天是九月二十日，约好的时间是下午三点半。"
             val acceptedAt = SystemClock.elapsedRealtime()

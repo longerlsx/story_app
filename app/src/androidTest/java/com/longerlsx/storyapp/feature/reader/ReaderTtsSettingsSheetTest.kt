@@ -65,6 +65,39 @@ class ReaderTtsSettingsSheetTest {
     }
 
     @Test
+    fun voiceChoicesForwardStableNamesAndKeepOtherSettingsWhenSwitching() {
+        val original = ReaderTtsSettings(
+            voiceName = "piper:aishell3:ssb1020", speechRate = 1.45f, pitch = 0.9f,
+            timerPreset = ReaderTtsTimerPreset.Countdown(30),
+        )
+        var settings by mutableStateOf(original)
+        val voices = mutableListOf<String>()
+        composeRule.setContent {
+            MaterialTheme {
+                ReaderTtsSettingsSheet(
+                    statusText = "已暂停", settings = settings, themePalette = palette,
+                    primaryActionLabel = "继续朗读", onPrimaryAction = {}, onStop = {}, onClose = {},
+                    onUpdateSpeechRate = {}, onUpdatePitch = {}, onUpdateTimerPreset = {},
+                    onUpdateVoiceName = { voices += it; settings = settings.copy(voiceName = it) },
+                )
+            }
+        }
+        composeRule.onNodeWithContentDescription("C · SSB1020").performScrollTo().assertIsSelected().performClick()
+        composeRule.onNodeWithContentDescription("F · SSB0863").assertIsNotSelected().performClick()
+        composeRule.onNodeWithContentDescription("F · SSB0863").assertIsSelected().performClick()
+        composeRule.runOnIdle {
+            assertEquals(listOf("piper:aishell3:ssb0863"), voices)
+            assertEquals(original.copy(voiceName = "piper:aishell3:ssb0863"), settings)
+        }
+        composeRule.onNodeWithContentDescription("C · SSB1020").assertIsNotSelected().performClick()
+        composeRule.onNodeWithContentDescription("C · SSB1020").assertIsSelected()
+        composeRule.runOnIdle {
+            assertEquals(listOf("piper:aishell3:ssb0863", "piper:aishell3:ssb1020"), voices)
+            assertEquals(original, settings)
+        }
+    }
+
+    @Test
     fun timerMenuKeepsLongDurationsOutOfTheCommonControlsAndSelectsOnce() {
         val timers = mutableListOf<ReaderTtsTimerPreset>()
         composeRule.setContent {

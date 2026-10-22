@@ -1,16 +1,16 @@
 # 大脸猫阅读（Story App）项目背景、功能与实现概览
 
-**10月22日最新进展：** 用户已批准[以Piper替换ZipVoice的实施计划](superpowers/plans/2026-10-22-piper-listening-replacement.md)，当前实施中、尚未形成验收候选。已确认单一Piper后端、共享模型C/F双声且C默认、英文逐字母兜底，先模拟器后真机；中文读法与分段协同、旧路径清理和数据回退一起完成。完整中文前端、较长试听及手机低热仍待验证。[讨论稿](superpowers/specs/2026-10-22-piper-listening-replacement.md)保留历史依据。
+**10月22日最新进展：** 用户已批准[以Piper替换ZipVoice的实施计划](superpowers/plans/2026-10-22-piper-listening-replacement.md)。当前源码已接入单一Piper后端、共享模型C/F双声且C默认，中文前端、分段读法提示、设置和资源清理已接通，初次正式实播成功。仍在实施中，尚未完成模拟器候选验收或新版本交付；较长核听、完整控制回归、升级回退和手机低热均待验证，执行顺序继续是先模拟器后真机。[讨论稿](superpowers/specs/2026-10-22-piper-listening-replacement.md)保留历史依据。
 
-更新时间：2026-10-22。**当前执行Piper替换，已交付版本仍为ZipVoice，发热问题未解决。** 15 Ultra和17 Pro均有1.45×下发热及随发热出现失真的反馈；小米浏览器、番茄和网盘App断网朗读本地小说是用户的体验对照。免费、离线、男声及尽量一体打包偏好继续成立，目标仍是朗读通顺、低运算、长听舒适。广泛路线调查见[可行性报告](superpowers/specs/2026-10-21-offline-tts-landscape.md)，MNN、新克隆模型、高通NPU及雷军声轻量训练保留为未实施后备方向，不混入当前替换范围。实际安装包身份与“热后失真”机制未完成新取证，不能从相关性推定根因；[BUG-062](knowledge/bugs/BUG-2026-062-zipvoice-long-listening-thermal.json)继续调查。
+更新时间：2026-10-22。**当前执行Piper替换，已交付版本仍为ZipVoice，发热问题未解决。** 15 Ultra和17 Pro均有1.45×下发热及随发热出现失真的反馈；小米浏览器、番茄和网盘App断网朗读本地小说是用户的体验对照。免费、离线、男声及尽量一体打包偏好继续成立，目标仍是朗读通顺、低运算、长听舒适。广泛路线调查见[可行性报告](superpowers/specs/2026-10-21-offline-tts-landscape.md)，MNN、新克隆模型、高通NPU及雷军声轻量训练保留为未实施后备方向，不混入当前替换范围。用户反馈时的手机安装包身份与“热后失真”机制未完成新取证，不能从相关性推定根因；[BUG-062](knowledge/bugs/BUG-2026-062-zipvoice-long-listening-thermal.json)继续调查。
 
-**已取得的选型证据：** 用户认可[六男声试听](../app/build/outputs/现成男声试听-20261022)中的C（SSB1020／SID30）和F（SSB0863／SID151）。同M1 Pro、sherpa1.13.8、两线程、50字输入，三轮交替初筛显示C/F同文热运行CPU较ZipVoice三步完整参考减少71.5%／73.2%；条件、归一指标及限制由[研究第15节](superpowers/specs/2026-10-21-offline-tts-landscape.md#15-10月22日cf认可与本机计算成本初筛)和[原始结果](../app/build/outputs/tts-cost-20261022/README.md)维护。样音用人工拼音，性能测试用固定小词典；结果支持投入候选，不是完整前端或手机节电／温降结论。尚未试听全部174声，也未接入App或开展新的手机验证。
+**已取得的选型证据：** 用户认可[六男声试听](../app/build/outputs/现成男声试听-20261022)中的C（SSB1020／SID30）和F（SSB0863／SID151）。同M1 Pro、sherpa1.13.8、两线程、50字输入，三轮交替初筛显示C/F同文热运行CPU较ZipVoice三步完整参考减少71.5%／73.2%；条件、归一指标及限制由[研究第15节](superpowers/specs/2026-10-21-offline-tts-landscape.md#15-10月22日cf认可与本机计算成本初筛)和[原始结果](../app/build/outputs/tts-cost-20261022/README.md)维护。样音用人工拼音，性能测试用固定小词典；结果支持投入候选，不是完整前端或手机节电／温降结论。该初筛发生在接入App前；当前已接入，但尚未试听全部174声，也未开展新的手机验证。
 
 **声音筛选历史：** 本轮C不是此前公开样音C「超文」。超文曾获用户初步认可，随后朋友反馈“油腻、咯痰”，用户确认原速也明显，故暂不定选；不据此归因于倍速、发热或否定所有Piper声音。[历史判断](superpowers/specs/2026-10-21-offline-tts-landscape.md#12-超文原速喉音反馈与后续筛选)及[已保存的超文录音](../app/build/outputs/超文试听-20261021)保留。用户嫌卡的本机试听HTTP服务保持停止，临时浏览器页已关闭；网页卡顿不构成Piper推理性能证据。旧Kokoro、先前未选用的fanchen-wnj及撤回的ZipVoice配置不重新加入候选。
 
 **10月16日主要修复已形成候选交付，尚未全部结项。** 按[体验稳定性计划](superpowers/plans/2026-10-16-app-experience-stability.md)完成分页取整、章节格式、时间回拨后阅读进度、主题无障碍状态及极短首段衔接修复。347项JVM、118个不同设备案例最终通过，构建与lint无错误；正式入口覆盖升级、恢复、实际音轨及15分钟定时播放。用户已核听两种速度固定样本和长听摘录，均反馈没有明显问题；这些限定窗口不覆盖10月21日的新实际反馈。仍保留一次未定位的0.923秒听书交接异常（[BUG-066](knowledge/bugs/BUG-2026-066-intermittent-audio-handoff-delay.json)）；新增日志下15分钟及同文复测未重现，不能据此关闭，也不能把听书B项整体写为通过。原用户原书的偶发截字／切章现场及真机温耗仍有验证边界。
 
-**10月16日体验候选APK：** [同签名ARM64候选包](/Users/longshengxi/proj/story_app/app/build/outputs/experience-20261016/daliamao-reader-experience-candidate-20261016.apk)，225,895,027字节，代码提交 `6ada54c`（后续仅文档与证据整理不改变APK）。SHA256 `3d5f83efa1f5a029c77b1102bc5bcdeb9a42bfdf9750547d68a8c732626bc437`；ARM64 debug，包名、版本及证书与下方基线一致。交付目录包含实际录音、核听摘录与回归摘要；完整参考基线继续保留用于回退。未更改存储格式、迁移目录或重新试用短参考；本轮没有手机安装和新的温耗结论，不宣称普遍提速。
+**10月16日体验候选APK（ZipVoice历史交付／当前回退基线）：** [同签名ARM64候选包](/Users/longshengxi/proj/story_app/app/build/outputs/experience-20261016/daliamao-reader-experience-candidate-20261016.apk)，225,895,027字节，代码提交 `6ada54c`（后续仅文档与证据整理不改变APK）。SHA256 `3d5f83efa1f5a029c77b1102bc5bcdeb9a42bfdf9750547d68a8c732626bc437`；ARM64 debug，包名、版本及证书与下方基线一致。交付目录包含实际录音、核听摘录与回归摘要；完整参考基线继续保留用于回退。10月16日该阶段未更改存储格式、迁移目录或重新试用短参考，没有手机安装和新的温耗结论，不宣称普遍提速。
 
 **前序完整参考打包阶段已完成：** 用户实际试用反馈1.930秒短参考经常失真，已撤回该试用选择；该阶段按要求恢复“四线程／三步／完整6.057秒参考”并打包，保留单一雷军合成音色、段首两字缩进和既有阅读／播放交互。失真机制尚未定位，恢复完整参考不等于已经证明所有正文失真消失；完整真机温耗目标仍未验收。该打包阶段仅恢复参考配置并交付APK，未重新启动发热调查或全量界面验收，不限制随后获批的当前轮计划。历史路线、条件及未决项见[9月23日阶段交接](knowledge/2026-09-23-offline-tts-thermal-handoff.md)。两步E和三线程C此前均已撤回，不是当前备用配置。
 
@@ -24,15 +24,15 @@
 
 9月23日用户曾允许轻微听感损失换取较低生成成本，并选择三步短参考试用；10月16日因实际使用中频繁失真撤回。此前[三步完整／短参考同文试听](../app/build/outputs/thermal-investigation/listening-three-steps-20260923/README.txt)在1.45×下分别约36.7／35.9秒，只是当时的小样本，不能覆盖后来的用户反馈。短参考在四步、两步小样本均减少生成CPU，但三步短参考未测新的CPU降幅或真机能耗，不能套用百分比。原冻结门槛及逐轮过程保存在[发热改善计划](superpowers/plans/2026-09-23-offline-listening-thermal.md)，阶段结项和10月16日前序恢复完整参考都没有改判热问题解决。
 
-**9月23日历史试用交付（短参考已撤回）：** [三步短参考＋段首缩进APK](/Users/longshengxi/proj/story_app/app/build/outputs/thermal-investigation/daliamao-reader-3steps-shortref-indent-20260923.apk)约215.7MiB，仅保留历史身份。缩进14项JVM、9项Android验证通过；当时1.45×实际声音、相关播放控制及模拟器覆盖安装数据保留已检查。一次“继续”控件查找失败在录屏复验未重现，根因未确定，详细证据和限制见[历史交付身份](knowledge/2026-09-23-offline-tts-thermal-handoff.md#本轮交付身份)。这些检查不证明长篇任意正文的音质合格。优化前四步完整参考由tag `tts-thermal-baseline-20260922-4steps-full-reference`固定，不与当前三步完整参考混称。
+**9月23日历史试用交付（短参考已撤回）：** [三步短参考＋段首缩进APK](/Users/longshengxi/proj/story_app/app/build/outputs/thermal-investigation/daliamao-reader-3steps-shortref-indent-20260923.apk)约215.7MiB，仅保留历史身份。缩进14项JVM、9项Android验证通过；当时1.45×实际声音、相关播放控制及模拟器覆盖安装数据保留已检查。一次“继续”控件查找失败在录屏复验未重现，根因未确定，详细证据和限制见[历史交付身份](knowledge/2026-09-23-offline-tts-thermal-handoff.md#本轮交付身份)。这些检查不证明长篇任意正文的音质合格。优化前四步完整参考由tag `tts-thermal-baseline-20260922-4steps-full-reference`固定，不与后续三步完整参考基线混称。
 
 **9月22日ZipVoice与听书交互已完成当轮模拟器验收：** 只保留雷军合成音色，实现页顶直接起读、独立听书面板、图标暂停／停止与紧凑播放条。[问题版本debug APK](/Users/longshengxi/proj/story_app/app/build/outputs/zipvoice-upgrade/daliamao-reader-debug-20260922.apk)约215MiB、仅ARM64，完全离线，不打包旧音色。真实小说1×／2×连续播放、后台与焦点恢复、数字读法、旧版覆盖升级及进程终止恢复均有直接证据。APK完整身份、实现关系和验证范围由[9月22日实施计划](superpowers/plans/2026-09-22-zipvoice-listening-upgrade.md)维护；当轮只验收模拟器，不声称新音源的小米性能通过。以下9月22日“不安排真机”的表述均为历史范围，不覆盖9月23日另行进行的长听调查。
 
 **当前已实现的交互：** 每次新开听书从操作时当前页面最上一行正文直接开始，不再选择起点；暂停／继续保留原会话。独立听书面板固定显示图标播放／暂停、停止和收起操作，下方设置按定时→语速→音色→更多选项排列；普通阅读设置不再包含朗读页签。正常操作不追加成功提示，面板覆盖正文而不改变分页尺寸。[已确认交互讨论稿](superpowers/specs/2026-09-22-listening-controls-and-voice.md)保存设计来源，当前实现及验收边界以下文为准。
 
-**9月20日视觉与听书操作（历史交付）：** 四页日夜改版、2×语速、直接停止、名称／猫脸图标已实现，当时Kokoro音源的连续跨章真实音频、暂停／停止／续听及旧版覆盖升级检查通过。[当时的debug APK](/Users/longshengxi/proj/story_app/app/build/outputs/visual-upgrade/daliamao-reader-debug-20260920.apk)与[四页真实前后对比](superpowers/specs/assets/2026-09-20-visual-direction/implemented-compare.html)保留历史身份。当时验收在模拟器完成；随后按用户要求覆盖安装并正常打开在小米15 Ultra上，手机安装包SHA与交付包一致，未清除应用数据。该次安装不增加真机2×或长听验收结论，更不证明本轮ZipVoice通过。实现、证据、APK身份和限制由[9月20日实施计划](superpowers/plans/2026-09-20-visual-listening-upgrade.md)维护。
+**9月20日视觉与听书操作（历史交付）：** 四页日夜改版、2×语速、直接停止、名称／猫脸图标已实现，当时Kokoro音源的连续跨章真实音频、暂停／停止／续听及旧版覆盖升级检查通过。[当时的debug APK](/Users/longshengxi/proj/story_app/app/build/outputs/visual-upgrade/daliamao-reader-debug-20260920.apk)与[四页真实前后对比](superpowers/specs/assets/2026-09-20-visual-direction/implemented-compare.html)保留历史身份。当时验收在模拟器完成；随后按用户要求覆盖安装并正常打开在小米15 Ultra上，手机安装包SHA与交付包一致，未清除应用数据。该次安装不增加真机2×或长听验收结论，也不证明后续ZipVoice或当前Piper通过。实现、证据、APK身份和限制由[9月20日实施计划](superpowers/plans/2026-09-20-visual-listening-upgrade.md)维护。
 
-**历史已交付基线：** 9月20日免费离线听书目标已按用户最终确认范围完成，v3已安装并打开在15 Ultra上，书籍与进度保留。四种内置音色、约124秒正文连续输出、通知实际播放／暂停／回正文、进程终止后的显式续听和真实系统音频焦点恢复均有直接证据。两次临时打断保留原音频，归还控制权后约0.12秒播放帧继续推进；主动暂停及永久失焦不会擅自续播。用户明确将真机30分钟不充电熄屏移为后续体验项，不作为当时完成卡点；模拟器该项已通过。v3的主观听感、原消息应用、物理耳机／来电及17 Pro仍未逐项实测，不宣称所有设备和场景已验收。各项证据所属版本、条件及限制见[听书实施计划](superpowers/plans/2026-09-20-offline-listening.md)。9月14日纯阅读性能与交互缺口优化也已完成实现及验证，未受影响证据继续继承；对应记录在[9月14日计划](superpowers/plans/2026-09-14-pagination-measurement-reuse.md)。上述代码已按用户授权提交并推送至`origin/feat-android-reader-foundation`：`a1a2538`为分页测量优化，`d8848fe`为阅读交互及离线听书；这不是9月22日本轮ZipVoice改动的提交或交付声明。
+**历史已交付基线：** 9月20日免费离线听书目标已按用户最终确认范围完成，v3已安装并打开在15 Ultra上，书籍与进度保留。四种内置音色、约124秒正文连续输出、通知实际播放／暂停／回正文、进程终止后的显式续听和真实系统音频焦点恢复均有直接证据。两次临时打断保留原音频，归还控制权后约0.12秒播放帧继续推进；主动暂停及永久失焦不会擅自续播。用户明确将真机30分钟不充电熄屏移为后续体验项，不作为当时完成卡点；模拟器该项已通过。v3的主观听感、原消息应用、物理耳机／来电及17 Pro仍未逐项实测，不宣称所有设备和场景已验收。各项证据所属版本、条件及限制见[听书实施计划](superpowers/plans/2026-09-20-offline-listening.md)。9月14日纯阅读性能与交互缺口优化也已完成实现及验证，未受影响证据继续继承；对应记录在[9月14日计划](superpowers/plans/2026-09-14-pagination-measurement-reuse.md)。上述代码已按用户授权提交并推送至`origin/feat-android-reader-foundation`：`a1a2538`为分页测量优化，`d8848fe`为阅读交互及离线听书；这不是后续ZipVoice或当前Piper改动的提交或交付声明。
 
 第一阶段历史成果为 `c639941`（存储与导入）、`e9b9498`（阅读定位与交互）；[9月11日计划](superpowers/plans/2026-09-11-reader-stability-phase-one.md) 保存当时的构建与验证，未受本轮影响的证据继续继承。
 
@@ -44,7 +44,7 @@
 
 这是以本地 TXT 为核心的 Android 小说阅读器。最初目标是：从文件管理器或其他应用导入小说，自动建立目录，顺畅地翻页或滚动，退出后回到原来的文字位置。后来增加了后台听书、朗读跟随和定时停止。
 
-用户在上一轮听书任务补充的实际语音情况是：**小米中国版设备默认可以朗读，但当时只能用小爱女声，希望有真正的男声音色。** 不应再将这件事描述成“小米无法发声”，也不能用修复初始化或调整音高替代音色需求。用户另报告设30–60分钟定时、熄屏后几分钟会中断且难以继续，属于半实验版本；上一轮已处理后台与恢复，模拟器完整30分钟熄屏定时已通过，真机长测按用户最终要求不阻断当时交付，不能反称旧路径稳定或小米长测已通过。用户允许根据实际设计重做听书交互和内部结构。设备为小米15 Ultra及17 Pro；15 Ultra已核对型号25019PNF3C、Android 16、HyperOS `OS3.0.306.0.WOACNXM`，17 Pro尚未核对或测试。
+用户在9月20日听书任务补充的实际语音情况是：**小米中国版设备默认可以朗读，但当时只能用小爱女声，希望有真正的男声音色。** 不应再将这件事描述成“小米无法发声”，也不能用修复初始化或调整音高替代音色需求。用户另报告设30–60分钟定时、熄屏后几分钟会中断且难以继续，属于半实验版本；当时已处理后台与恢复，模拟器完整30分钟熄屏定时已通过，真机长测按用户最终要求不阻断当时交付，不能反称旧路径稳定或小米长测已通过。用户允许根据实际设计重做听书交互和内部结构。设备为小米15 Ultra及17 Pro；15 Ultra已核对型号25019PNF3C、Android 16、HyperOS `OS3.0.306.0.WOACNXM`，17 Pro尚未由代理核对或测试。
 
 最初明确暂不做在线书源接入、账号、同步、付费、社区及 EPUB/PDF。用户进一步明确：搜索、删除等能力现在也不做，不能因为现状表列出缺口就扩展下一阶段范围。
 
@@ -53,7 +53,7 @@
 1. **先把纯看书做稳。** 重点是翻页/滚动时文字跳动或闪烁、标题和章节切分、显示控件、卡顿及其他实际阅读问题。需要代理主动检查完整使用过程，不能依赖用户遇到一个再报告修一个，也要减少修复引起的反复返工。
 2. **再解决听小说。** 包括真正可用的男声音色与可靠的听书体验。应复用第一阶段形成的文本、定位、翻页/滚动和显示能力，避免给听书重新写一套页面操作。
 
-用户愿意补充小说样本，但需要代理先说明缺什么、怎么用，并高效利用。上述两阶段已有交付成果，9月22日进一步替换为单一雷军音源并重做听书入口与面板。10月22日开始讨论Piper后端替换，尚未实施，声音来源约束继续适用，见下文。
+用户愿意补充小说样本，但需要代理先说明缺什么、怎么用，并高效利用。上述两阶段已有交付成果，9月22日替换为单一雷军音源并重做听书入口与面板。10月22日用户批准Piper替换，当前代码已接入C/F双声，正在完成验收；声音来源约束继续适用，见下文。
 
 ## 已有功能与交互
 
@@ -61,7 +61,7 @@
 
 | 用户动作 | 当前行为 | 完成程度或需要留意的地方 |
 | --- | --- | --- |
-| 应用名称与图标 | 对外名称为“大脸猫阅读”，启动图标取自原宠物猫脸；书架、应用标签及通知渠道文案同步 | 内部包名与存储格式沿用，旧渠道保留用户偏好；本轮已通过旧APK正常导入、设置、播放后覆盖ZipVoice候选的检查，书籍、设置和位置保留；旧版证据另标历史 |
+| 应用名称与图标 | 对外名称为“大脸猫阅读”，启动图标取自原宠物猫脸；书架、应用标签及通知渠道文案同步 | 内部包名与存储格式沿用，旧渠道保留用户偏好；ZipVoice历史升级检查曾确认书籍、设置和位置保留，当前Piper升级往返仍待验证 |
 | 启动应用 | 共享一次后台初始化，恢复书籍索引、目录、设置和进度；有有效最近阅读书籍时打开，否则进入书架 | 显示载入/重试状态；单本坏书隔离并提示；纯阅读不等待音色预载 |
 | 从书架导入 | 系统文件选择 → 共同 URI 读取与校验 → 后台解码、元数据、分章、保存 → 自动开书 | 支持哈希去重、导入中提示和失败反馈；失败导入清理未提交数据 |
 | 从其他应用打开/分享 | 接收 VIEW/SEND 文本 URI，与本地选择共用读取、校验、导入和错误反馈 | 正常导入及异常入口已有设备回归，完整运行记录见计划 |
@@ -78,9 +78,9 @@
 | 暂停与停止听书 | 暂停保留会话和剩余定时，继续沿用原会话；停止取消生成与待播队列、清空本次计时、释放播放资源并收起通知，设置和已保存听书位置保留 | 停止后旧任务和焦点回调不能自行续播；新开须明确操作，从届时页顶正文开始并重置所选定时。焦点恢复、自动跨章与暂停继续不套用新开的页顶规则 |
 | 听书时翻页/滚动 | 普通浏览暂时停止跟随约10秒后追上；明确目录/章节按钮及手动分页跨章停止听书 | 自动跟读、通知定位和会话恢复跨章不会误当手动翻章而停止 |
 | 听书时长按正文 | 从按下处之后的可读位置重新开始，保留定时余额 | 与点击/滑动手势共存，需动态检查冲突 |
-| 后台听书 | 沿用前台媒体服务、通知/锁屏控制、音频焦点、耳机断开暂停和定时；自定义“停止”与标准停止、通知入口共用结束路径 | ZipVoice真实引擎4条后台回归已通过，覆盖熄屏、通知操作、临时失焦恢复及主动暂停／永久失焦不自动续播；另有真实进程终止后恢复证据。结论限指定模拟器，不安排或等待真机 |
-| 听书设置 | 顺序为定时→语速→音色→更多选项；不定时、15/30/60分钟直接可选，90/120分钟在“更多”中；音色仅显示“雷军 · 合成音色”，音调置于更多选项 | 已删除多音色选择及试听入口；设置自动保存，语速和音调从下一语音单元生效，已选值再次点击不追加更新 |
-| 调整语速 | 可选0.85×、1×、1.3×、1.45×、2×，标签对应实际数值；旧1.15设置读取为1× | ZipVoice固定按自然1×完整合成，AudioTrack应用实际播放速度和独立音调；当前单元保留开始时的参数，下一单元用最新值，自然语音缓存不因换播放速度失效。四线程下的2×连续供给及预生成音频换速实播已通过，范围限本轮模拟器与已测输入 |
+| 后台听书 | Piper沿用前台媒体服务、通知/锁屏控制、音频焦点、耳机断开暂停和定时；自定义“停止”与标准停止、通知入口共用结束路径 | ZipVoice历史后台和进程恢复证据按原构建保留；Piper的受影响设备回归及持续运行尚未完成，不能沿用旧音源的通过结论 |
+| 听书设置 | 顺序为定时→语速→音色→更多选项；不定时、15/30/60分钟直接可选，90/120分钟在“更多”中；可选“C · SSB1020”和“F · SSB0863”，音调置于更多选项 | C默认，旧／空／未知音色在内存中归一为C，有效C/F写入后重载保留；读取不改写其他数据。设置自动保存，当前单元保留参数，下一单元使用新音色／语速／音调；重复选择不追加更新。界面未增加试听按钮 |
+| 调整语速 | 可选0.85×、1×、1.3×、1.45×、2×，标签对应实际数值；旧1.15设置读取为1× | Piper固定自然1×合成，由AudioTrack应用播放速度和独立音调；当前单元保留开始时参数，自然音频不因换播放速度失效。两线程是当前配置，Piper完整供给与长听仍待验，不外推ZipVoice四线程的旧2×结果 |
 | 返回 | 系统返回先关闭目录、阅读设置或听书面板，否则保存后回书架；顶栏返回直接保存后回书架 | 两个退出入口共用保存路径，后台停止也保存确认位置 |
 | 在线书源 | 书架已收起未开放的在线书源入口；旧说明页代码仍保留 | 未接入书源系统，不扩展本轮范围 |
 
@@ -103,14 +103,15 @@ flowchart TD
     G --> H[章节号 + 字符位置]
     H --> I[进度保存与恢复]
     F --> J[朗读控制器 + 前台服务]
-    J --> K[内置ZipVoice自然合成 → AudioTrack倍速播放]
+    J --> K[正式分段 + 中文读法规范化与覆盖检查]
+    K --> M[Piper双声自然合成 → AudioTrack倍速播放]
     J --> L[独立听书进度]
     J --> F
 ```
 
 主要入口：
 
-- [StoryApplication.kt](/Users/longshengxi/proj/story_app/app/src/main/java/com/longerlsx/storyapp/StoryApplication.kt)：共享后台初始化、进度写入协调、朗读控制器与按需音色预载。
+- [StoryApplication.kt](/Users/longshengxi/proj/story_app/app/src/main/java/com/longerlsx/storyapp/StoryApplication.kt)：共享后台初始化、进度写入协调、朗读控制器与音色目录预载；展示C/F目录不加载声学模型。
 - [StoryApp.kt](/Users/longshengxi/proj/story_app/app/src/main/java/com/longerlsx/storyapp/app/StoryApp.kt)：三个页面、初始化状态、共同导入入口及错误反馈、跨书时停止听书。
 - [ImportCoordinator.kt](/Users/longshengxi/proj/story_app/app/src/main/java/com/longerlsx/storyapp/data/book/ImportCoordinator.kt)：共同导入流程。
 - [ChapterParser.kt](/Users/longshengxi/proj/story_app/app/src/main/java/com/longerlsx/storyapp/data/book/ChapterParser.kt)：章节解析流水线。
@@ -122,7 +123,9 @@ flowchart TD
 - [ReaderPageTextLayout.kt](/Users/longshengxi/proj/story_app/app/src/main/java/com/longerlsx/storyapp/feature/reader/ReaderPageTextLayout.kt)、[ReaderPagePagination.kt](/Users/longshengxi/proj/story_app/app/src/main/java/com/longerlsx/storyapp/feature/reader/ReaderPagePagination.kt)：真实行测量及段落轻量指标复用；仍对页首尾截断片段测量、按行回退并核对页底。
 - [ReaderSettingsStore.kt](/Users/longshengxi/proj/story_app/app/src/main/java/com/longerlsx/storyapp/data/reader/ReaderSettingsStore.kt)：设置校验、内存快照和后台原子保存。
 - [ReaderControls.kt](/Users/longshengxi/proj/story_app/app/src/main/java/com/longerlsx/storyapp/feature/reader/ReaderControls.kt)维护覆盖式控制、听书入口与紧凑条；[ReaderSettingsSheet.kt](/Users/longshengxi/proj/story_app/app/src/main/java/com/longerlsx/storyapp/feature/reader/ReaderSettingsSheet.kt)只承载阅读设置，[ReaderTtsSettingsSheet.kt](/Users/longshengxi/proj/story_app/app/src/main/java/com/longerlsx/storyapp/feature/reader/ReaderTtsSettingsSheet.kt)承载独立听书面板；[ReaderTtsSpeechRates.kt](/Users/longshengxi/proj/story_app/app/src/main/java/com/longerlsx/storyapp/core/model/ReaderTtsSpeechRates.kt)统一语速选项、标签及旧值迁移。
-- [ReaderTtsService.kt](/Users/longshengxi/proj/story_app/app/src/main/java/com/longerlsx/storyapp/feature/reader/tts/ReaderTtsService.kt)：有限章节队列、媒体会话、定时、音频焦点与恢复；[OfflineReaderTtsEngine.kt](/Users/longshengxi/proj/story_app/app/src/main/java/com/longerlsx/storyapp/feature/reader/tts/OfflineReaderTtsEngine.kt)负责ZipVoice初始化、自然语速合成与AudioTrack倍速播放；[ListeningProgressStore.kt](/Users/longshengxi/proj/story_app/app/src/main/java/com/longerlsx/storyapp/data/reader/ListeningProgressStore.kt)独立保存听书检查点。生产音源已替换为ZipVoice，不打包旧Kokoro作为备用。
+- [ReaderTtsService.kt](/Users/longshengxi/proj/story_app/app/src/main/java/com/longerlsx/storyapp/feature/reader/tts/ReaderTtsService.kt)：有限章节队列、媒体会话、定时、音频焦点与恢复；[OfflineReaderTtsEngine.kt](/Users/longshengxi/proj/story_app/app/src/main/java/com/longerlsx/storyapp/feature/reader/tts/OfflineReaderTtsEngine.kt)负责共享Piper模型初始化、按SID自然语速合成与AudioTrack播放；[ListeningProgressStore.kt](/Users/longshengxi/proj/story_app/app/src/main/java/com/longerlsx/storyapp/data/reader/ListeningProgressStore.kt)独立保存听书检查点。当前后端不并存ZipVoice或Kokoro备用。
+- [ReaderBundledVoices.kt](/Users/longshengxi/proj/story_app/app/src/main/java/com/longerlsx/storyapp/core/model/ReaderBundledVoices.kt)：统一C/F标识、显示名、SID及旧值回落；设置、面板与引擎共用该目录。
+- [ReaderTtsSegmenter.kt](/Users/longshengxi/proj/story_app/app/src/main/java/com/longerlsx/storyapp/feature/reader/tts/ReaderTtsSegmenter.kt)与[ReaderTtsLexicalTokens.kt](/Users/longshengxi/proj/story_app/app/src/main/java/com/longerlsx/storyapp/feature/reader/tts/ReaderTtsLexicalTokens.kt)：分段、数字／型号语境和原文范围；[ReaderTtsChineseNumberNormalizer.kt](/Users/longshengxi/proj/story_app/app/src/main/java/com/longerlsx/storyapp/feature/reader/tts/ReaderTtsChineseNumberNormalizer.kt)按语境展开数字，[ReaderTtsChineseFrontend.kt](/Users/longshengxi/proj/story_app/app/src/main/java/com/longerlsx/storyapp/feature/reader/tts/ReaderTtsChineseFrontend.kt)规范化字母与标点并检查整段覆盖；[ReaderTtsAudioPreparation.kt](/Users/longshengxi/proj/story_app/app/src/main/java/com/longerlsx/storyapp/feature/reader/tts/ReaderTtsAudioPreparation.kt)管理最多两段预取及含读法提示的缓存身份。
 
 值得保留的基础是：两种阅读模式共用“章节 + 字符位置”，不把易变的页码当真实进度；原始 TXT 留在应用私有目录；朗读控制器不依附单个页面；章节切片保存准确的正文范围。
 
@@ -156,7 +159,7 @@ flowchart TD
 
 启动只恢复索引、目录、源文件登记、设置和进度，不读取整架正文。正文首次访问按书读取，最多缓存两本，同书并发访问共用一次加载，文件 IO 不占用仓库全局锁。分页只准备当前章节窗口；滚动模式仍为当前书准备章节正文。听书只保留当前章和最多下一章的短句队列，当前播放期间串行准备最多后两短句音频，不提前生成全书。
 
-听书新开会话时，若首段实际播放不足2秒且下一段字数超过两倍，会先准备好下一段再发声，避免极短开头播完就等待长段生成；普通首段不增加等待。仍使用正式分段及原两段预取窗口，暂停／停止可取消这段准备。5字→40字正式冷启动的实际衔接空档从约2.85秒降到0.315秒，代价是该场景首次发声前增加下一段准备时间；不代表普遍提速或音质验收，见 [BUG-2026-063](knowledge/bugs/BUG-2026-063-short-initial-speech-starves-next-segment.json)。
+听书新开会话时，若首段实际播放不足2秒且下一段字数超过两倍，会先准备好下一段再发声，避免极短开头播完就等待长段生成；普通首段不增加等待。Piper仍保留该策略及两段预取窗口，暂停／停止可取消准备，尚未依据新引擎数据调整等待规则。10月16日ZipVoice的5字→40字正式冷启动衔接空档曾从约2.85秒降到0.315秒，代价是首次发声前增加下一段准备时间；这是旧引擎窗口，不代表Piper首声或连续性结果，见 [BUG-2026-063](knowledge/bugs/BUG-2026-063-short-initial-speech-starves-next-segment.json)。
 
 导入与重载继续使用原 TXT 和既有章节偏移，不自动重切旧书。目录读取兼容标题内的 TAB，并检查章节数量、序号和范围；坏书单独报告。hydrate 只恢复内存，不重写磁盘。目录、设置和进度通过临时文件原子替换，新导入最后提交元数据，失败不会留下可打开的半本书。
 
@@ -166,7 +169,7 @@ flowchart TD
 
 用户举小米默认浏览器的小说阅读能力，是在说明：连不以小说阅读为主要用途的产品，也能把阅读和朗读做得完善，这应按成熟的常见产品能力理解。这个例子不是要求模仿浏览器的界面或操作方式，也不直接规定采用哪种语音技术。后续目标应面向完整听小说体验，不能把基础能力描述成只适合专业软件的小众定制。
 
-朗读和中文男声是成熟需求。旧版只读取默认系统引擎的音色目录，没有自带音源；过滤规则无法创造引擎本来没有的声音。`pitch`改变音高，不会更换发音人；Android Voice也没有统一的性别字段。上一轮按用户已定的独立免费离线方向引入实际音源，不再以调整系统音色过滤作为男声方案。[Android Voice 文档](https://developer.android.com/reference/android/speech/tts/Voice)、[TextToSpeech 文档](https://developer.android.com/reference/android/speech/tts/TextToSpeech)。
+朗读和中文男声是成熟需求。旧版只读取默认系统引擎的音色目录，没有自带音源；过滤规则无法创造引擎本来没有的声音。`pitch`改变音高，不会更换发音人；Android Voice也没有统一的性别字段。9月20日按用户已定的独立免费离线方向引入实际音源，不再以调整系统音色过滤作为男声方案。[Android Voice 文档](https://developer.android.com/reference/android/speech/tts/Voice)、[TextToSpeech 文档](https://developer.android.com/reference/android/speech/tts/TextToSpeech)。
 
 浏览器可以提供自己的在线或离线朗读能力。以 Edge 为例，官方明确支持在线和离线朗读，离线音色较少。因此浏览器能选多种声音，不意味着这些声音会注册成其他 Android 应用可用的系统 TTS 音色。[Edge 官方说明](https://explore.microsoft.com/en-us/edge/features/read-aloud)。
 
@@ -174,27 +177,35 @@ flowchart TD
 
 用户进一步明确这是个人自用App，功能和使用体验优先，普通实现取舍由代理自主决定，不把未来公开分发的许可流程或无关要求设成当前卡点。来源和版本保留必要记录。
 
-当前选择沿用sherpa-onnx 1.13.8，恢复为 **ZipVoice-Distill INT8／四线程／3步＋官方 `leijun-1` 完整6.057秒参考声音**（9月22日原问题包为4步／完整参考，9月23日三步／1.930秒短参考试用已撤回）；唯一音色标识为 `zipvoice:leijun`，界面显示“雷军 · 合成音色”。这是参考声音条件下为新正文生成的合成音频，不是原讲话录音。APK内置一套模型及一个参考声音，不依赖系统TTS、联网下载或额外训练；旧 `kokoro:*` 等音色值读取时归一为新音色，书籍、进度和其他设置不因换音源清除。初始化使用完整WAV及匹配的完整参考文字；资源版本与准备入口由[离线声音依赖](knowledge/offline-voice-dependencies.md#当前接入选择)维护。当前仅打包ARM64，本轮包体与验证身份见页首；旧四音色Kokoro与约443MiB包体属于9月20日版本，不是当前备用方案。
+**当前离线TTS实现（10月22日实施中）：** 沿用sherpa-onnx 1.13.8，单一Piper AISHELL-3模型、一个实例、CPU两线程，C/F通过SID切换，不使用参考录音或训练新音色。C为SSB1020／SID30，标识`piper:aishell3:ssb1020`；F为SSB0863／SID151，标识`piper:aishell3:ssb0863`。界面只开放这两个声音，共享权重仍是174说话人模型。旧雷军、系统、Kokoro、空值及无效标识统一回落到C；有效C/F随设置保存，读取旧值只在内存中解析，不清书籍、位置或其他设置。资源来源、许可、固定摘要和准备入口统一由[离线声音依赖](knowledge/offline-voice-dependencies.md)维护，不在本页复制摘要。
 
-ZipVoice原生倍速曾在模拟器将目标声音截短，现已改为先完整合成自然1×音频，再由AudioTrack施加用户语速与独立音调；下一语音单元使用最新设置，同一自然音频无需因换速重新生成。截短原因与处理详见[依赖说明](knowledge/offline-voice-dependencies.md)。播放完成才推进独立听书位置；停止、旧任务失效与焦点恢复仍走已有服务边界。生成改为四线程后，已测2×跨章序列及真实小说连续播放通过，预生成音频也已证实按新速度播放而不重算；具体环境和窗口见下文，不推广为手机播放性能。
+**中文与分段：** 手机使用完整静态中文词典查表，不加载G2PW神经网络；应用先规范化数字、字母和标点，再逐字检查是否有合法读音。英文统一小写并以空格分开相邻字母，交给明确的字母名称词条；可读字符仍未覆盖时整段失败，不先播放已知前缀。数字与分段共享词法分类，保留负号、型号连接符、日期、时间及分隔数字的语境；电话号码等有明确标签时逐位读，普通数量保留数量读法。正常组合尽量不在内部切断，超长组合及组合内部起读携带当前片段的读法提示，不回读起点之前的文字。正式服务仍显式采用**每段最多40个Unicode字符**，通用分段器默认上限为80；计划中的80不是已将正式服务段长调大。本轮保留原队列长度，实际数字边界验证按服务40字符安排。分段范围、回调映射与持久化位置仍使用原文UTF-16偏移，不改TXT或存储格式。
 
-验收边界继续适用：播放状态和回调不能证明实际出声，合成音频不能单独证明扬声器播放；音色和连续播放需要实际声音证据。历史Kokoro v3曾在15 Ultra媒体音量0时取得非零内部播放音轨，手机和电脑均未外放；该证据不代替ZipVoice、扬声器、耳机或实际听感验收。9月22日本轮只验收模拟器，不安排或等待小米测试，也不据模拟器结果声称真机性能通过。
+**自然音频与缓存：** Piper按自然1×生成22.05kHz单声道音频，AudioTrack再应用用户语速及独立音调。最多两段预取串行生成，缓存身份包含正文、数字读法提示及音色，避免型号尾部和数量相同字符串误用声音；引擎始终以自然合成速度请求缓存，换播放速度不重算同一份PCM。当前已取用单元保留启动时的参数快照，换声更新未来窗口，过时任务取消或丢弃。暂停换声不主动发声，底层临时试听保留正文暂停位置并在结束时恢复正文设置；界面本轮只增加C/F选择，没有增加试听按钮。这些控制行为的新设备回归仍待运行。
 
-用户要求目标执行由代理自行安排推进节奏，关键过程落文档并按需要配图，留下维护所需的决定、实现关系和证据，避免堆积日志。面向用户说明怎么做、做到什么程度、哪些尚未验证或仍需研究，不要求用户先理解Android技术；稳定规则见[协作约定的文档维护](knowledge/agent-operating-agreements.md#文档维护)。[听书实施计划](superpowers/plans/2026-09-20-offline-listening.md)已收口：本地与真机已覆盖路径的实质问题关闭，用户最终明确30分钟真机熄屏不作为目标卡点。未覆盖的设备和实际使用变体保留证据边界，不将它们写成已通过，也不另增交付门槛。
+**失败与资源边界：** 未覆盖文字、生成异常、空音频或不匹配的采样率走既有失败／重试通道；未来预取失败保存在结果中，消费到该段时才报告。实际播放完成才确认段尾，停止或旧任务失效后不能再播放或写入完成进度。开发机准备脚本校验输入、暂存转换输出、成功后发布Piper四份资源，并备份后移出本脚本管理的旧ZipVoice/Kokoro打包assets；不删除原始下载、试听或回退APK。手机仅在新模型成功初始化后尝试清理旧专属`offline-voice/zipvoice-distill-int8-v1`目录，不碰书籍、设置、两类进度或其他版本目录；回退旧APK可由自身assets重建依赖，但升级往返仍须实测。当前源码已移除ZipVoice参考文字／声音、专属生成参数及Vocos接线；沿用AAR中的其他引擎支持代码未另行裁剪。
+
+**替换前的历史基线：** ZipVoice-Distill INT8／四线程／3步＋官方`leijun-1`完整6.057秒参考曾是10月16日交付配置，单一音色为`zipvoice:leijun`；9月23日短参考已撤回。其原生倍速截短问题、自然1×后播放调速的历史处理、模型／参考的来源与许可保存在[依赖页历史记录](knowledge/offline-voice-dependencies.md#历史zipvoice基线与回退资料)。APK身份及旧验证见页首与下文；这些旧资源不作为Piper候选中的备用引擎。
+
+验收边界继续适用：播放状态和回调不能证明实际出声，合成音频不能单独证明扬声器播放；音色和连续播放需要实际声音证据。Piper初次正式实播只证明当前链路已经产生输出，不等于两声较长核听、完整前端准确性、连续性或手机温耗已通过。历史Kokoro、ZipVoice音轨仍按原版本及条件保留，不能代替Piper、扬声器、耳机或实际听感验收；BUG-062、BUG-066继续开放。
+
+用户要求目标执行由代理自行安排推进节奏，关键过程落文档并按需要配图，留下维护所需的决定、实现关系和证据，避免堆积日志。面向用户说明怎么做、做到什么程度、哪些尚未验证或仍需研究，不要求用户先理解Android技术；稳定规则见[协作约定的文档维护](knowledge/agent-operating-agreements.md#文档维护)。[9月20日听书实施计划](superpowers/plans/2026-09-20-offline-listening.md)已按当时范围收口，用户曾明确30分钟真机熄屏不作为当轮卡点；这项历史范围不覆盖10月22日新批准的模拟器验收与真机后补安排。
 
 ## 当前验证结果与证据边界
 
-**9月22日ZipVoice与听书交互：** 单一雷军音源、旧音色读取兼容、页顶起读、独立面板及播放倍速已完成。迁移、面板状态、音频准备单测及首批完整界面回归通过；后续跟读与后台接线组19项通过，覆盖PAGE／SCROLL页顶、暂停保留会话和计时、停止重开、面板／紧凑条／长按入口、失败偏移重试、跟读及手动跨章停止。批次存在交集，不累加为独立总数。[本轮计划](superpowers/plans/2026-09-22-zipvoice-listening-upgrade.md#执行记录)保存对应构建和各项直接证据。
+**10月22日Piper当前证据：** 初次正式实播成功，相关代码及设备测试APK已编译，设置、前端、分段和缓存仅取得局部JVM通过结果；最近新增或修正的数字边界及服务控制回归仍待统一验证，新设备回归尚未运行。不能据此写全量JVM、模拟器完整验收、两声较长音质或新版本交付通过。首次离线、完整连续播放、升级回退及真机长听继续按[本轮执行记录](superpowers/plans/2026-10-22-piper-listening-replacement.md#6-执行记录)推进；声音和资源证据分别保留实际条件，不把受控引擎测试当真实音质证明。
 
-本轮环境为`StoryReader_API34`模拟器：Android14/API34 ARM64、4核、4GiB RAM、SwiftShader，宿主静音。ZipVoice使用四线程后，正式界面2×跨章连续序列通过；正常导入真实小说并覆盖升级后的1×约42秒、2×约48秒音轨均持续输出，首声后未检出≥0.6秒静音。预生成音频换速实播也通过，使用缓存后按新速度播放且没有新增合成。冷模型加载约3.8–4.2秒，点击到首次输出约7.4–8.4秒，不承诺秒开；这些录音窗口不证明真机性能、任意文本或长时间播放。
+**9月22日ZipVoice与听书交互（以下为历史证据）：** 单一雷军音源、旧音色读取兼容、页顶起读、独立面板及播放倍速已完成。迁移、面板状态、音频准备单测及首批完整界面回归通过；后续跟读与后台接线组19项通过，覆盖PAGE／SCROLL页顶、暂停保留会话和计时、停止重开、面板／紧凑条／长按入口、失败偏移重试、跟读及手动跨章停止。批次存在交集，不累加为独立总数。[9月22日计划](superpowers/plans/2026-09-22-zipvoice-listening-upgrade.md#执行记录)保存对应构建和各项直接证据。
 
-真实引擎4条后台回归通过：熄屏持续推进、通知暂停／继续及回正文、临时失焦保留音轨并恢复、合成中失焦等待归还焦点才播，以及主动暂停／永久失焦不自动续播。旧APK经正常系统入口导入真实小说、设置并播放后覆盖候选，源TXT、目录、元数据、设置及听书文件逐字节一致；阅读锚点仍为chapterIndex=1、charOffset=503、PAGE模式，新界面只显示雷军并保留2×和30分钟。真实播放中宿主force-stop后旧进程消失，正常重启产生新进程且未启动听书服务，听书文件与阅读位置保留；该结果不是Activity重建证据。
+9月22日环境为`StoryReader_API34`模拟器：Android14/API34 ARM64、4核、4GiB RAM、SwiftShader，宿主静音。ZipVoice使用四线程后，正式界面2×跨章连续序列通过；正常导入真实小说并覆盖升级后的1×约42秒、2×约48秒音轨均持续输出，首声后未检出≥0.6秒静音。预生成音频换速实播也通过，使用缓存后按新速度播放且没有新增合成。冷模型加载约3.8–4.2秒，点击到首次输出约7.4–8.4秒，不承诺秒开；这些录音窗口不证明真机性能、任意文本或长时间播放。
 
-**数字读法与限制：** 真实小说中“48小时”走英文前端的问题已修复；仅规范化合成输入，不改正文或原文位置。6项规则回归通过，最终构建实际1×／2×音轨中的“四十八小时”“二十三点五十九分”均被独立转写完整识别。普通整数、小数、百分数、年份及时刻有明确支持边界，不声称任意数字组合、专名和口音都准确。冷启动仍需数秒等待；小米性能、真机长听及任意文本的持续2×未据本轮模拟器样本外推。本轮不安排固定30分钟长测或真机，旧Kokoro的相关历史证据不代替新音源结论。
+当时真实引擎4条后台回归通过：熄屏持续推进、通知暂停／继续及回正文、临时失焦保留音轨并恢复、合成中失焦等待归还焦点才播，以及主动暂停／永久失焦不自动续播。旧APK经正常系统入口导入真实小说、设置并播放后覆盖ZipVoice候选，源TXT、目录、元数据、设置及听书文件逐字节一致；阅读锚点仍为chapterIndex=1、charOffset=503、PAGE模式，当时新界面只显示雷军并保留2×和30分钟。真实播放中宿主force-stop后旧进程消失，正常重启产生新进程且未启动听书服务，听书文件与阅读位置保留；该结果不是Activity重建证据。
 
-**已确认方向与证据边界：** 用户9月21日认可电脑上的ZipVoice雷军参考声音；[调查稿](superpowers/specs/2026-09-21-chinese-tts-quality-research.md)保留当时选型与试听条件，[交互讨论稿](superpowers/specs/2026-09-22-listening-controls-and-voice.md)保留随后获批的操作设计。9月21日“现有Kokoro保底”是历史调查策略，当前候选不并存旧引擎。手机独立离线、完整准确读出正文、及时开始与持续2×仍是产品目标；本轮用指定模拟器的真实声音验证，不把电脑听感认可当作持续播放通过，也不增加真机前置门槛。
+**9月22日数字读法与限制：** 真实小说中“48小时”走英文前端的问题已修复；仅规范化合成输入，不改正文或原文位置。6项规则回归通过，当时最终构建实际1×／2×音轨中的“四十八小时”“二十三点五十九分”均被独立转写完整识别。该版本的普通整数、小数、百分数、年份及时刻有明确支持边界，不声称任意数字组合、专名和口音都准确。冷启动仍需数秒等待；小米性能、真机长听及任意文本的持续2×未据当轮模拟器样本外推。9月22日任务不安排固定30分钟长测或真机；该范围不覆盖后续长听调查及当前Piper计划。
 
-**9月20日视觉与Kokoro听书（历史证据）：** 23项相关单测、集成阶段34项设备回归、返回触摸新增1项及后续18项定向回归通过；批次存在重验，数量不相加。当时完整界面的真实2×回归另覆盖连续跨章、暂停保留计时、停止释放且不复播、保存位置显式续听；取得同文1×／2×与连续音轨。旧v3经正常导入／设置／播放、进程终止再覆盖当时新版，确认数据与位置保留。四页日夜、320dp＋1.3倍字体及横屏可操作，实际通知／锁屏停止通过。正文返回热区和书架系统栏对比度的关联问题已修复。设备条件、音频窗口及未覆盖范围见[9月20日实施计划](superpowers/plans/2026-09-20-visual-listening-upgrade.md)；起点选择、旧面板和旧音源证据不作为本轮ZipVoice新行为的验收结论。
+**9月21—22日选型方向与证据边界：** 用户当时认可电脑上的ZipVoice雷军参考声音；[调查稿](superpowers/specs/2026-09-21-chinese-tts-quality-research.md)保留当时选型与试听条件，[交互讨论稿](superpowers/specs/2026-09-22-listening-controls-and-voice.md)保留随后获批的操作设计。9月21日“现有Kokoro保底”是历史调查策略，后续ZipVoice及当前Piper均不并存旧引擎。当轮在指定模拟器验证独立离线、正文读法、起读与2×播放，不把电脑听感认可当作持续播放通过，也没有将真机设为前置门槛；当前Piper优先1.45×长听，验证范围由10月22日计划确定。
+
+**9月20日视觉与Kokoro听书（历史证据）：** 23项相关单测、集成阶段34项设备回归、返回触摸新增1项及后续18项定向回归通过；批次存在重验，数量不相加。当时完整界面的真实2×回归另覆盖连续跨章、暂停保留计时、停止释放且不复播、保存位置显式续听；取得同文1×／2×与连续音轨。旧v3经正常导入／设置／播放、进程终止再覆盖当时新版，确认数据与位置保留。四页日夜、320dp＋1.3倍字体及横屏可操作，实际通知／锁屏停止通过。正文返回热区和书架系统栏对比度的关联问题已修复。设备条件、音频窗口及未覆盖范围见[9月20日实施计划](superpowers/plans/2026-09-20-visual-listening-upgrade.md)；起点选择、旧面板和旧音源证据不作为后续ZipVoice或当前Piper新行为的验收结论。
 
 **以下为已交付阅读与v3听书的历史证据：** 未受影响结论按原版本和条件继承，不计作本轮新构建的重复验收。
 
@@ -223,7 +234,7 @@ v3在断网、无测试宿主、模拟器AC供电条件下，使用真实小说�
 
 ## 两阶段推进范围
 
-**第一阶段9月11日成果及9月14日纯阅读补强已交付。** 当时的代码、debug/本地签名 release APK 与证据由第一阶段计划保留身份；构建输出目录会被新构建覆盖，不能将当前路径中的文件自动视为历史交付物。2026-09-23清理了默认debug输出和听书v1—v3本地产物，文档保留其历史路径与SHA，不再提供下载链接；页首的新ZipVoice包与上一版视觉升级包继续保留。
+**第一阶段9月11日成果及9月14日纯阅读补强已交付。** 当时的代码、debug/本地签名 release APK 与证据由第一阶段计划保留身份；构建输出目录会被新构建覆盖，不能将当前路径中的文件自动视为历史交付物。2026-09-23清理了默认debug输出和听书v1—v3本地产物，文档保留其历史路径与SHA，不再提供下载链接；页首的ZipVoice历史基线包与9月20日视觉升级包继续保留。
 
 **2026-09-14 纯阅读交付记录：** 段落轻量测量复用、缓存命中绕锁、共同滑动目标、模式执行权、设置保存分离及模式切换显示保护，附长期回归测试。当时debug APK指纹前缀为`e988f60d`，本地签名release为`f916fd9a`；release使用本地debug key签名、非debuggable，lintVital与签名检查通过。完整身份由9月14日计划保存；默认构建目录已开始被听书新构建覆盖，不能将该目录现有文件当作这份历史APK。该批改动已于9月20日随`a1a2538`、`d8848fe`提交并推送。
 

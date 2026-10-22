@@ -7,7 +7,7 @@ data class ReaderTtsSettings(
     val timerPreset: ReaderTtsTimerPreset = ReaderTtsTimerPreset.NoTimer,
 ) {
     companion object {
-        const val DEFAULT_VOICE_NAME = "zipvoice:leijun"
+        const val DEFAULT_VOICE_NAME = ReaderBundledVoices.DEFAULT_NAME
     }
 }
 

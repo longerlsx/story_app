@@ -11,6 +11,9 @@ object ReaderTtsSegmenter {
     ): List<ReaderTtsSegment> {
         require(maxChunkChars > 0) { "朗读分段长度必须大于零" }
         val segments = mutableListOf<ReaderTtsSegment>()
+        val speechText = ReaderTtsLexicalTokens.foldWidth(text)
+        val tokens = ReaderTtsLexicalTokens.scan(speechText)
+        var tokenIndex = 0
         var cursor = startCharOffset.coerceIn(0, text.length)
         if (cursor > 0 && cursor < text.length &&
             Character.isLowSurrogate(text[cursor]) && Character.isHighSurrogate(text[cursor - 1])
@@ -28,9 +31,13 @@ object ReaderTtsSegmenter {
                 end += Character.charCount(text.codePointAt(end))
                 characters++
             }
-            if (end < text.length) end = preferredBoundary(text, cursor, end)
+            while (tokenIndex < tokens.size && tokens[tokenIndex].end <= cursor) tokenIndex++
+            var tokenEnd = tokenIndex
+            while (tokenEnd < tokens.size && tokens[tokenEnd].start < end) tokenEnd++
+            val nearbyTokens = tokens.subList(tokenIndex, tokenEnd)
+            if (end < text.length) end = preferredBoundary(speechText, cursor, end, maxChunkChars, nearbyTokens)
             while (end > cursor && text[end - 1].isWhitespace()) end--
-            val normalized = normalizeForSpeech(text, cursor, end)
+            val normalized = normalizeForSpeech(speechText, cursor, end, nearbyTokens)
             if (normalized.text.isNotEmpty()) {
                 segments += ReaderTtsSegment(
                     chapterIndex = chapterIndex,
@@ -38,6 +45,7 @@ object ReaderTtsSegmenter {
                     endCharOffset = end,
                     spokenText = normalized.text,
                     spokenCharSourceRanges = normalized.sourceRanges,
+                    numberReadingHints = normalized.numberReadingHints,
                 )
             }
             cursor = end
@@ -45,50 +53,55 @@ object ReaderTtsSegmenter {
         return segments
     }
 
-    private fun preferredBoundary(text: String, start: Int, limit: Int): Int {
+    private fun preferredBoundary(
+        text: String,
+        start: Int,
+        limit: Int,
+        maxChunkChars: Int,
+        tokens: List<ReaderTtsLexicalTokens.Token>,
+    ): Int {
         var punctuationBoundary = -1
         var whitespaceBoundary = -1
         for (index in start until limit) {
             val character = text[index]
             if (character.isWhitespace()) whitespaceBoundary = index
-            if (character in "。！？!?，,；;：:、.\n" && !isNumberSeparator(text, index)) {
+            if (character in "。！？!?，,；;：:、.\n" && tokens.none { index in it.start until it.end }) {
                 punctuationBoundary = index + 1
             }
         }
         if (punctuationBoundary > start) return punctuationBoundary
         if (whitespaceBoundary > start) return whitespaceBoundary
 
-        // Keep a number/Latin word together when moving it still permits a bounded chunk.
-        if (isTokenCharacter(text, limit - 1) && isTokenCharacter(text, limit)) {
-            var tokenStart = limit
-            while (tokenStart > start && isTokenCharacter(text, tokenStart - 1)) tokenStart--
-            if (tokenStart > start) return tokenStart
+        // Oversized compounds remain bounded and receive reading hints for their visible fragments.
+        val crossing = tokens.firstOrNull { it.start < limit && it.end > limit }
+        if (crossing != null && crossing.start > start && crossing.end - crossing.start <= maxChunkChars) {
+            return crossing.start
         }
         return limit
     }
 
-    private fun isTokenCharacter(text: String, index: Int): Boolean {
-        return text[index].isDigit() || text[index] in 'a'..'z' || text[index] in 'A'..'Z' ||
-            isNumberSeparator(text, index)
-    }
-
-    private fun isNumberSeparator(text: String, index: Int): Boolean {
-        return text[index] in ".,:" && index > 0 && index + 1 < text.length &&
-            text[index - 1].isDigit() && text[index + 1].isDigit()
-    }
-
     fun sanitizeForSpeech(text: String): String {
-        return normalizeForSpeech(text, 0, text.length).text
+        val folded = ReaderTtsLexicalTokens.foldWidth(text)
+        return normalizeForSpeech(folded, 0, folded.length, ReaderTtsLexicalTokens.scan(folded)).text
     }
 
-    private fun normalizeForSpeech(text: String, start: Int, end: Int): NormalizedSpeech {
+    private fun normalizeForSpeech(
+        text: String,
+        start: Int,
+        end: Int,
+        tokens: List<ReaderTtsLexicalTokens.Token>,
+    ): NormalizedSpeech {
         val spoken = StringBuilder()
         val sourceRanges = mutableListOf<ReaderTtsCharacterRange>()
         var cursor = start
+        var tokenIndex = 0
         var pendingSpaceStart = -1
         while (cursor < end) {
             val next = cursor + Character.charCount(text.codePointAt(cursor))
-            if (text[cursor].isWhitespace() || isNoisySymbol(text[cursor])) {
+            while (tokenIndex < tokens.size && tokens[tokenIndex].end <= cursor) tokenIndex++
+            val token = tokens.getOrNull(tokenIndex)
+            val meaningfulSymbol = token != null && cursor >= token.start && token.kind != ReaderTtsLexicalTokens.Kind.WORD
+            if (text[cursor].isWhitespace() || isNoisySymbol(text[cursor]) && !meaningfulSymbol) {
                 if (pendingSpaceStart == -1) pendingSpaceStart = cursor
             } else {
                 if (pendingSpaceStart != -1 && spoken.isNotEmpty()) {
@@ -104,7 +117,16 @@ object ReaderTtsSegmenter {
             }
             cursor = next
         }
-        return NormalizedSpeech(spoken.toString(), sourceRanges)
+        val hints = tokens.filter { ReaderTtsLexicalTokens.needsContext(it, start, end) }.flatMap { token ->
+            ReaderTtsLexicalTokens.readings(text, token, start, end).mapNotNull { reading ->
+                val first = sourceRanges.indexOfFirst { it.startCharOffset >= reading.start && it.endCharOffset <= reading.end }
+                val last = sourceRanges.indexOfLast { it.startCharOffset >= reading.start && it.endCharOffset <= reading.end }
+                if (first < 0 || last < first) null else ReaderTtsNumberReadingHint(
+                    first, last + 1, reading.kind, reading.suffix,
+                )
+            }
+        }
+        return NormalizedSpeech(spoken.toString(), sourceRanges.toList(), hints)
     }
 
     private fun isNoisySymbol(ch: Char): Boolean {
@@ -123,5 +145,6 @@ object ReaderTtsSegmenter {
     private data class NormalizedSpeech(
         val text: String,
         val sourceRanges: List<ReaderTtsCharacterRange>,
+        val numberReadingHints: List<ReaderTtsNumberReadingHint>,
     )
 }

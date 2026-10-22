@@ -124,6 +124,118 @@ class ReaderTtsBackgroundPlaybackTest {
     }
 
     @Test
+    fun rapidVoiceChangesKeepCurrentParametersAndUseTheLatestVoiceAcrossChapters() {
+        val voiceC = ReaderTtsSettings(voiceName = "piper:aishell3:ssb1020", speechRate = 1.45f)
+        val voiceF = voiceC.copy(voiceName = "piper:aishell3:ssb0863")
+        application.readerSettingsStore.save(ReaderSettings(ttsSettings = voiceC))
+        val firstSentence = "甲".repeat(39) + "。"
+        val book = seedBook("voice-preparation", "换声准备", listOf(
+            "第1章" to firstSentence + "同章下一句。", "第2章" to "邻章第一句。",
+        ))
+        ActivityScenario.launch<MainActivity>(mainIntent()).use {
+            startPlaybackFor(book.id, book.title, 0, 0, "第1章")
+            val engine = engineHarness.awaitSpokenSegment(0, 0)
+            waitForPlaybackState(ReaderTtsSessionState.PLAYING)
+            val upcoming = listOf(0 to 40, 1 to 0)
+            engine.awaitPreparedWindow(1.45f, upcoming, voiceC.voiceName)
+            val currentUtterance = engine.activeUtteranceId
+            val applications = engine.settingsApplicationCount
+
+            // Dispatch both while the first unit remains active; do not wait for F to settle.
+            application.readerTtsController.applySettings(voiceF)
+            application.readerTtsController.applySettings(voiceC)
+            engine.awaitAppliedSettings(voiceC, applications + 2)
+            engine.awaitPreparedWindow(1.45f, upcoming, voiceC.voiceName)
+            assertEquals(currentUtterance, engine.activeUtteranceId)
+            assertEquals(1, engine.speakCount)
+            assertEquals(voiceC, engine.lastSpokenSettings)
+
+            engine.complete()
+            engineHarness.awaitSpokenSegment(0, 40)
+            assertEquals("同章下一句。", engine.lastSpokenSegment?.spokenText)
+            assertEquals(voiceC, engine.lastSpokenSettings)
+            val secondUtterance = engine.activeUtteranceId
+            application.readerTtsController.applySettings(voiceF)
+            engine.awaitPreparedWindow(1.45f, listOf(1 to 0), voiceF.voiceName)
+            assertEquals(secondUtterance, engine.activeUtteranceId)
+            assertEquals(voiceC, engine.lastSpokenSettings)
+
+            engine.complete()
+            engineHarness.awaitSpokenSegment(1, 0)
+            assertEquals("邻章第一句。", engine.lastSpokenSegment?.spokenText)
+            assertEquals(voiceF, engine.lastSpokenSettings)
+            assertEquals(3, engine.speakCount)
+        }
+    }
+
+    @Test
+    fun generationFailureBeforeFirstPlaybackKeepsItsStartForExplicitRetry() {
+        val book = seedBook("first-generation-failure", "首段失败", listOf(
+            "第1章" to "已经听完。未能生成的正文。",
+        ))
+        engineHarness.failNextSpeakAt(0, 5, "整段生成失败")
+        ActivityScenario.launch<MainActivity>(mainIntent()).use {
+            startPlaybackFor(book.id, book.title, 0, 5, "第1章")
+            val failedEngine = engineHarness.awaitLatestEngine()
+            waitForPlaybackState(ReaderTtsSessionState.FAILED)
+            assertEquals("整段生成失败", application.readerTtsController.localErrorMessage)
+            val saved = requireNotNull(runBlocking { application.listeningProgressStore.load(book.id) })
+            assertEquals(0, saved.chapterIndex)
+            assertEquals(5, saved.charOffset)
+            assertFalse(saved.completed)
+            assertNull("失败单元不能宣布正文已开始播放", failedEngine.lastSpokenSegment)
+
+            failedEngine.complete()
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            assertEquals(saved, runBlocking { application.listeningProgressStore.load(book.id) })
+            assertEquals(ReaderTtsSessionState.FAILED, application.readerTtsController.playbackState)
+            failedEngine.awaitDestroyed()
+            application.readerTtsController.requestResumePlayback()
+            val resumed = engineHarness.awaitSpokenSegment(0, 5, differentFrom = failedEngine)
+            waitForPlaybackState(ReaderTtsSessionState.PLAYING)
+            assertEquals("未能生成的正文。", resumed.lastSpokenSegment?.spokenText)
+            assertEquals(5, runBlocking { application.listeningProgressStore.load(book.id) }?.charOffset)
+        }
+    }
+
+    @Test
+    fun nextChapterGenerationFailureKeepsTheCompletedBoundaryAndRetriesTheUnspokenChapter() {
+        val book = seedBook("chapter-generation-failure", "跨章失败", listOf(
+            "第1章" to "已经听完。", "第2章" to "这一章需要重试。", "第3章" to "不能跳到这里。",
+        ))
+        engineHarness.failNextSpeakAt(1, 0, "下一章整段生成失败")
+        ActivityScenario.launch<MainActivity>(mainIntent()).use {
+            startPlaybackFor(book.id, book.title, 0, 0, "第1章")
+            val failedEngine = engineHarness.awaitSpokenSegment(0, 0)
+            waitForPlaybackState(ReaderTtsSessionState.PLAYING)
+            failedEngine.awaitPreparedWindow(1f, listOf(1 to 0))
+            failedEngine.complete()
+            waitForPlaybackState(ReaderTtsSessionState.FAILED)
+            assertEquals("下一章整段生成失败", application.readerTtsController.localErrorMessage)
+            val saved = requireNotNull(runBlocking { application.listeningProgressStore.load(book.id) })
+            assertEquals(0, saved.chapterIndex)
+            assertEquals(5, saved.charOffset)
+            assertFalse(saved.completed)
+            assertEquals("已经听完。", failedEngine.lastSpokenSegment?.spokenText)
+            assertEquals(2, failedEngine.speakCount)
+
+            failedEngine.complete()
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            assertEquals(saved, runBlocking { application.listeningProgressStore.load(book.id) })
+            failedEngine.awaitDestroyed()
+            application.readerTtsController.requestResumePlayback()
+            val resumed = engineHarness.awaitSpokenSegment(1, 0, differentFrom = failedEngine)
+            waitForPlaybackState(ReaderTtsSessionState.PLAYING)
+            assertEquals("这一章需要重试。", resumed.lastSpokenSegment?.spokenText)
+            assertEquals(1, resumed.speakCount)
+            val retried = requireNotNull(runBlocking { application.listeningProgressStore.load(book.id) })
+            assertEquals(1, retried.chapterIndex)
+            assertEquals(0, retried.charOffset)
+            assertFalse(retried.completed)
+        }
+    }
+
+    @Test
     fun resumeAfterServiceDisappearsRebuildsAtLastCompletedBoundary() {
         val book = seedBook("service-recovery", "服务恢复", listOf("第1章" to "第一句。", "第2章" to "第二句未完成。"))
         ActivityScenario.launch<MainActivity>(mainIntent()).use {
@@ -242,6 +354,53 @@ class ReaderTtsBackgroundPlaybackTest {
             application.readerTtsController.requestResumePlayback()
             waitForPlaybackState(ReaderTtsSessionState.PLAYING)
             assertEquals("这段正文还没有听完。", engine.lastSpokenSegment?.spokenText)
+        }
+    }
+
+    @Test
+    fun changingVoiceWhilePausedNeverAutoplaysAndPreviewRestoresTheBookVoiceAndPosition() {
+        val voiceC = ReaderTtsSettings(voiceName = "piper:aishell3:ssb1020", speechRate = 1.45f)
+        val voiceF = voiceC.copy(voiceName = "piper:aishell3:ssb0863")
+        application.readerSettingsStore.save(ReaderSettings(ttsSettings = voiceC))
+        val book = seedBook("preview-checkpoint", "试听续听", listOf("第1章" to "这段正文还没有听完。"))
+        ActivityScenario.launch<MainActivity>(mainIntent()).use {
+            startPlaybackFor(book.id, book.title, 0, 0, "第1章")
+            val engine = engineHarness.awaitSpokenSegment(0, 0)
+            waitForPlaybackState(ReaderTtsSessionState.PLAYING)
+            val before = runBlocking { application.listeningProgressStore.load(book.id) }
+            application.readerTtsController.requestPausePlayback()
+            waitForPlaybackState(ReaderTtsSessionState.PAUSED_BY_USER)
+            application.readerSettingsStore.save(application.readerSettingsStore.load().copy(ttsSettings = voiceF))
+            application.readerTtsController.applySettings(voiceF)
+            engine.awaitAppliedSettings(voiceF)
+            assertEquals(ReaderTtsSessionState.PAUSED_BY_USER, application.readerTtsController.playbackState)
+            assertEquals("换声本身不能启动播放", 1, engine.speakCount)
+            assertEquals(before, runBlocking { application.listeningProgressStore.load(book.id) })
+
+            application.readerTtsController.requestVoicePreview(voiceC)
+            val deadline = System.currentTimeMillis() + 8_000
+            while (System.currentTimeMillis() < deadline &&
+                (!application.readerTtsController.runtimeState.value.isVoicePreviewing || engine.lastSpokenSegment?.spokenText == "这段正文还没有听完。")) {
+                Thread.sleep(20)
+            }
+            assertTrue(application.readerTtsController.runtimeState.value.isVoicePreviewing)
+            assertTrue(engine === engineHarness.currentEngineOrNull())
+            assertFalse(engine.lastSpokenSegment?.spokenText == "这段正文还没有听完。")
+            assertEquals(voiceC, engine.lastSpokenSettings)
+            engine.complete()
+            val finishDeadline = System.currentTimeMillis() + 3_000
+            while (application.readerTtsController.runtimeState.value.isVoicePreviewing && System.currentTimeMillis() < finishDeadline) Thread.sleep(20)
+            assertFalse(application.readerTtsController.runtimeState.value.isVoicePreviewing)
+            assertEquals(ReaderTtsSessionState.PAUSED_BY_USER, application.readerTtsController.playbackState)
+            engine.awaitAppliedSettings(voiceF)
+            assertEquals("试听结束不能擅自继续正文", 2, engine.speakCount)
+            assertEquals(before, runBlocking { application.listeningProgressStore.load(book.id) })
+            application.readerTtsController.requestResumePlayback()
+            waitForPlaybackState(ReaderTtsSessionState.PLAYING)
+            assertEquals("这段正文还没有听完。", engine.lastSpokenSegment?.spokenText)
+            assertEquals(0, engine.lastSpokenSegment?.startCharOffset)
+            assertEquals(voiceF, engine.lastSpokenSettings)
+            assertEquals(3, engine.speakCount)
         }
     }
 
@@ -701,6 +860,11 @@ private class ControlledReaderTtsEngineHarness {
     @Volatile
     private var initializeLatch: CountDownLatch? = null
     @Volatile private var startupBufferGate: CompletableDeferred<Unit>? = null
+    @Volatile private var nextSpeakFailure: Triple<Int, Int, String>? = null
+
+    fun failNextSpeakAt(chapterIndex: Int, startCharOffset: Int, message: String) {
+        nextSpeakFailure = Triple(chapterIndex, startCharOffset, message)
+    }
 
     fun blockStartupBuffer() { startupBufferGate = CompletableDeferred() }
 
@@ -723,6 +887,11 @@ private class ControlledReaderTtsEngineHarness {
             callback = callback,
             generation = generation,
             startupBufferGate = { startupBufferGate },
+            takeSpeakFailure = { segment ->
+                nextSpeakFailure?.takeIf {
+                    it.first == segment.chapterIndex && it.second == segment.startCharOffset
+                }?.also { nextSpeakFailure = null }?.third
+            },
             awaitInitialize = suspend {
                 val startedAt = System.currentTimeMillis()
                 while (initializeLatch?.count ?: 0L > 0L) {
@@ -778,6 +947,7 @@ private class ControlledReaderTtsEngine(
     val generation: Int,
     private val awaitInitialize: suspend () -> Unit,
     private val startupBufferGate: () -> CompletableDeferred<Unit>?,
+    private val takeSpeakFailure: (ReaderTtsSegment) -> String?,
 ) : ReaderTtsEngine {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var startupBufferJob: Job? = null
@@ -791,6 +961,8 @@ private class ControlledReaderTtsEngine(
     @Volatile var lastSpokenSegment: ReaderTtsSegment? = null
         private set
     @Volatile private var settings = ReaderTtsSettings()
+    @Volatile var settingsApplicationCount = 0
+        private set
     @Volatile var lastSpokenSettings: ReaderTtsSettings? = null
         private set
     @Volatile var speakCount = 0
@@ -811,21 +983,34 @@ private class ControlledReaderTtsEngine(
 
     override fun applySettings(settings: ReaderTtsSettings) {
         this.settings = settings
+        settingsApplicationCount++
+    }
+
+    fun awaitAppliedSettings(expected: ReaderTtsSettings, minimumApplications: Int = 0) {
+        val deadline = System.currentTimeMillis() + 3_000
+        while (System.currentTimeMillis() < deadline) {
+            if (settingsApplicationCount >= minimumApplications && settings == expected) return
+            Thread.sleep(20)
+        }
+        assertTrue("等待服务处理最新声音设置", settingsApplicationCount >= minimumApplications)
+        assertEquals(expected, settings)
     }
 
     override fun prepareUpcoming(segments: List<ReaderTtsSegment>) {
         preparedWindow = settings to segments.map { it.chapterIndex to it.startCharOffset }
     }
 
-    fun awaitPreparedWindow(speechRate: Float, locations: List<Pair<Int, Int>>) {
+    fun awaitPreparedWindow(speechRate: Float, locations: List<Pair<Int, Int>>, voiceName: String? = null) {
         val deadline = System.currentTimeMillis() + 3_000
         while (System.currentTimeMillis() < deadline) {
             val prepared = preparedWindow
-            if (prepared?.first?.speechRate == speechRate && prepared.second == locations) return
+            if (prepared?.first?.speechRate == speechRate && prepared.second == locations &&
+                (voiceName == null || prepared.first.voiceName == voiceName)) return
             Thread.sleep(20)
         }
         assertEquals("后续声音应按最新语速准备", speechRate, preparedWindow?.first?.speechRate)
         assertEquals("准备顺序应覆盖同章后句及邻章首句", locations, preparedWindow?.second)
+        if (voiceName != null) assertEquals("后续声音应按最新音色准备", voiceName, preparedWindow?.first?.voiceName)
     }
 
     override fun speak(
@@ -858,6 +1043,10 @@ private class ControlledReaderTtsEngine(
         activeUtteranceId = utteranceId
         lastSpokenSettings = settings
         speakCount++
+        takeSpeakFailure(segment)?.let { message ->
+            callback.onUtteranceError(utteranceId, message)
+            return true
+        }
         lastSpokenSegment = segment
         callback.onUtteranceStarted(utteranceId)
         return true
@@ -881,6 +1070,12 @@ private class ControlledReaderTtsEngine(
     fun completionForCurrentUtterance(): () -> Unit {
         val id = requireNotNull(activeUtteranceId)
         return { callback.onUtteranceCompleted(id) }
+    }
+
+    fun awaitDestroyed() {
+        val deadline = System.currentTimeMillis() + 3_000
+        while (!destroyed && System.currentTimeMillis() < deadline) Thread.sleep(20)
+        assertTrue("失败后的服务必须释放旧引擎", destroyed)
     }
 
     override fun shutdown() {

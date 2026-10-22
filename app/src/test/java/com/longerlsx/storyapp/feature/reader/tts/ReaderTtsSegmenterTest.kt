@@ -87,6 +87,89 @@ class ReaderTtsSegmenterTest {
         assertEquals(listOf("共有", "12345件", "物品"), segments.map { it.spokenText })
     }
 
+    @Test
+    fun negativeNumbersModelsAndDatesKeepTheirMeaningfulSeparators() {
+        val segment = ReaderTtsSegmenter.segment(
+            chapterIndex = 0,
+            text = "温度-12.5度，型号X-100，日期2026-10-22。",
+        ).single()
+
+        assertEquals("温度-12.5度，型号X-100，日期2026-10-22。", segment.spokenText)
+        assertEquals(ReaderTtsCharacterRange(2, 7), segment.sourceRangeForSpokenRange(2, 7))
+        assertEquals(ReaderTtsCharacterRange(12, 17), segment.sourceRangeForSpokenRange(12, 17))
+    }
+
+    @Test
+    fun aCompoundCrossingTheEightyCharacterBoundaryMovesTogether() {
+        val prefix = "甲".repeat(77)
+        val examples = listOf("-12.5", "X-100", "2026-10-22", "09:05", "1,234")
+
+        examples.forEach { token ->
+            val segments = ReaderTtsSegmenter.segment(0, prefix + token + "乙")
+
+            assertEquals(token, listOf(prefix, token + "乙"), segments.map { it.spokenText })
+            assertEquals(token, listOf(0 to 77, 77 to (78 + token.length)),
+                segments.map { it.startCharOffset to it.endCharOffset })
+        }
+    }
+
+    @Test
+    fun aCompoundEndingExactlyAtTheLimitDoesNotForceAnExtraSplit() {
+        val text = "甲".repeat(75) + "X-100" + "乙"
+        val segments = ReaderTtsSegmenter.segment(0, text)
+
+        assertEquals(listOf("甲".repeat(75) + "X-100", "乙"), segments.map { it.spokenText })
+        assertEquals(listOf(0 to 80, 80 to 81), segments.map { it.startCharOffset to it.endCharOffset })
+    }
+
+    @Test
+    fun aOneCharacterLimitKeepsSignsAndSeparatorsWithoutLosingSourceCharacters() {
+        val segments = ReaderTtsSegmenter.segment(0, "-3X-10", maxChunkChars = 1)
+
+        assertEquals(listOf("-", "3", "X", "-", "1", "0"), segments.map { it.spokenText })
+        assertEquals(listOf(0 to 1, 1 to 2, 2 to 3, 3 to 4, 4 to 5, 5 to 6),
+            segments.map { it.startCharOffset to it.endCharOffset })
+    }
+
+    @Test
+    fun restartingAtAModelSeparatorDoesNotDropItOrRereadTheModelPrefix() {
+        val segment = ReaderTtsSegmenter.segment(0, "前文X-100型", startCharOffset = 3).single()
+
+        assertEquals("-100型", segment.spokenText)
+        assertEquals(3, segment.startCharOffset)
+        assertEquals(8, segment.endCharOffset)
+        assertEquals(ReaderTtsCharacterRange(3, 4), segment.sourceRangeForSpokenRange(0, 1))
+    }
+
+    @Test
+    fun aLongModelStaysBoundedAndDoesNotLoseItsHyphen() {
+        val text = "X-" + "1".repeat(81)
+        val segments = ReaderTtsSegmenter.segment(0, text)
+
+        assertEquals(listOf("X-" + "1".repeat(78), "111"), segments.map { it.spokenText })
+        assertEquals(listOf(0 to 80, 80 to 83), segments.map { it.startCharOffset to it.endCharOffset })
+    }
+
+    @Test
+    fun fullWidthModelCharactersFoldWithoutChangingSourcePositions() {
+        val segment = ReaderTtsSegmenter.segment(0, "型号Ｘ－１００，温度－１２．５度。").single()
+
+        assertEquals("型号X-100，温度-12.5度。", segment.spokenText)
+        assertEquals(ReaderTtsCharacterRange(2, 7), segment.sourceRangeForSpokenRange(2, 7))
+        assertEquals(ReaderTtsCharacterRange(10, 15), segment.sourceRangeForSpokenRange(10, 15))
+    }
+
+    @Test
+    fun aSupplementaryCharacterBeforeAModelKeepsUnicodeLimitAndUtf16Offsets() {
+        val prefix = "甲".repeat(76) + "😀"
+        val segments = ReaderTtsSegmenter.segment(0, prefix + "X-123乙")
+
+        assertEquals(listOf(prefix, "X-123乙"), segments.map { it.spokenText })
+        assertEquals(listOf(0 to 78, 78 to 84), segments.map { it.startCharOffset to it.endCharOffset })
+        assertEquals(ReaderTtsCharacterRange(76, 78), segments.first().sourceRangeForSpokenRange(76, 77))
+        assertEquals(ReaderTtsCharacterRange(78, 83), segments.last().sourceRangeForSpokenRange(0, 5))
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun rejectsAnImpossibleChunkLimitInsteadOfLoopingOrProducingUnboundedChunks() {
         ReaderTtsSegmenter.segment(chapterIndex = 0, text = "正文", maxChunkChars = 0)

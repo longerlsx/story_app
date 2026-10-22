@@ -1,6 +1,7 @@
 package com.longerlsx.storyapp.data.reader
 
 import com.longerlsx.storyapp.core.model.ReaderAppearanceMode
+import com.longerlsx.storyapp.core.model.ReaderBundledVoices
 import com.longerlsx.storyapp.core.model.ReaderSettings
 import com.longerlsx.storyapp.core.model.ReaderTtsSettings
 import com.longerlsx.storyapp.core.model.ReaderTtsSpeechRates
@@ -80,9 +81,8 @@ class ReaderSettingsStore(
                 ?: legacyThemePreset?.takeIf { it.appearanceMode == ReaderAppearanceMode.NIGHT }
                 ?: defaults.nightThemePreset,
             ttsSettings = ReaderTtsSettings(
-                // Only the bundled reference voice is selectable. Loading an older
-                // preference maps it in memory without rewriting unrelated data.
-                voiceName = ReaderTtsSettings.DEFAULT_VOICE_NAME,
+                // Resolve older preferences in memory without rewriting unrelated data.
+                voiceName = ReaderBundledVoices.resolve(properties.getProperty(KEY_TTS_VOICE_NAME)).name,
                 speechRate = ReaderTtsSpeechRates.fromStoredValue(
                     properties.getProperty(KEY_TTS_SPEECH_RATE)?.toFloatOrNull(),
                 ),

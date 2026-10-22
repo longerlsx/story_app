@@ -5,14 +5,14 @@ import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
 import android.os.SystemClock
+import android.os.Process
 import android.util.Log
 import com.k2fsa.sherpa.onnx.GenerationConfig
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.OfflineTtsConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
-import com.k2fsa.sherpa.onnx.OfflineTtsZipVoiceModelConfig
-import com.k2fsa.sherpa.onnx.WaveData
-import com.k2fsa.sherpa.onnx.WaveReader
+import com.k2fsa.sherpa.onnx.OfflineTtsVitsModelConfig
+import com.longerlsx.storyapp.core.model.ReaderBundledVoices
 import com.longerlsx.storyapp.core.model.ReaderTtsSettings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -43,7 +43,7 @@ class OfflineReaderTtsEngine(
     private val audioLock = Any()
     @Volatile private var closed = false
     @Volatile private var model: OfflineTts? = null
-    private var referenceVoice: WaveData? = null
+    private var frontend: ReaderTtsChineseFrontend? = null
     @Volatile private var settings = ReaderTtsSettings()
     private var playbackJob: Job? = null
     private var activeTrack: AudioTrack? = null
@@ -57,28 +57,28 @@ class OfflineReaderTtsEngine(
     override suspend fun initialize(): Result<List<ReaderTtsVoiceOption>> {
         return try {
             withContext(Dispatchers.IO) {
-                // eSpeak has process-global state. Initialization, generation and release share a lock.
+                // Keep initialization, generation and release serialized across engine lifetimes.
                 nativeMutex.withLock {
                     check(!closed) { "朗读已停止，请重新开始" }
                     if (model == null) {
                         val startedAt = SystemClock.elapsedRealtime()
-                        val dataDir = preparePhonemeData()
+                        val supported = context.assets.open("$MODEL_DIR/supported-codepoints.txt")
+                            .bufferedReader().useLines { lines -> lines.map { it.toInt(16) }.toSet() }
+                        check(supported.isNotEmpty()) { "内置中文词典无法读取" }
                         currentCoroutineContext().ensureActive()
-                        val reference = WaveReader.readWave(context.assets, "$MODEL_DIR/leijun-1.wav")
-                        check(reference.sampleRate > 0 && reference.samples.isNotEmpty()) { "内置参考声音无法读取" }
                         val created = OfflineTts(
                             assetManager = context.assets,
                             config = OfflineTtsConfig(
                                 model = OfflineTtsModelConfig(
-                                    zipvoice = OfflineTtsZipVoiceModelConfig(
-                                        encoder = "$MODEL_DIR/encoder.int8.onnx",
-                                        decoder = "$MODEL_DIR/decoder.int8.onnx",
-                                        vocoder = "$MODEL_DIR/vocos_24khz.onnx",
+                                    vits = OfflineTtsVitsModelConfig(
+                                        model = "$MODEL_DIR/model.onnx",
                                         tokens = "$MODEL_DIR/tokens.txt",
-                                        dataDir = dataDir.absolutePath,
                                         lexicon = "$MODEL_DIR/lexicon.txt",
+                                        noiseScale = 0.333f,
+                                        noiseScaleW = 0.333f,
+                                        lengthScale = 1f,
                                     ),
-                                    numThreads = 4,
+                                    numThreads = 2,
                                 ),
                             ),
                         )
@@ -86,9 +86,14 @@ class OfflineReaderTtsEngine(
                             created.release()
                             throw CancellationException("Engine closed during initialization")
                         }
-                        referenceVoice = reference
+                        frontend = ReaderTtsChineseFrontend(supported)
                         model = created
-                        Log.i(TAG, "model=zipvoice-distill-int8 threads=4 steps=3 referenceMs=${reference.samples.size * 1_000L / reference.sampleRate} modelReadyMs=${SystemClock.elapsedRealtime() - startedAt}")
+                        // The old APK can reconstruct this private dependency from its own assets.
+                        // Do not touch books, settings, progress or any other version directories.
+                        File(context.filesDir, "offline-voice/zipvoice-distill-int8-v1").let { old ->
+                            if (old.exists() && !old.deleteRecursively()) Log.w(TAG, "oldVoiceDataCleanupIncomplete")
+                        }
+                        Log.i(TAG, "model=piper-aishell3 threads=2 voices=30,151 modelReadyMs=${SystemClock.elapsedRealtime() - startedAt}")
                     }
                 }
             }
@@ -101,9 +106,8 @@ class OfflineReaderTtsEngine(
     }
 
     override fun applySettings(settings: ReaderTtsSettings) {
-        // Old persisted system/Kokoro names still use the one bundled reference voice.
         // Speed and pitch are applied at playback; prepared natural-rate PCM remains valid.
-        this.settings = settings.copy(voiceName = ReaderTtsSettings.DEFAULT_VOICE_NAME)
+        this.settings = settings.copy(voiceName = ReaderBundledVoices.resolve(settings.voiceName).name)
     }
 
     override fun prepareNext(segment: ReaderTtsSegment) {
@@ -157,23 +161,17 @@ class OfflineReaderTtsEngine(
             jobContext.ensureActive()
             if (closed) throw CancellationException("Engine closed")
             val readyModel = checkNotNull(model)
-            val reference = checkNotNull(referenceVoice)
             val startedAt = SystemClock.elapsedRealtime()
-            Log.i(TAG, "synthesisStart chapter=${segment.chapterIndex} offset=${segment.startCharOffset} chars=${segment.spokenText.length} elapsedRealtime=$startedAt")
+            val cpuStartedAt = Process.getElapsedCpuTime()
+            val voice = ReaderBundledVoices.resolve(selected.voiceName)
+            Log.i(TAG, "synthesisStart chapter=${segment.chapterIndex} offset=${segment.startCharOffset} end=${segment.endCharOffset} chars=${segment.spokenText.length} sid=${voice.speakerId} elapsedRealtime=$startedAt")
+            val preparedText = checkNotNull(frontend).prepare(segment)
             val audio = readyModel.generateWithConfigAndCallback(
-                // sherpa's ZipVoice front end sends raw digit runs to English eSpeak.
-                // Transform only synthesis input; segment offsets and completion stay in source text.
-                text = ReaderTtsChineseNumberNormalizer.normalize(segment.spokenText),
+                text = preparedText,
                 config = GenerationConfig(
-                    // The bundled encoder scales prompt+target length before sherpa removes
-                    // the unscaled prompt. Higher synthesis speed can truncate the target.
+                    sid = voice.speakerId,
                     speed = 1f,
                     silenceScale = 0.2f,
-                    referenceAudio = reference.samples,
-                    referenceSampleRate = reference.sampleRate,
-                    referenceText = REFERENCE_TEXT,
-                    numSteps = 3,
-                    extra = mapOf("min_char_in_sentence" to "30"),
                 ),
                 // JNI requires invoke(float[]) -> Integer; an indy lambda only exposes invoke(Object).
                 callback = object : (FloatArray) -> Int {
@@ -183,8 +181,9 @@ class OfflineReaderTtsEngine(
             jobContext.ensureActive()
             if (closed) throw CancellationException("Engine closed")
             check(audio.samples.isNotEmpty()) { "这段文字没有生成声音，请重试或换一处开始" }
+            check(audio.sampleRate == 22_050) { "内置声音采样率不匹配，请重新安装" }
             val completedAt = SystemClock.elapsedRealtime()
-            Log.i(TAG, "synthesisMs=${completedAt - startedAt} audioMs=${audio.samples.size.toLong() * 1000 / audio.sampleRate} chars=${segment.spokenText.length} rate=${selected.speechRate} chapter=${segment.chapterIndex} offset=${segment.startCharOffset} elapsedRealtime=$completedAt")
+            Log.i(TAG, "synthesisMs=${completedAt - startedAt} audioMs=${audio.samples.size.toLong() * 1000 / audio.sampleRate} chars=${segment.spokenText.length} rate=${selected.speechRate} chapter=${segment.chapterIndex} offset=${segment.startCharOffset} end=${segment.endCharOffset} sid=${voice.speakerId} processCpuMs=${Process.getElapsedCpuTime() - cpuStartedAt} elapsedRealtime=$completedAt")
             ReaderSpeechAudio(audio.samples, audio.sampleRate)
         }
 
@@ -391,7 +390,7 @@ class OfflineReaderTtsEngine(
             nativeMutex.withLock {
                 model?.release()
                 model = null
-                referenceVoice = null
+                frontend = null
             }
             scope.cancel()
         }
@@ -424,32 +423,10 @@ class OfflineReaderTtsEngine(
 
     private data class ResumeCheckpoint(val utteranceId: String, val sessionId: Int, val frame: Int, val requestedAt: Long)
 
-    private fun preparePhonemeData(): File {
-        val directory = File(context.filesDir, "offline-voice/zipvoice-distill-int8-v1/espeak-ng-data")
-        val ready = File(directory, ".ready")
-        if (ready.isFile) return directory
-        fun copy(asset: String, destination: File) {
-            check(!closed) { "朗读已停止" }
-            val children = context.assets.list(asset).orEmpty()
-            if (children.isNotEmpty()) {
-                check(destination.isDirectory || destination.mkdirs()) { "无法准备离线声音目录" }
-                children.forEach { copy("$asset/$it", File(destination, it)) }
-            } else {
-                context.assets.open(asset).use { input -> destination.outputStream().use(input::copyTo) }
-            }
-        }
-        copy("$MODEL_DIR/espeak-ng-data", directory)
-        ready.writeText("zipvoice-distill-int8-v1/sherpa-1.13.8")
-        return directory
-    }
-
     companion object {
         private const val TAG = "OfflineReaderTts"
-        private const val MODEL_DIR = "sherpa-onnx-zipvoice-distill-int8-zh-en-emilia"
-        private const val REFERENCE_TEXT = "那还是三十六年前, 一九八七年. 我呢考上了武汉大学的计算机系."
+        private const val MODEL_DIR = "piper-zh-cn-aishell3-v1"
         private val nativeMutex = Mutex()
-        val voices = listOf(
-            ReaderTtsVoiceOption(ReaderTtsSettings.DEFAULT_VOICE_NAME, "雷军"),
-        )
+        val voices = ReaderBundledVoices.options.map { ReaderTtsVoiceOption(it.name, it.displayName) }
     }
 }

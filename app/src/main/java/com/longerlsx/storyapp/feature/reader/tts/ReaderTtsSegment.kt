@@ -6,6 +6,7 @@ data class ReaderTtsSegment(
     val endCharOffset: Int,
     val spokenText: String,
     val spokenCharSourceRanges: List<ReaderTtsCharacterRange> = emptyList(),
+    val numberReadingHints: List<ReaderTtsNumberReadingHint> = emptyList(),
 ) {
     /** Callback offsets are UTF-16 indices, just like Android and the source chapter. */
     fun sourceRangeForSpokenRange(start: Int, end: Int): ReaderTtsCharacterRange {
@@ -24,3 +25,23 @@ data class ReaderTtsSegment(
         )
     }
 }
+
+/** A bounded reading instruction for a visible fragment, never a copy of the surrounding chapter. */
+data class ReaderTtsNumberReadingHint(
+    val startSpokenOffset: Int,
+    val endSpokenOffset: Int,
+    val reading: ReaderTtsNumberReading,
+    val suffix: ReaderTtsNumberSuffix = ReaderTtsNumberSuffix.NONE,
+)
+
+enum class ReaderTtsNumberReading {
+    DIGITS,
+    NEGATIVE_DIGITS,
+    QUANTITY,
+    CLOCK_MINUTES,
+    YEAR_SEPARATOR,
+    MONTH_SEPARATOR,
+    HOUR_SEPARATOR,
+}
+
+enum class ReaderTtsNumberSuffix { NONE, DAY, MINUTE }

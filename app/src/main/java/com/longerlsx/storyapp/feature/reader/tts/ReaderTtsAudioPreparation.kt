@@ -120,10 +120,16 @@ internal class ReaderTtsAudioPreparation(
 
     private fun synthesisKey(segment: ReaderTtsSegment, settings: ReaderTtsSettings) = SynthesisKey(
         spokenText = segment.spokenText,
+        numberReadingHints = segment.numberReadingHints,
         voiceName = settings.voiceName,
         speechRate = settings.speechRate,
     )
 
-    private data class SynthesisKey(val spokenText: String, val voiceName: String?, val speechRate: Float)
+    private data class SynthesisKey(
+        val spokenText: String,
+        val numberReadingHints: List<ReaderTtsNumberReadingHint>,
+        val voiceName: String?,
+        val speechRate: Float,
+    )
     private data class PendingAudio(val key: SynthesisKey, val audio: Deferred<Result<ReaderSpeechAudio>>)
 }

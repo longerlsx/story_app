@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -39,6 +40,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.longerlsx.storyapp.core.model.ReaderBundledVoices
 import com.longerlsx.storyapp.core.model.ReaderTtsSettings
 import com.longerlsx.storyapp.core.model.ReaderTtsSpeechRates
 import com.longerlsx.storyapp.core.model.ReaderTtsTimerPreset
@@ -67,6 +69,7 @@ fun ReaderTtsSettingsSheet(
     onUpdateTimerPreset: (ReaderTtsTimerPreset) -> Unit,
     remainingTimeLabel: String? = null,
     errorText: String? = null,
+    onUpdateVoiceName: (String) -> Unit = {},
 ) {
     var pitchExpanded by rememberSaveable { mutableStateOf(false) }
     var timerMenuExpanded by rememberSaveable { mutableStateOf(false) }
@@ -154,7 +157,23 @@ fun ReaderTtsSettingsSheet(
                     }
                 }
             }
-            ReaderTtsSectionHeading("音色", themePalette, "雷军 · 合成音色")
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                ReaderTtsSectionHeading("音色", themePalette, "合成音色")
+                val selectedVoice = ReaderBundledVoices.resolve(settings.voiceName)
+                val minimumWidth = (140 * LocalDensity.current.fontScale.coerceAtLeast(1f)).dp
+                FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ReaderBundledVoices.options.forEach { voice ->
+                        ReaderTtsChoicePill(
+                            label = voice.displayName,
+                            selected = voice.name == selectedVoice.name,
+                            themePalette = themePalette,
+                            modifier = Modifier.weight(1f).widthIn(min = minimumWidth),
+                            onClick = { if (voice.name != selectedVoice.name) onUpdateVoiceName(voice.name) },
+                        )
+                    }
+                }
+            }
             Column {
                 HorizontalDivider(color = themePalette.outline)
                 Surface(
@@ -184,7 +203,7 @@ fun ReaderTtsSettingsSheet(
                     }
                 }
             }
-            Text("调整自动保存，语速与音调从下一句生效", style = MaterialTheme.typography.bodySmall, color = themePalette.subtleContent)
+            Text("调整自动保存，音色、语速与音调从下一段语音生效", style = MaterialTheme.typography.bodySmall, color = themePalette.subtleContent)
         }
     }
 }
