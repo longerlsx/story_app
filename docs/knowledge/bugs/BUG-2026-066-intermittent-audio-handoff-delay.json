@@ -10,6 +10,8 @@
     "The completionStart-to-progressSaved interval includes snapshot updates, coroutine scheduling and the complete storage operation; it does not isolate fsync. The progressSaved-to-trackBuilt interval also includes service handoff, any focus/chapter wait, worker dispatch and audio retrieval, so it is not an isolated AudioTrack constructor measurement."
   ],
   "evidence": [
+    "2026-10-22 Piper follow-up, separate from the original ZipVoice anomaly: piper-F-1x-fixed.mkv contains one 0.611604-second internal low-level interval at 146.819583-147.431187 seconds, near the chapter 4 handoff. Successor PCM was ready 8988ms before the preceding playEnd; playEnd-to-playStart is 395ms. Capture packet PTS gaps in this window are 1-44ms, so a matching capture dropout is not established. Logged playStart follows observed playback-head progress and is not an exact physical first-sound timestamp. This does not establish the same cause as the original 810ms handoff or a pure natural pause. The raw recording and matching log are in app/build/outputs/piper-20261022.",
+    "Final Piper code 56a17a6 completes a separate C 1.45x formal 900.041-second screen-off/timer window with two natural chapter transitions. The full actual-speech interval has no internal low-level interval at least 0.6 seconds; handoffs range from 52 to 453ms with median 86.5ms and all successors ready in advance. This does not resolve the earlier observations. The user explicitly deferred all Piper listening feedback, including the F excerpt, as non-blocking for candidate delivery. Preserve subjective judgment and phone thermal/audio checks as pending; see docs/superpowers/plans/2026-10-22-piper-listening-replacement.md.",
     "2026-10-16 voice-samples-1x.mka: actual speech spans 9.049667-165.504667 seconds. The full scan finds one internal low-level interval of at least 0.6 seconds, at 61.285667-62.208875 seconds, lasting 0.923208 seconds. The capture uses raw PCM in timestamp-preserving Matroska; recordings are not concatenated to remove idle time.",
     "Matching voice-samples-1x-logcat.txt: chapter 1 / offset 90 finishes generation at 16:35:15.321. Preceding utterance 1-9, chapter 1 / offset 62, logs playEnd at 16:35:22.332, elapsedRealtime 4638866; utterance 1-10 logs playStart at 16:35:23.141, elapsedRealtime 4639676. The monotonic handoff is 810ms, so the observation cannot be dismissed solely as capture timestamp jitter. The preceding segment has 3498ms PCM but a 4824ms logged playback span; the old logs cannot separate delayed observations from actual playback slowdown.",
     "The same original window includes AudioFlinger throttle values of 310ms and 280ms, SystemUI skipping 35 frames, and an 1828ms SysUiBg dispatch. SystemUI concurrent GC reports total durations of 2.109 seconds and 694ms with only microsecond pause fields. These are correlated scheduling observations, not a diagnosed application GC pause or a proven cause of the handoff.",
@@ -25,6 +27,7 @@
     "android",
     "tts",
     "zipvoice",
+    "piper",
     "audio-gap",
     "audio-handoff",
     "emulator",
@@ -32,5 +35,5 @@
   ],
   "confidence": 0.95,
   "created_at": "2026-10-16",
-  "updated_at": "2026-10-16"
+  "updated_at": "2026-10-22"
 }
